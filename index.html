@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Barcode Scanner</title>
 
-  <!-- Quagga2 - Most accurate open-source barcode scanner -->
-  <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+  <!-- Quagga2 - Latest and most reliable -->
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@latest/dist/quagga.min.js"></script>
 
   <style>
     * {
@@ -84,11 +84,19 @@
       font-size: 18px;
     }
 
-    .product-fields {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 15px;
+    /* First row - Name (full width) */
+    .product-field-name {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       margin-bottom: 15px;
+    }
+
+    /* Second row - Price and Qty */
+    .product-fields-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
     }
 
     .product-field {
@@ -97,7 +105,8 @@
       align-items: flex-start;
     }
 
-    .product-field label {
+    .product-field label,
+    .product-field-name label {
       font-size: 12px;
       font-weight: bold;
       color: #666;
@@ -105,7 +114,8 @@
       text-transform: uppercase;
     }
 
-    .product-field input {
+    .product-field input,
+    .product-field-name input {
       width: 100%;
       padding: 10px;
       border: 2px solid #ddd;
@@ -115,7 +125,8 @@
       background-color: #f9f9f9;
     }
 
-    .product-field input:focus {
+    .product-field input:focus,
+    .product-field-name input:focus {
       outline: none;
       border-color: #007bff;
       box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
@@ -255,11 +266,15 @@
     <!-- Product Info Section -->
     <div class="product-info">
       <h3>Product Info</h3>
-      <div class="product-fields">
-        <div class="product-field">
-          <label>Name</label>
-          <input type="text" id="productName" placeholder="Product name" readonly />
-        </div>
+      
+      <!-- First row - Name (full width) -->
+      <div class="product-field-name">
+        <label>Name</label>
+        <input type="text" id="productName" placeholder="Product name" readonly />
+      </div>
+
+      <!-- Second row - Price and Qty -->
+      <div class="product-fields-row">
         <div class="product-field">
           <label>Price</label>
           <input type="text" id="productPrice" placeholder="Price" readonly />
@@ -290,6 +305,11 @@
       </div>
     </div>
   </div>
+
+  <!-- Hidden audio element for beep sound -->
+  <audio id="barcodeSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA==" type="audio/wav">
+  </audio>
 
   <script src="app.js"></script>
 </body>
