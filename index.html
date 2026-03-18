@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
   <title>Barcode Scanner</title>
 
   <!-- Quagga2 - Latest and most reliable -->
@@ -32,11 +32,11 @@
       margin: 0 auto;
     }
 
-    /* Scanner container - SMALLER */
+    /* Scanner container - LARGER FOR BETTER FOCUS */
     #scanner {
       width: 100%;
-      max-width: 300px;
-      height: 300px;
+      max-width: 450px;
+      height: 450px;
       margin: 0 auto 20px;
       border: 3px solid #333;
       border-radius: 8px;
@@ -50,6 +50,24 @@
       height: 100%;
       object-fit: cover;
       display: block;
+    }
+
+    .camera-controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+
+    .camera-controls button {
+      padding: 8px 16px;
+      font-size: 14px;
+      background-color: #6c757d;
+    }
+
+    .camera-controls button:hover {
+      background-color: #5a6268;
     }
 
     /* Barcode Input - Editable */
@@ -255,8 +273,13 @@
   <div class="container">
     <h2>📱 Barcode Scanner</h2>
 
-    <!-- Scanner SMALLER -->
+    <!-- Scanner - LARGER -->
     <div id="scanner"></div>
+
+    <!-- Camera Controls -->
+    <div class="camera-controls">
+      <button id="torchBtn" style="display: none;">🔦 Torch</button>
+    </div>
 
     <!-- Barcode Input - Editable -->
     <input type="text" id="barcodeOutput" placeholder="Scan or type barcode here..." />
@@ -305,11 +328,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Hidden audio element for beep sound -->
-  <audio id="barcodeSound" preload="auto">
-    <source src="data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA==" type="audio/wav">
-  </audio>
 
   <script src="app.js"></script>
 </body>
