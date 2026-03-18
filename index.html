@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
   <title>Barcode Scanner</title>
 
-  <!-- Quagga2 - Latest and most reliable -->
-  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@latest/dist/quagga.min.js"></script>
+  <!-- Original Quagga Library - TESTED AND WORKING -->
+  <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 
   <style>
     * {
@@ -28,11 +28,11 @@
     }
 
     .container {
-      max-width: 600px;
+      max-width: 700px;
       margin: 0 auto;
     }
 
-    /* Scanner container - LARGER FOR BETTER FOCUS */
+    /* Scanner container - LARGER FOR BETTER FOCUS AND DETECTION */
     #scanner {
       width: 100%;
       max-width: 450px;
@@ -52,37 +52,19 @@
       display: block;
     }
 
-    .camera-controls {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      margin-bottom: 15px;
-      flex-wrap: wrap;
-    }
-
-    .camera-controls button {
-      padding: 8px 16px;
-      font-size: 14px;
-      background-color: #6c757d;
-    }
-
-    .camera-controls button:hover {
-      background-color: #5a6268;
-    }
-
     /* Barcode Input - Editable */
     #barcodeOutput {
-      font-size: 20px;
+      font-size: 24px;
       margin: 15px 0;
       font-weight: bold;
       color: #333;
-      padding: 12px;
+      padding: 15px;
       background-color: white;
       border-radius: 5px;
-      min-height: 45px;
+      min-height: 50px;
       border: 3px solid #007bff;
       word-wrap: break-word;
-      letter-spacing: 1px;
+      letter-spacing: 2px;
       font-family: 'Courier New', monospace;
       cursor: text;
     }
@@ -273,13 +255,8 @@
   <div class="container">
     <h2>📱 Barcode Scanner</h2>
 
-    <!-- Scanner - LARGER -->
+    <!-- Scanner - LARGER FOR BETTER AUTOFOCUS -->
     <div id="scanner"></div>
-
-    <!-- Camera Controls -->
-    <div class="camera-controls">
-      <button id="torchBtn" style="display: none;">🔦 Torch</button>
-    </div>
 
     <!-- Barcode Input - Editable -->
     <input type="text" id="barcodeOutput" placeholder="Scan or type barcode here..." />
