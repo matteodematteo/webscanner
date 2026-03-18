@@ -1,407 +1,608 @@
-// =====================
-// CONFIG
-// =====================
+"use strict";
+
 const CONFIG = {
   COOKIE_POST_URL: "https://lgkiller.mattoteo96.workers.dev/",
   PRODUCT_GET_URL_PREFIX: "https://www.lgerp.cc/goods/ongoodsCode?goodCode=",
-  SCAN_DELAY: 1500
+  SCAN_COOLDOWN_MS: 1600,
+  SCAN_INTERVAL_MS: 220,
+  VIDEO_CONSTRAINTS: {
+    audio: false,
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 }
+    }
+  }
 };
 
-// =====================
-// ELEMENTS & STATE
-// =====================
-const scannerElementId = "scanner";
-const statusEl = document.getElementById("status");
-const barcodeInput = document.getElementById("barcodeOutput");
-const scanBtn = document.getElementById("scanBtn");
+const els = {
+  allowCameraBtn: document.getElementById("allowCameraBtn"),
+  barcodeInput: document.getElementById("barcodeOutput"),
+  cameraBadge: document.getElementById("cameraBadge"),
+  cameraBtn: document.getElementById("cameraBtn"),
+  cameraPreview: document.getElementById("cameraPreview"),
+  cameraStatus: document.getElementById("cameraStatus"),
+  closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+  detectorStatus: document.getElementById("detectorStatus"),
+  dismissPermissionBtn: document.getElementById("dismissPermissionBtn"),
+  passwordInput: document.getElementById("password"),
+  permissionModal: document.getElementById("permissionModal"),
+  previewEmpty: document.getElementById("previewEmpty"),
+  productName: document.getElementById("productName"),
+  productPrice: document.getElementById("productPrice"),
+  productQty: document.getElementById("productQty"),
+  saveSettingsBtn: document.getElementById("saveSettingsBtn"),
+  scanBtn: document.getElementById("scanBtn"),
+  settingsBtn: document.getElementById("settingsBtn"),
+  settingsModal: document.getElementById("settingsModal"),
+  shopKeyInput: document.getElementById("shopKey"),
+  loginNameInput: document.getElementById("loginName"),
+  statusCard: document.getElementById("statusCard"),
+  statusText: document.getElementById("statusText"),
+  statusTitle: document.getElementById("statusTitle"),
+  toast: document.getElementById("toast")
+};
 
-const productNameEl = document.getElementById("productName");
-const productPriceEl = document.getElementById("productPrice");
-const productQtyEl = document.getElementById("productQty");
+const state = {
+  authCookie: localStorage.getItem("auth_cookie") || "",
+  credentials: readStoredCredentials(),
+  detector: null,
+  detectorSupported: "BarcodeDetector" in window,
+  scanning: false,
+  scanLoopHandle: 0,
+  scannerCanvas: document.createElement("canvas"),
+  stream: null,
+  toastTimer: 0,
+  lastScanAt: 0
+};
 
-const settingsBtn = document.getElementById("settingsBtn");
-const modalBackdrop = document.getElementById("modalBackdrop");
-const shopKeyInput = document.getElementById("shopKey");
-const loginNameInput = document.getElementById("loginName");
-const passwordInput = document.getElementById("password");
-const saveSettingsBtn = document.getElementById("saveSettingsBtn");
-const closeModalBtn = document.getElementById("closeModalBtn");
-const toastEl = document.getElementById("toast");
-
-let html5QrCode = null;
-let isScanningActive = false;
-let lastScanTime = 0;
-let cameraStartedForPreview = false;
-let storedCookie = localStorage.getItem("auth_cookie") || "";
-let storedCredentials = JSON.parse(localStorage.getItem("auth_credentials") || "null");
-
-// =====================
-// UTILITIES
-// =====================
-function setStatus(text, isError = false) {
-  statusEl.textContent = text;
-  statusEl.style.color = isError ? "#c0392b" : "#666";
-}
-
-function showToast(text, duration = 1200) {
-  toastEl.textContent = text;
-  toastEl.classList.add("show");
-  setTimeout(() => toastEl.classList.remove("show"), duration);
-}
-
-function playBeep() {
+function readStoredCredentials() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = 900;
-    o.connect(g);
-    g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.25, ctx.currentTime);
-    o.start();
-    setTimeout(() => {
-      g.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.08);
-      o.stop(ctx.currentTime + 0.09);
-    }, 50);
-  } catch (e) { /* ignore */ }
-}
-
-function clearProductInfo() {
-  productNameEl.value = "";
-  productPriceEl.value = "";
-  productQtyEl.value = "";
-}
-
-// =====================
-// COOKIE HANDLING
-// =====================
-function formatCookieFromResponse(respContent) {
-  try {
-    if (!respContent) return "";
-    if (typeof respContent === "object") {
-      if (respContent.fullCookie) return String(respContent.fullCookie);
-      if (respContent.cookie) return String(respContent.cookie);
-    }
-    try {
-      const p = JSON.parse(respContent);
-      if (p.fullCookie) return String(p.fullCookie);
-      if (p.cookie) return String(p.cookie);
-    } catch (e) {}
-    const parts = String(respContent).split(";");
-    const pairs = [];
-    for (const part of parts) {
-      const t = part.trim();
-      if (!t) continue;
-      const lower = t.toLowerCase();
-      if (lower.startsWith("path=") || lower.startsWith("expires=") ||
-          lower.includes("httponly") || lower.includes("secure") ||
-          lower.startsWith("domain=") || lower.startsWith("max-age=")) {
-        continue;
-      }
-      if (t.includes("=")) {
-        pairs.push(t);
-      }
-    }
-    return pairs.join("; ");
-  } catch (e) {
-    console.error("formatCookie error", e);
-    return "";
-  }
-}
-
-async function storeCookieFromPostResponse(responseText) {
-  const cookieStr = formatCookieFromResponse(responseText);
-  if (cookieStr) {
-    storedCookie = cookieStr;
-    localStorage.setItem("auth_cookie", storedCookie);
-    return true;
-  }
-  return false;
-}
-
-async function postCredentialsAndStoreCookie(login_name, password, shopkey) {
-  const params = new URLSearchParams();
-  params.append("login_name", login_name || "");
-  params.append("password", password || "");
-  params.append("shopkey", shopkey || "");
-  try {
-    setStatus("Requesting auth cookie...");
-    const res = await fetch(CONFIG.COOKIE_POST_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString()
-    });
-    const text = await res.text();
-    const ok = await storeCookieFromPostResponse(text);
-    if (!ok) throw new Error("Could not format cookie from response");
-    storedCredentials = { login_name, password, shopkey };
-    localStorage.setItem("auth_credentials", JSON.stringify(storedCredentials));
-    showToast("Saved");
-    setStatus("Auth cookie saved");
-    return true;
-  } catch (err) {
-    console.error("postCredentials error", err);
-    setStatus("Auth error", true);
-    throw err;
-  }
-}
-
-// =====================
-// PRODUCT FETCH
-// =====================
-async function fetchProductByBarcode(barcode, allowAuthRefresh = true) {
-  if (!barcode) throw new Error("Empty barcode");
-  const url = CONFIG.PRODUCT_GET_URL_PREFIX + encodeURIComponent(barcode);
-  try {
-    setStatus("Fetching product...");
-    const headers = {};
-    if (storedCookie) headers["Cookie"] = storedCookie;
-    const res = await fetch(url, { method: "GET", headers });
-    if (!res.ok) {
-      if ((res.status === 401 || res.status === 403 || res.status === 302) && allowAuthRefresh && storedCredentials) {
-        setStatus("Auth failed - refreshing cookie...");
-        try { await postCredentialsAndStoreCookie(storedCredentials.login_name, storedCredentials.password, storedCredentials.shopkey); } catch (e) {}
-        return fetchProductByBarcode(barcode, false);
-      }
-      throw new Error(`Product request failed (${res.status})`);
-    }
-    const data = await res.json();
-    let name = data.italian_name ?? data.italianName ?? null;
-    let price = data.s_price ?? data.sPrice ?? data.price ?? null;
-    let qty = data.resporeal_inventoryse ?? data.real_inventory ?? data.qty ?? null;
-    if (!name || !price || !qty) {
-      const seen = [data];
-      while (seen.length) {
-        const node = seen.shift();
-        if (!node || typeof node !== "object") continue;
-        if (!name && node.italian_name) name = node.italian_name;
-        if (!price && node.s_price) price = node.s_price;
-        if (!qty && node.resporeal_inventoryse) qty = node.resporeal_inventoryse;
-        for (const k of Object.keys(node)) if (node[k] && typeof node[k] === "object") seen.push(node[k]);
-      }
-    }
-    name = (name === null || name === undefined) ? "" : String(name);
-    price = (price === null || price === undefined) ? "" : String(price);
-    qty = (qty === null || qty === undefined) ? "" : String(qty);
-    setStatus("Product loaded");
-    return { name, price, qty, raw: data };
-  } catch (err) {
-    console.error("fetchProductByBarcode error", err);
-    setStatus("Product fetch failed", true);
-    throw err;
-  }
-}
-
-// =====================
-// CAMERA PERMISSION & PREVIEW
-// =====================
-async function ensureCameraPermission() {
-  // Ask for permission explicitly using getUserMedia (prompts user)
-  try {
-    setStatus("Requesting camera permission...");
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    // We got permission — stop tracks (we just wanted prompt) and return true
-    stream.getTracks().forEach(t => t.stop());
-    setStatus("Camera permission granted");
-    return true;
-  } catch (err) {
-    console.warn("Camera permission denied or error", err);
-    setStatus("Camera permission denied", true);
-    return false;
-  }
-}
-
-async function getBestCameraId() {
-  try {
-    const devices = await Html5Qrcode.getCameras();
-    if (!devices || devices.length === 0) return null;
-    const back = devices.find(d => d.label && /back|rear|environment/i.test(d.label));
-    return (back || devices[0]).id;
-  } catch (e) {
-    console.warn("Could not enumerate cameras:", e);
+    return JSON.parse(localStorage.getItem("auth_credentials") || "null");
+  } catch {
     return null;
   }
 }
 
-async function initPreviewAndScanner() {
-  if (html5QrCode) return;
-  html5QrCode = new Html5Qrcode(scannerElementId, { verbose: false });
-  const cameraId = await getBestCameraId();
+function setStatus(title, message, stateName = "idle") {
+  els.statusTitle.textContent = title;
+  els.statusText.textContent = message;
+  els.statusCard.dataset.state = stateName;
+}
+
+function showToast(message, duration = 1800) {
+  window.clearTimeout(state.toastTimer);
+  els.toast.textContent = message;
+  els.toast.classList.add("show");
+  state.toastTimer = window.setTimeout(() => {
+    els.toast.classList.remove("show");
+  }, duration);
+}
+
+function clearProductInfo() {
+  els.productName.value = "";
+  els.productPrice.value = "";
+  els.productQty.value = "";
+}
+
+function setPreviewState({ active, label }) {
+  els.previewEmpty.hidden = active;
+  els.cameraBadge.textContent = label;
+  els.cameraStatus.textContent = `Camera: ${active ? "active" : "inactive"}`;
+  els.scanBtn.disabled = !active || !state.detectorSupported;
+}
+
+function updateDetectorStatus() {
+  els.detectorStatus.textContent = state.detectorSupported
+    ? "Detector: BarcodeDetector ready"
+    : "Detector: unsupported in this browser";
+}
+
+function updateScanButton() {
+  els.scanBtn.textContent = state.scanning ? "Stop Scanning" : "Start Scanning";
+  els.scanBtn.dataset.variant = state.scanning ? "danger" : "";
+}
+
+function playBeep() {
   try {
-    await html5QrCode.start(
-      cameraId || { facingMode: "environment" },
-      {
-        fps: 10,
-        qrbox: { width: 280, height: 280 },
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_39
-        ],
-        experimentalFeatures: { useBarCodeDetectorIfSupported: false }
-      },
-      async (decodedText) => {
-        if (!isScanningActive) return;
-        const now = Date.now();
-        if (now - lastScanTime < CONFIG.SCAN_DELAY) return;
-        lastScanTime = now;
-        if (!decodedText || decodedText.length < 6) return;
-        playBeep();
-        barcodeInput.value = decodedText;
-        isScanningActive = false;
-        scanBtn.textContent = "Start Scanning";
-        scanBtn.style.backgroundColor = "#007bff";
-        setStatus("Detected: " + decodedText);
-        clearProductInfo();
-        try {
-          const product = await fetchProductByBarcode(decodedText);
-          productNameEl.value = product.name || "";
-          productPriceEl.value = product.price || "";
-          productQtyEl.value = product.qty || "";
-        } catch (err) {
-          alert("Product lookup failed: " + (err.message || String(err)));
-        }
-      },
-      (errorMessage) => {
-        // ignore per-frame failures
-      }
-    );
-    cameraStartedForPreview = true;
-    setStatus("Camera preview active");
-  } catch (err) {
-    console.error("initPreviewAndScanner error", err);
-    setStatus("Camera preview failed: " + (err.message || err), true);
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) return;
+
+    const audioContext = new Context();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    oscillator.type = "triangle";
+    oscillator.frequency.value = 880;
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+
+    gain.gain.setValueAtTime(0.001, audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.14);
+
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.14);
+  } catch {
+    // Audio feedback is optional.
   }
 }
 
-// =====================
-// UI: Start/Stop scanning modes
-// =====================
+function formatCookieFromResponse(respContent) {
+  if (!respContent) return "";
 
-async function startScanningMode() {
-  const ok = await ensureCameraPermission();
-  if (!ok) {
-    // user denied; show instruction
-    if (confirm("Camera permission is required. Please allow camera access in browser settings. Try again?")) {
-      return;
-    } else {
-      return;
-    }
+  if (typeof respContent === "object" && respContent !== null) {
+    if (respContent.fullCookie) return String(respContent.fullCookie);
+    if (respContent.cookie) return String(respContent.cookie);
   }
-  if (!html5QrCode) {
-    await initPreviewAndScanner();
+
+  try {
+    const parsed = JSON.parse(String(respContent));
+    if (parsed.fullCookie) return String(parsed.fullCookie);
+    if (parsed.cookie) return String(parsed.cookie);
+  } catch {
+    // Not JSON, continue with string parsing.
   }
-  barcodeInput.value = "";
-  barcodeInput.placeholder = "Scanning... keep barcode in view";
-  clearProductInfo();
-  lastScanTime = 0;
-  isScanningActive = true;
-  scanBtn.textContent = "Stop Scanning";
-  scanBtn.style.backgroundColor = "#dc3545";
-  setStatus("🔴 Scanning - point the barcode");
+
+  return String(respContent)
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => {
+      const lower = part.toLowerCase();
+      return !(
+        lower.startsWith("path=") ||
+        lower.startsWith("expires=") ||
+        lower.startsWith("domain=") ||
+        lower.startsWith("max-age=") ||
+        lower.includes("secure") ||
+        lower.includes("httponly") ||
+        lower.includes("samesite")
+      );
+    })
+    .filter((part) => part.includes("="))
+    .join("; ");
 }
 
-async function stopScanningMode() {
-  isScanningActive = false;
-  scanBtn.textContent = "Start Scanning";
-  scanBtn.style.backgroundColor = "#007bff";
-  barcodeInput.placeholder = "Scan or type barcode here...";
-  setStatus("Ready");
+async function postCredentialsAndStoreCookie(loginName, password, shopKey) {
+  const params = new URLSearchParams();
+  params.set("login_name", loginName || "");
+  params.set("password", password || "");
+  params.set("shopkey", shopKey || "");
+
+  setStatus("Authenticating", "Requesting a fresh product cookie.", "idle");
+
+  const response = await fetch(CONFIG.COOKIE_POST_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params.toString()
+  });
+
+  if (!response.ok) {
+    throw new Error(`Authentication failed with status ${response.status}`);
+  }
+
+  const responseText = await response.text();
+  const cookie = formatCookieFromResponse(responseText);
+  if (!cookie) {
+    throw new Error("The authentication endpoint did not return a usable cookie.");
+  }
+
+  state.authCookie = cookie;
+  state.credentials = {
+    login_name: loginName,
+    password,
+    shopkey: shopKey
+  };
+
+  localStorage.setItem("auth_cookie", cookie);
+  localStorage.setItem("auth_credentials", JSON.stringify(state.credentials));
+  showToast("Settings saved");
+  setStatus("Authenticated", "Cookie saved locally for product lookup.", "success");
 }
 
-scanBtn.addEventListener("click", async () => {
-  if (!cameraStartedForPreview) {
-    // ensure permission & preview started
-    const ok = await ensureCameraPermission();
-    if (!ok) {
-      return;
-    }
-    await initPreviewAndScanner();
+async function fetchProductByBarcode(barcode, allowAuthRefresh = true) {
+  const cleanBarcode = String(barcode || "").trim();
+  if (!cleanBarcode) {
+    throw new Error("Barcode is empty.");
   }
-  if (isScanningActive) {
-    await stopScanningMode();
-  } else {
-    await startScanningMode();
-  }
-});
 
-// Enter key in input triggers lookup
-barcodeInput.addEventListener("keydown", async (ev) => {
-  if (ev.key === "Enter") {
-    ev.preventDefault();
-    const code = barcodeInput.value.trim();
-    if (!code) { alert("Please enter a barcode"); return; }
-    if (isScanningActive) await stopScanningMode();
-    playBeep();
-    setStatus("Looking up product...");
-    clearProductInfo();
+  setStatus("Looking Up Product", `Fetching data for ${cleanBarcode}.`, "idle");
+
+  const headers = new Headers({ Accept: "application/json, text/plain, */*" });
+
+  if (state.authCookie) {
     try {
-      const product = await fetchProductByBarcode(code);
-      productNameEl.value = product.name || "";
-      productPriceEl.value = product.price || "";
-      productQtyEl.value = product.qty || "";
-    } catch (err) {
-      alert("Product lookup failed: " + (err.message || String(err)));
+      headers.set("Cookie", state.authCookie);
+    } catch {
+      // Browsers may block programmatic Cookie headers.
     }
   }
-});
 
-// Settings modal
-settingsBtn.addEventListener("click", () => {
-  const creds = JSON.parse(localStorage.getItem("auth_credentials") || "null");
-  shopKeyInput.value = creds?.shopkey || "";
-  loginNameInput.value = creds?.login_name || "";
-  passwordInput.value = creds?.password || "";
-  modalBackdrop.classList.add("active");
-});
-closeModalBtn.addEventListener("click", () => modalBackdrop.classList.remove("active"));
-saveSettingsBtn.addEventListener("click", async () => {
-  const shopkey = shopKeyInput.value.trim();
-  const login_name = loginNameInput.value.trim();
-  const password = passwordInput.value;
-  if (!login_name || !password) {
-    alert("Please enter login_name and password");
+  const response = await fetch(`${CONFIG.PRODUCT_GET_URL_PREFIX}${encodeURIComponent(cleanBarcode)}`, {
+    method: "GET",
+    headers,
+    credentials: "include"
+  });
+
+  if ((response.status === 401 || response.status === 403) && allowAuthRefresh && state.credentials) {
+    await postCredentialsAndStoreCookie(
+      state.credentials.login_name,
+      state.credentials.password,
+      state.credentials.shopkey
+    );
+
+    return fetchProductByBarcode(cleanBarcode, false);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Product request failed with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const normalized = extractProductFields(data);
+
+  setStatus("Product Loaded", `Loaded data for barcode ${cleanBarcode}.`, "success");
+  return normalized;
+}
+
+function extractProductFields(data) {
+  const queue = [data];
+  const found = {
+    name: "",
+    price: "",
+    qty: ""
+  };
+
+  while (queue.length > 0) {
+    const node = queue.shift();
+    if (!node || typeof node !== "object") continue;
+
+    if (!found.name) {
+      found.name = firstDefined(node.italian_name, node.italianName, node.name, node.product_name);
+    }
+    if (!found.price) {
+      found.price = firstDefined(node.s_price, node.sPrice, node.price, node.sale_price);
+    }
+    if (!found.qty) {
+      found.qty = firstDefined(node.real_inventory, node.resporeal_inventoryse, node.qty, node.quantity);
+    }
+
+    for (const value of Object.values(node)) {
+      if (value && typeof value === "object") {
+        queue.push(value);
+      }
+    }
+  }
+
+  return {
+    name: found.name ? String(found.name) : "",
+    price: found.price ? String(found.price) : "",
+    qty: found.qty ? String(found.qty) : "",
+    raw: data
+  };
+}
+
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== "");
+}
+
+async function requestCameraAccess() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("This browser does not support camera access.");
+  }
+
+  setStatus("Requesting Camera", "Waiting for browser permission.", "idle");
+
+  const stream = await navigator.mediaDevices.getUserMedia(CONFIG.VIDEO_CONSTRAINTS);
+  await attachStream(stream);
+
+  els.permissionModal.classList.remove("active");
+  setStatus("Camera Ready", "Preview is live. You can start scanning now.", "success");
+}
+
+async function attachStream(stream) {
+  stopScanning({ resetStatus: false });
+  releaseCurrentStream();
+
+  state.stream = stream;
+  els.cameraPreview.srcObject = stream;
+
+  try {
+    await els.cameraPreview.play();
+  } catch (error) {
+    releaseCurrentStream();
+    throw new Error(`The camera stream started but the preview could not play: ${error.message}`);
+  }
+
+  setPreviewState({ active: true, label: "Live preview" });
+  els.cameraBtn.textContent = "Restart Camera";
+  updateScanButton();
+}
+
+function releaseCurrentStream() {
+  if (!state.stream) return;
+
+  for (const track of state.stream.getTracks()) {
+    track.stop();
+  }
+
+  state.stream = null;
+  els.cameraPreview.srcObject = null;
+}
+
+function createDetector() {
+  if (!state.detectorSupported) return null;
+  if (state.detector) return state.detector;
+
+  state.detector = new window.BarcodeDetector({
+    formats: [
+      "ean_13",
+      "ean_8",
+      "upc_a",
+      "upc_e",
+      "code_128",
+      "code_39",
+      "codabar"
+    ]
+  });
+
+  return state.detector;
+}
+
+async function scanFrame() {
+  if (!state.scanning || !state.stream) return;
+
+  const video = els.cameraPreview;
+  if (video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) {
+    queueNextScan();
     return;
   }
-  saveSettingsBtn.disabled = true;
-  try {
-    setStatus("Saving credentials & requesting cookie...");
-    await postCredentialsAndStoreCookie(login_name, password, shopkey);
-    saveSettingsBtn.disabled = false;
-    modalBackdrop.classList.remove("active");
-    showToast("Save successful");
-  } catch (err) {
-    saveSettingsBtn.disabled = false;
-    alert("Save / auth failed: " + (err.message || String(err)));
-  }
-});
 
-// cleanup on unload
-window.addEventListener("beforeunload", async () => {
-  if (html5QrCode && cameraStartedForPreview) {
-    try { await html5QrCode.stop(); await html5QrCode.clear(); } catch (e) {}
+  const detector = createDetector();
+  if (!detector) {
+    stopScanning({ resetStatus: false });
+    setStatus("Scanner Unsupported", "This browser can show the preview but cannot scan barcodes.", "error");
+    return;
   }
-});
 
-// Initialize only permission prompt attempt on load if user gesture allowed.
-// Many browsers block getUserMedia unless triggered by user; we attempt but ignore errors.
-(async () => {
-  setStatus("Initializing...");
-  // Attempt to request permission silently (will prompt); if browser blocks, user will be prompted on Start button
-  try {
-    await ensureCameraPermission();
-    // if permission granted, init preview
-    await initPreviewAndScanner();
-  } catch (e) {
-    // ignore; user can click Start Scanning to trigger permission prompt
-    console.warn("Preview init skipped:", e);
+  const width = video.videoWidth;
+  const height = video.videoHeight;
+  if (!width || !height) {
+    queueNextScan();
+    return;
   }
-  // load stored cookie/credentials
-  storedCookie = localStorage.getItem("auth_cookie") || "";
-  storedCredentials = JSON.parse(localStorage.getItem("auth_credentials") || "null");
-  setStatus("Ready");
-})();
+
+  const canvas = state.scannerCanvas;
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    stopScanning({ resetStatus: false });
+    setStatus("Scan Error", "Could not create a canvas context for barcode detection.", "error");
+    return;
+  }
+
+  context.drawImage(video, 0, 0, width, height);
+
+  try {
+    const detections = await detector.detect(canvas);
+    const match = detections.find((item) => item.rawValue);
+
+    if (match && Date.now() - state.lastScanAt >= CONFIG.SCAN_COOLDOWN_MS) {
+      state.lastScanAt = Date.now();
+      await handleDetectedBarcode(match.rawValue);
+      return;
+    }
+  } catch (error) {
+    setStatus("Scan Error", error.message || "Barcode detection failed.", "error");
+  }
+
+  queueNextScan();
+}
+
+function queueNextScan() {
+  if (!state.scanning) return;
+  state.scanLoopHandle = window.setTimeout(scanFrame, CONFIG.SCAN_INTERVAL_MS);
+}
+
+function startScanning() {
+  if (!state.stream) {
+    setStatus("Camera Required", "Enable the camera before starting the scanner.", "error");
+    return;
+  }
+
+  if (!state.detectorSupported) {
+    setStatus("Scanner Unsupported", "This browser cannot scan barcodes automatically.", "error");
+    return;
+  }
+
+  if (state.scanning) return;
+
+  clearProductInfo();
+  state.scanning = true;
+  state.lastScanAt = 0;
+  updateScanButton();
+  setStatus("Scanning", "Hold the barcode inside the guide frame.", "success");
+  queueNextScan();
+}
+
+function stopScanning(options = {}) {
+  state.scanning = false;
+  window.clearTimeout(state.scanLoopHandle);
+  state.scanLoopHandle = 0;
+  updateScanButton();
+
+  if (options.resetStatus && state.stream) {
+    setStatus("Camera Ready", "Preview is live. You can start scanning now.", "success");
+  }
+}
+
+async function handleDetectedBarcode(rawValue) {
+  const barcode = String(rawValue || "").trim();
+  if (!barcode) {
+    queueNextScan();
+    return;
+  }
+
+  stopScanning({ resetStatus: false });
+  els.barcodeInput.value = barcode;
+  playBeep();
+
+  try {
+    const product = await fetchProductByBarcode(barcode);
+    els.productName.value = product.name;
+    els.productPrice.value = product.price;
+    els.productQty.value = product.qty;
+  } catch (error) {
+    setStatus("Lookup Failed", error.message || "Could not load product data.", "error");
+  }
+}
+
+async function handleManualLookup() {
+  const barcode = els.barcodeInput.value.trim();
+  if (!barcode) {
+    setStatus("Barcode Missing", "Type or scan a barcode first.", "error");
+    return;
+  }
+
+  stopScanning({ resetStatus: false });
+  clearProductInfo();
+  playBeep();
+
+  try {
+    const product = await fetchProductByBarcode(barcode);
+    els.productName.value = product.name;
+    els.productPrice.value = product.price;
+    els.productQty.value = product.qty;
+  } catch (error) {
+    setStatus("Lookup Failed", error.message || "Could not load product data.", "error");
+  }
+}
+
+function openSettingsModal() {
+  const credentials = state.credentials || {};
+  els.shopKeyInput.value = credentials.shopkey || "";
+  els.loginNameInput.value = credentials.login_name || "";
+  els.passwordInput.value = credentials.password || "";
+  els.settingsModal.classList.add("active");
+}
+
+function closeSettingsModal() {
+  els.settingsModal.classList.remove("active");
+}
+
+async function saveSettings() {
+  const shopKey = els.shopKeyInput.value.trim();
+  const loginName = els.loginNameInput.value.trim();
+  const password = els.passwordInput.value;
+
+  if (!loginName || !password) {
+    setStatus("Settings Incomplete", "Login name and password are required.", "error");
+    return;
+  }
+
+  els.saveSettingsBtn.disabled = true;
+
+  try {
+    await postCredentialsAndStoreCookie(loginName, password, shopKey);
+    closeSettingsModal();
+  } catch (error) {
+    setStatus("Settings Failed", error.message || "Could not save settings.", "error");
+  } finally {
+    els.saveSettingsBtn.disabled = false;
+  }
+}
+
+function bindEvents() {
+  els.allowCameraBtn.addEventListener("click", async () => {
+    els.allowCameraBtn.disabled = true;
+
+    try {
+      await requestCameraAccess();
+    } catch (error) {
+      setStatus("Camera Blocked", error.message || "Camera access was denied.", "error");
+      els.permissionModal.classList.add("active");
+    } finally {
+      els.allowCameraBtn.disabled = false;
+    }
+  });
+
+  els.dismissPermissionBtn.addEventListener("click", () => {
+    els.permissionModal.classList.remove("active");
+    setStatus("Permission Needed", "Enable the camera whenever you are ready to scan.", "idle");
+  });
+
+  els.cameraBtn.addEventListener("click", async () => {
+    els.cameraBtn.disabled = true;
+
+    try {
+      await requestCameraAccess();
+    } catch (error) {
+      setStatus("Camera Blocked", error.message || "Camera access was denied.", "error");
+      els.permissionModal.classList.add("active");
+    } finally {
+      els.cameraBtn.disabled = false;
+    }
+  });
+
+  els.scanBtn.addEventListener("click", () => {
+    if (state.scanning) {
+      stopScanning({ resetStatus: true });
+      return;
+    }
+
+    startScanning();
+  });
+
+  els.barcodeInput.addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") return;
+
+    event.preventDefault();
+    await handleManualLookup();
+  });
+
+  els.settingsBtn.addEventListener("click", openSettingsModal);
+  els.closeSettingsBtn.addEventListener("click", closeSettingsModal);
+  els.saveSettingsBtn.addEventListener("click", saveSettings);
+
+  els.settingsModal.addEventListener("click", (event) => {
+    if (event.target === els.settingsModal) {
+      closeSettingsModal();
+    }
+  });
+
+  els.permissionModal.addEventListener("click", (event) => {
+    if (event.target === els.permissionModal) {
+      els.permissionModal.classList.remove("active");
+    }
+  });
+
+  window.addEventListener("beforeunload", () => {
+    stopScanning({ resetStatus: false });
+    releaseCurrentStream();
+  });
+}
+
+function init() {
+  updateDetectorStatus();
+  setPreviewState({ active: false, label: "Camera idle" });
+  updateScanButton();
+  bindEvents();
+
+  if (!state.detectorSupported) {
+    setStatus(
+      "Preview Only",
+      "Your browser can still show the camera preview, but barcode detection is not supported here.",
+      "idle"
+    );
+    return;
+  }
+
+  setStatus("Ready", "Waiting for camera permission.", "idle");
+}
+
+init();
