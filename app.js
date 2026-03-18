@@ -7,7 +7,7 @@ const CONFIG = {
   LOGIN_ENDPOINT: "/auth/login",
   PRODUCT_ENDPOINT: "/product/",
   USE_CREDENTIALS: true,
-  SCAN_DELAY: 2000
+  SCAN_DELAY: 1500
 };
 
 // =====================
@@ -23,19 +23,21 @@ const STORAGE_KEY = "app_settings";
 let isScanningActive = false;
 let lastScanTime = 0;
 let userSettings = null;
-let quaggaInitialized = false;
-let detectionBuffer = [];
+let codeReader = null;
+let mediaStream = null;
 
 // =====================
 // ELEMENTS
 // =====================
 
+const videoElement = document.getElementById("video");
 const scannerDiv = document.getElementById("scanner");
 const barcodeInputElement = document.getElementById("barcodeOutput");
 const productNameElement = document.getElementById("productName");
 const productPriceElement = document.getElementById("productPrice");
 const productQtyElement = document.getElementById("productQty");
 const scanBtn = document.getElementById("scanBtn");
+const statusElement = document.getElementById("status");
 
 const modal = document.getElementById("modal");
 const settingsBtn = document.getElementById("settingsBtn");
@@ -68,7 +70,7 @@ function playBarcodeSound() {
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.1);
 
-    console.log("🔊 Beep sound played");
+    console.log("🔊 Beep!");
   } catch (err) {
     console.error("Sound error:", err);
   }
@@ -166,115 +168,47 @@ function clearProductInfo() {
 }
 
 // =====================
-// INIT QUAGGA - WORKING VERSION
+// INIT ZXING
 // =====================
 
-async function initQuagga() {
-  if (quaggaInitialized) {
-    console.log("✅ Quagga already initialized");
-    return true;
-  }
+async function initZXing() {
+  try {
+    statusElement.textContent = "Initializing camera...";
 
-  return new Promise((resolve) => {
-    try {
-      console.log("📹 Initializing Quagga...");
-
-      // 🔥 TESTED AND WORKING CONFIGURATION
-      Quagga.init(
-        {
-          inputStream: {
-            type: "LiveStream",
-            target: scannerDiv,
-            constraints: {
-              facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 960 }
-            }
-          },
-          locator: {
-            halfSample: false,        // 🔥 Full sample for better accuracy
-            patchSize: "x-large"      // 🔥 Larger patches for barcode detection
-          },
-          numOfWorkers: navigator.hardwareConcurrency || 4,
-          frequency: 15,              // 🔥 Increased from 10 to 15 scans/sec
-          decoder: {
-            readers: [
-              "ean_reader",
-              "ean_8_reader",
-              "code_128_reader",
-              "code_39_reader",
-              "code_39_vin_reader",
-              "codabar_reader",
-              "upc_reader",
-              "upc_e_reader",
-              "i2of5_reader"
-            ],
-            debug: {
-              showPattern: false,
-              showCanvas: false,
-              showPatternLabel: false
-            }
-          }
-        },
-        function(err) {
-          if (err) {
-            console.error("❌ Quagga initialization error:", err);
-            barcodeInputElement.placeholder = "Camera Error";
-            alert(`Camera Error: ${err.message}`);
-            resolve(false);
-            return;
-          }
-
-          console.log("✅ Quagga initialized successfully");
-
-          // 🔥 START CAMERA STREAM
-          Quagga.start();
-
-          // 🔥 Setup detection handler
-          Quagga.onDetected(onQuaggaDetected);
-
-          quaggaInitialized = true;
-          barcodeInputElement.placeholder = "Scan or type barcode here...";
-          resolve(true);
-        }
-      );
-    } catch (err) {
-      console.error("❌ Error:", err);
-      barcodeInputElement.placeholder = "Error";
-      resolve(false);
-    }
-  });
-}
-
-// =====================
-// QUAGGA DETECTION HANDLER
-// =====================
-
-function onQuaggaDetected(result) {
-  if (!isScanningActive) return;
-
-  const code = result.codeResult.code;
-  const format = result.codeResult.format;
-
-  if (code && code.length >= 8) {
-    // 🔥 Add to buffer for confirmation
-    detectionBuffer.push(code);
-
-    // 🔥 Require 2 consecutive detections to confirm
-    if (detectionBuffer.length >= 2) {
-      const firstCode = detectionBuffer[detectionBuffer.length - 2];
-      const secondCode = detectionBuffer[detectionBuffer.length - 1];
-
-      if (firstCode === secondCode) {
-        handleBarcodeDetection(code);
-        detectionBuffer = [];
+    if (!window.ZXing) {
+      statusElement.textContent = "Loading ZXing library...";
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!window.ZXing) {
+        throw new Error("ZXing library not loaded");
       }
     }
 
-    // 🔥 Keep buffer size manageable
-    if (detectionBuffer.length > 5) {
-      detectionBuffer.shift();
-    }
+    const { BrowserMultiFormatReader } = window.ZXing;
+    codeReader = new BrowserMultiFormatReader();
+
+    statusElement.textContent = "Requesting camera access...";
+
+    const result = await codeReader.decodeFromVideoDevice(
+      undefined,
+      videoElement,
+      async (result, err) => {
+        if (result && isScanningActive) {
+          const barcode = result.text;
+          console.log("✅ Barcode detected:", barcode);
+          await handleBarcodeDetection(barcode);
+        }
+      }
+    );
+
+    statusElement.textContent = "Camera active - ready to scan";
+    console.log("✅ ZXing initialized");
+    return true;
+
+  } catch (err) {
+    console.error("❌ ZXing init error:", err);
+    statusElement.textContent = `Camera Error: ${err.message}`;
+    alert(`Camera Error: ${err.message}`);
+    return false;
   }
 }
 
@@ -295,13 +229,13 @@ async function handleBarcodeDetection(barcode) {
   // 🔥 PLAY SOUND
   playBarcodeSound();
 
-  // 🔥 Display barcode immediately in input field
+  // 🔥 Display barcode
   barcodeInputElement.value = barcode;
 
   // 🔥 Stop scanning
   stopScanning();
 
-  // 🔥 Clear product info first
+  // 🔥 Clear product info
   clearProductInfo();
 
   // 🔥 Fetch product
@@ -332,7 +266,7 @@ async function handleBarcodeSubmit() {
   // 🔥 Play sound
   playBarcodeSound();
 
-  // 🔥 Clear product info first
+  // 🔥 Clear product info
   clearProductInfo();
 
   try {
@@ -354,36 +288,26 @@ async function startScanning() {
   if (isScanningActive) return;
 
   try {
-    console.log("🟢 START SCANNING button clicked");
+    console.log("🟢 START SCANNING");
 
-    // 🔥 CLEAR BARCODE INPUT FIELD
+    // 🔥 Clear fields
     barcodeInputElement.value = "";
-    barcodeInputElement.placeholder = "Scanning... Keep barcode in view";
-
-    // 🔥 Clear product info
+    barcodeInputElement.placeholder = "Scanning...";
     clearProductInfo();
 
-    // 🔥 Initialize Quagga if not already done
-    const initialized = await initQuagga();
+    // 🔥 Initialize ZXing
+    const initialized = await initZXing();
+    if (!initialized) return;
 
-    if (!initialized) {
-      console.error("Failed to initialize Quagga");
-      return;
-    }
-
-    // 🔥 Enable scanning mode
+    // 🔥 Enable scanning
     isScanningActive = true;
     scanBtn.textContent = "Stop Scanning";
     scanBtn.style.backgroundColor = "#dc3545";
-
-    // 🔥 Clear detection buffer
-    detectionBuffer = [];
-
-    console.log("✅ Scanning started");
+    statusElement.textContent = "🔴 SCANNING - Point barcode at camera";
 
   } catch (err) {
-    console.error("❌ Error starting scanner:", err);
-    barcodeInputElement.placeholder = "Error";
+    console.error("❌ Error:", err);
+    statusElement.textContent = "Error";
     isScanningActive = false;
     scanBtn.textContent = "Start Scanning";
     scanBtn.style.backgroundColor = "#007bff";
@@ -402,9 +326,11 @@ function stopScanning() {
   scanBtn.textContent = "Start Scanning";
   scanBtn.style.backgroundColor = "#007bff";
   barcodeInputElement.placeholder = "Scan or type barcode here...";
+  statusElement.textContent = "Scanning stopped";
 
-  // 🔥 Clear detection buffer
-  detectionBuffer = [];
+  if (codeReader) {
+    codeReader.reset();
+  }
 
   console.log("✅ Scanning stopped");
 }
@@ -421,7 +347,6 @@ scanBtn.addEventListener("click", () => {
   }
 });
 
-// 🔥 BARCODE INPUT ENTER KEY EVENT
 barcodeInputElement.addEventListener("keypress", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
@@ -453,4 +378,4 @@ modal.addEventListener("click", (e) => {
 // =====================
 
 loadSettings();
-console.log("✅ App initialized and ready");
+console.log("✅ App initialized");
