@@ -1,121 +1,207 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Barcode Scanner</title>
 
-  <!-- Html5Qrcode (stable) -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
+  <!-- Quagga2 - Most accurate open-source barcode scanner -->
+  <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-      background:#f5f7fb;
-      color:#222;
-      padding:20px;
-      display:flex;
-      justify-content:center;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background-color: #f5f5f5;
     }
-    .container { width:100%; max-width:720px; }
 
-    h2 { text-align:center; margin-bottom:14px; }
+    h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
 
-    /* scanner preview - made smaller as requested */
+    /* Scanner container - ALWAYS VISIBLE */
     #scanner {
-      width:100%;
-      max-width:360px;
-      height:270px;
-      margin:0 auto 12px;
-      border-radius:8px;
-      overflow:hidden;
-      background:#000;
-      border:2px solid #333;
+      width: 100%;
+      max-width: 400px;
+      height: 400px;
+      margin: 0 auto 20px;
+      border: 3px solid #333;
+      border-radius: 8px;
+      overflow: hidden;
+      background-color: #000;
+      position: relative;
     }
 
-    .status { text-align:center; color:#666; margin-bottom:8px; min-height:18px; }
+    #scanner video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
 
-    /* barcode input editable */
     #barcodeOutput {
-      width:100%;
-      max-width:360px;
-      margin:8px auto;
-      display:block;
-      padding:10px 12px;
-      font-size:18px;
-      border-radius:6px;
-      border:2px solid #007bff;
-      background:#fff;
-      font-family: "Courier New", monospace;
+      font-size: 28px;
+      margin: 15px 0;
+      font-weight: bold;
+      color: #333;
+      padding: 15px;
+      background-color: white;
+      border-radius: 5px;
+      min-height: 50px;
+      border: 3px solid #007bff;
+      word-wrap: break-word;
+      letter-spacing: 2px;
+    }
+
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background-color: #007bff;
+      color: white;
+      transition: background-color 0.3s;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    button:active {
+      background-color: #004085;
     }
 
     #scanBtn {
-      display:block;
-      width:100%;
-      max-width:360px;
-      margin:14px auto;
-      padding:12px;
-      font-size:16px;
-      border-radius:6px;
-      background:#007bff;
-      color:#fff;
-      border:none;
-      cursor:pointer;
-      font-weight:600;
+      margin-bottom: 20px;
+      padding: 15px 40px;
+      font-size: 18px;
     }
 
-    .product-info {
-      max-width:720px;
-      margin:18px auto 0;
-      background:#fff;
-      padding:14px;
-      border-radius:8px;
-      box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    /* ⚙️ Gear button - Settings */
+    #settingsBtn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      font-size: 24px;
+      padding: 12px 15px;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #6c757d;
+      cursor: pointer;
     }
 
-    .product-info h3 { margin-bottom:10px; font-size:16px; color:#333; }
+    #settingsBtn:hover {
+      background-color: #5a6268;
+    }
 
-    .product-field-name { margin-bottom:12px; }
-    .product-field-name label { font-size:12px; color:#666; margin-bottom:6px; display:block; text-transform:uppercase; font-weight:700; }
-    .product-field-name input { width:100%; padding:10px; border-radius:6px; border:1px solid #ddd; background:#fafafa; }
+    /* Modal */
+    #modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+    }
 
-    .product-fields-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .product-field label { font-size:12px; color:#666; margin-bottom:6px; display:block; text-transform:uppercase; font-weight:700; }
-    .product-field input { width:100%; padding:10px; border-radius:6px; border:1px solid #ddd; background:#fafafa; }
+    #modal.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-    /* small helpers */
-    .muted { color:#777; font-size:13px; }
+    #modalContent {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    #modalContent h3 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #007bff;
+      box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .modal-buttons button {
+      flex: 1;
+    }
+
+    #closeModal {
+      background-color: #6c757d;
+    }
+
+    #closeModal:hover {
+      background-color: #5a6268;
+    }
   </style>
 </head>
+
 <body>
-  <div class="container">
-    <h2>📱 Barcode Scanner</h2>
 
-    <div id="scanner"></div>
-    <div class="status" id="status">Ready</div>
+  <h2>📱 Barcode Scanner</h2>
 
-    <input id="barcodeOutput" type="text" placeholder="Scan or type barcode here..." />
+  <!-- Scanner ALWAYS VISIBLE -->
+  <div id="scanner"></div>
 
-    <button id="scanBtn">Start Scanning</button>
+  <div id="barcodeOutput">No barcode scanned</div>
 
-    <div class="product-info" aria-live="polite">
-      <h3>Product Info</h3>
+  <button id="scanBtn">Start Scanning</button>
 
-      <div class="product-field-name">
-        <label for="productName">Name</label>
-        <input id="productName" type="text" readonly />
-      </div>
+  <!-- ⚙️ Settings Button -->
+  <button id="settingsBtn">⚙️</button>
 
-      <div class="product-fields-row">
-        <div class="product-field">
-          <label for="productPrice">Price</label>
-          <input id="productPrice" type="text" readonly />
-        </div>
-        <div class="product-field">
-          <label for="productQty">Qty</label>
-          <input id="productQty" type="text" readonly />
-        </div>
+  <!-- ⚙️ Modal -->
+  <div id="modal">
+    <div id="modalContent">
+      <h3>Settings</h3>
+
+      <input id="shopKey" placeholder="Shop Key" />
+      <input id="loginName" placeholder="Login Name" />
+      <input id="password" type="password" placeholder="Password" />
+
+      <div class="modal-buttons">
+        <button id="saveSettings">Save</button>
+        <button id="closeModal">Close</button>
       </div>
     </div>
   </div>
