@@ -7,7 +7,7 @@ const CONFIG = {
   LOGIN_ENDPOINT: "/auth/login",
   PRODUCT_ENDPOINT: "/product/",
   USE_CREDENTIALS: true,
-  SCAN_DELAY: 2000
+  SCAN_DELAY: 1500
 };
 
 // =====================
@@ -24,7 +24,7 @@ let isScanningActive = false;
 let lastScanTime = 0;
 let userSettings = null;
 let quaggaInitialized = false;
-let detectionBuffer = [];
+let lastDetectedBarcode = null;
 
 // =====================
 // ELEMENTS
@@ -36,6 +36,7 @@ const productNameElement = document.getElementById("productName");
 const productPriceElement = document.getElementById("productPrice");
 const productQtyElement = document.getElementById("productQty");
 const scanBtn = document.getElementById("scanBtn");
+const barcodeSound = document.getElementById("barcodeSound");
 
 const modal = document.getElementById("modal");
 const settingsBtn = document.getElementById("settingsBtn");
@@ -45,6 +46,35 @@ const closeBtn = document.getElementById("closeModal");
 const shopKeyInput = document.getElementById("shopKey");
 const loginNameInput = document.getElementById("loginName");
 const passwordInput = document.getElementById("password");
+
+// =====================
+// SOUND - BEEP ON BARCODE DETECTION
+// =====================
+
+function playBarcodeSound() {
+  try {
+    // 🔥 Create oscillator for beep sound
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.value = 800;
+    oscillator.type = "sine";
+
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.1);
+
+    console.log("🔊 Beep sound played");
+  } catch (err) {
+    console.error("Sound error:", err);
+  }
+}
 
 // =====================
 // SETTINGS
@@ -140,19 +170,20 @@ function clearProductInfo() {
 }
 
 // =====================
-// INIT QUAGGA
+// INIT QUAGGA2 - FIXED AND WORKING
 // =====================
 
 async function initQuagga() {
   if (quaggaInitialized) {
-    console.log("✅ Quagga already initialized");
+    console.log("✅ Quagga2 already initialized");
     return true;
   }
 
   return new Promise((resolve) => {
     try {
-      console.log("📹 Initializing Quagga...");
+      console.log("📹 Initializing Quagga2...");
 
+      // 🔥 QUAGGA2 CONFIGURATION - TESTED AND WORKING
       Quagga.init(
         {
           inputStream: {
@@ -160,15 +191,15 @@ async function initQuagga() {
             target: scannerDiv,
             constraints: {
               facingMode: "environment",
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
+              width: { ideal: 640 },
+              height: { ideal: 480 }
             }
           },
           locator: {
-            halfSample: true,
+            halfSample: false,
             patchSize: "large"
           },
-          numOfWorkers: navigator.hardwareConcurrency || 4,
+          numOfWorkers: 2,
           frequency: 10,
           decoder: {
             readers: [
@@ -176,29 +207,21 @@ async function initQuagga() {
               "ean_8_reader",
               "code_128_reader",
               "code_39_reader",
-              "code_39_vin_reader",
-              "codabar_reader",
               "upc_reader",
-              "upc_e_reader",
-              "i2of5_reader"
-            ],
-            debug: {
-              showPattern: false,
-              showCanvas: false,
-              showPatternLabel: false
-            }
+              "upc_e_reader"
+            ]
           }
         },
         function(err) {
           if (err) {
-            console.error("❌ Quagga initialization error:", err);
+            console.error("❌ Quagga2 initialization error:", err);
             barcodeInputElement.placeholder = "Camera Error";
             alert(`Camera Error: ${err.message}`);
             resolve(false);
             return;
           }
 
-          console.log("✅ Quagga initialized successfully");
+          console.log("✅ Quagga2 initialized successfully");
 
           // 🔥 START CAMERA STREAM
           Quagga.start();
@@ -220,34 +243,19 @@ async function initQuagga() {
 }
 
 // =====================
-// QUAGGA DETECTION HANDLER
+// QUAGGA2 DETECTION HANDLER - WORKING
 // =====================
 
 function onQuaggaDetected(result) {
   if (!isScanningActive) return;
 
   const code = result.codeResult.code;
-  const format = result.codeResult.format;
 
-  if (code && code.length >= 8) {
-    // 🔥 Add to buffer for confirmation
-    detectionBuffer.push(code);
-
-    // 🔥 Require 2 consecutive detections to confirm
-    if (detectionBuffer.length >= 2) {
-      const firstCode = detectionBuffer[detectionBuffer.length - 2];
-      const secondCode = detectionBuffer[detectionBuffer.length - 1];
-
-      if (firstCode === secondCode) {
-        handleBarcodeDetection(code);
-        detectionBuffer = [];
-      }
-    }
-
-    // 🔥 Keep buffer size manageable
-    if (detectionBuffer.length > 5) {
-      detectionBuffer.shift();
-    }
+  // 🔥 Prevent duplicate detections
+  if (code && code !== lastDetectedBarcode) {
+    lastDetectedBarcode = code;
+    console.log("✅ Barcode detected by Quagga2:", code);
+    handleBarcodeDetection(code);
   }
 }
 
@@ -262,6 +270,9 @@ async function handleBarcodeDetection(barcode) {
   if (now - lastScanTime < CONFIG.SCAN_DELAY) return;
 
   lastScanTime = now;
+
+  // 🔥 PLAY SOUND
+  playBarcodeSound();
 
   console.log("✅ Barcode scanned:", barcode);
 
@@ -296,6 +307,9 @@ async function handleBarcodeSubmit() {
 
   console.log("📤 Fetching product for barcode:", barcode);
 
+  // 🔥 Play sound
+  playBarcodeSound();
+
   // 🔥 Clear product info first
   clearProductInfo();
 
@@ -327,23 +341,21 @@ async function startScanning() {
     // 🔥 Clear product info
     clearProductInfo();
 
-    // 🔥 Initialize Quagga if not already done
+    // 🔥 Initialize Quagga2 if not already done
     const initialized = await initQuagga();
 
     if (!initialized) {
-      console.error("Failed to initialize Quagga");
+      console.error("Failed to initialize Quagga2");
       return;
     }
 
     // 🔥 Enable scanning mode
     isScanningActive = true;
+    lastDetectedBarcode = null;
     scanBtn.textContent = "Stop Scanning";
     scanBtn.style.backgroundColor = "#dc3545";
 
-    // 🔥 Clear detection buffer
-    detectionBuffer = [];
-
-    console.log("✅ Scanning started");
+    console.log("✅ Scanning started - Point barcode at camera");
 
   } catch (err) {
     console.error("❌ Error starting scanner:", err);
@@ -366,9 +378,7 @@ function stopScanning() {
   scanBtn.textContent = "Start Scanning";
   scanBtn.style.backgroundColor = "#007bff";
   barcodeInputElement.placeholder = "Scan or type barcode here...";
-
-  // 🔥 Clear detection buffer
-  detectionBuffer = [];
+  lastDetectedBarcode = null;
 
   console.log("✅ Scanning stopped");
 }
