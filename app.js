@@ -5,28 +5,42 @@
     COOKIE_POST_URL: "https://lgkiller.mattoteo96.workers.dev/",
     PRODUCT_GET_URL_PREFIX: "https://www.lgerp.cc/goods/ongoodsCode?goodCode=",
     SCAN_COOLDOWN_MS: 1600,
-    SCAN_INTERVAL_MS: 220,
-    VIDEO_CONSTRAINTS: {
+    ZXING_RESTART_DELAY_MS: 180,
+    CAMERA_CONSTRAINTS: {
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
         width: { ideal: 1920 },
-        height: { ideal: 1080 }
+        height: { ideal: 1080 },
+        frameRate: { ideal: 24, max: 30 }
       }
-    }
+    },
+    FORMATS: [
+      "qr_code",
+      "data_matrix",
+      "aztec",
+      "pdf_417",
+      "ean_13",
+      "ean_8",
+      "upc_a",
+      "upc_e",
+      "code_128",
+      "code_39",
+      "itf",
+      "codabar"
+    ]
   };
 
   const state = {
     authCookie: localStorage.getItem("auth_cookie") || "",
     credentials: readStoredCredentials(),
-    detector: null,
-    detectorSupported: "BarcodeDetector" in window,
-    scanning: false,
-    scanLoopHandle: 0,
-    scannerCanvas: document.createElement("canvas"),
+    els: null,
+    lastScanAt: 0,
+    reader: null,
+    scanControls: null,
+    scanningActive: false,
     stream: null,
-    toastTimer: 0,
-    els: null
+    toastTimer: 0
   };
 
   function readStoredCredentials() {
@@ -46,6 +60,7 @@
       cameraPreview: document.getElementById("cameraPreview"),
       cameraStatus: document.getElementById("cameraStatus"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+      cookieStatus: document.getElementById("cookieStatus"),
       detectorStatus: document.getElementById("detectorStatus"),
       diagnosticsText: document.getElementById("diagnosticsText"),
       dismissPermissionBtn: document.getElementById("dismissPermissionBtn"),
@@ -79,46 +94,28 @@
   }
 
   function setStatus(title, message, stateName) {
-    const { statusTitle, statusText, statusCard } = state.els;
-    statusTitle.textContent = title;
-    statusText.textContent = message;
-    statusCard.dataset.state = stateName || "idle";
+    state.els.statusTitle.textContent = title;
+    state.els.statusText.textContent = message;
+    state.els.statusCard.dataset.state = stateName || "idle";
   }
 
   function setDiagnostics(message) {
-    if (state.els && state.els.diagnosticsText) {
-      state.els.diagnosticsText.textContent = `Diagnostics: ${message}`;
-    }
-  }
-
-  function showBootError(error) {
-    const message = error && error.message ? error.message : String(error);
-
-    try {
-      const statusTitle = document.getElementById("statusTitle");
-      const statusText = document.getElementById("statusText");
-      const statusCard = document.getElementById("statusCard");
-      const diagnosticsText = document.getElementById("diagnosticsText");
-
-      if (statusTitle) statusTitle.textContent = "Startup Error";
-      if (statusText) statusText.textContent = message;
-      if (statusCard) statusCard.dataset.state = "error";
-      if (diagnosticsText) diagnosticsText.textContent = `Diagnostics: startup failed - ${message}`;
-    } catch {
-      // Last-resort fallback below.
-    }
-
-    console.error("App startup failed:", error);
+    state.els.diagnosticsText.textContent = `Diagnostics: ${message}`;
   }
 
   function showToast(message, duration) {
-    const { toast } = state.els;
     window.clearTimeout(state.toastTimer);
-    toast.textContent = message;
-    toast.classList.add("show");
+    state.els.toast.textContent = message;
+    state.els.toast.classList.add("show");
     state.toastTimer = window.setTimeout(() => {
-      toast.classList.remove("show");
+      state.els.toast.classList.remove("show");
     }, duration || 1800);
+  }
+
+  function updateCookieStatus() {
+    state.els.cookieStatus.textContent = state.authCookie
+      ? `Cookie: saved (${state.authCookie.length})`
+      : "Cookie: missing";
   }
 
   function clearProductInfo() {
@@ -131,18 +128,12 @@
     state.els.previewEmpty.hidden = active;
     state.els.cameraBadge.textContent = label;
     state.els.cameraStatus.textContent = `Camera: ${active ? "active" : "inactive"}`;
-    state.els.scanBtn.disabled = !active || !state.detectorSupported;
-  }
-
-  function updateDetectorStatus() {
-    state.els.detectorStatus.textContent = state.detectorSupported
-      ? "Detector: BarcodeDetector ready"
-      : "Detector: unsupported in this browser";
+    state.els.scanBtn.disabled = !active;
   }
 
   function updateScanButton() {
-    state.els.scanBtn.textContent = state.scanning ? "Stop Scanning" : "Start Scanning";
-    state.els.scanBtn.dataset.variant = state.scanning ? "danger" : "";
+    state.els.scanBtn.textContent = state.scanningActive ? "Stop Scanning" : "Start Scanning";
+    state.els.scanBtn.dataset.variant = state.scanningActive ? "danger" : "";
   }
 
   function playBeep() {
@@ -155,55 +146,101 @@
       const gain = audioContext.createGain();
 
       oscillator.type = "triangle";
-      oscillator.frequency.value = 880;
+      oscillator.frequency.value = 920;
       oscillator.connect(gain);
       gain.connect(audioContext.destination);
-
       gain.gain.setValueAtTime(0.001, audioContext.currentTime);
-      gain.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.14);
-
+      gain.gain.linearRampToValueAtTime(0.18, audioContext.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.13);
       oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.14);
+      oscillator.stop(audioContext.currentTime + 0.13);
     } catch {
       // Optional feedback only.
     }
   }
 
-  function formatCookieFromResponse(respContent) {
-    if (!respContent) return "";
-
-    if (typeof respContent === "object" && respContent !== null) {
-      if (respContent.fullCookie) return String(respContent.fullCookie);
-      if (respContent.cookie) return String(respContent.cookie);
-    }
-
+  function safeJsonParse(value) {
+    if (typeof value === "object" && value !== null) return value;
     try {
-      const parsed = JSON.parse(String(respContent));
-      if (parsed.fullCookie) return String(parsed.fullCookie);
-      if (parsed.cookie) return String(parsed.cookie);
+      return JSON.parse(String(value));
     } catch {
-      // Non-JSON response.
+      return null;
+    }
+  }
+
+  function appInventorCookieFromFullCookie(fullCookie) {
+    const parts = String(fullCookie || "").split(",");
+    const selectedIndexes = [5, 3];
+    const cookieParts = [];
+
+    for (let index = 0; index < selectedIndexes.length; index += 1) {
+      const rawSegment = parts[selectedIndexes[index] - 1];
+      if (!rawSegment) continue;
+
+      const firstSemicolonPart = rawSegment.split(";")[0].trim();
+      if (firstSemicolonPart && firstSemicolonPart.includes("=")) {
+        cookieParts.push(firstSemicolonPart);
+      }
     }
 
-    return String(respContent)
-      .split(";")
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .filter((part) => {
-        const lower = part.toLowerCase();
-        return !(
-          lower.startsWith("path=") ||
-          lower.startsWith("expires=") ||
-          lower.startsWith("domain=") ||
-          lower.startsWith("max-age=") ||
-          lower.includes("secure") ||
-          lower.includes("httponly") ||
-          lower.includes("samesite")
-        );
-      })
-      .filter((part) => part.includes("="))
-      .join("; ");
+    if (cookieParts.length > 0) {
+      return cookieParts.join("; ");
+    }
+
+    return "";
+  }
+
+  function genericCookieFromFullCookie(fullCookie) {
+    const matches = String(fullCookie || "").match(/[A-Za-z0-9_.-]+=([^;,]|"[^"]*")+/g);
+    if (!matches || matches.length === 0) {
+      return "";
+    }
+
+    const cookies = [];
+    for (let index = 0; index < matches.length; index += 1) {
+      const token = matches[index].trim();
+      const lower = token.toLowerCase();
+      if (
+        lower.startsWith("path=") ||
+        lower.startsWith("expires=") ||
+        lower.startsWith("domain=") ||
+        lower.startsWith("max-age=") ||
+        lower.startsWith("samesite=")
+      ) {
+        continue;
+      }
+      cookies.push(token);
+    }
+
+    return cookies.join("; ");
+  }
+
+  function extractCookieFromResponse(responseContent) {
+    const parsed = safeJsonParse(responseContent);
+    const fullCookie =
+      parsed?.fullCookie ||
+      parsed?.cookie ||
+      parsed?.data?.fullCookie ||
+      parsed?.data?.cookie ||
+      "";
+
+    if (fullCookie) {
+      const mitStyleCookie = appInventorCookieFromFullCookie(fullCookie);
+      if (mitStyleCookie) {
+        return mitStyleCookie;
+      }
+
+      const genericCookie = genericCookieFromFullCookie(fullCookie);
+      if (genericCookie) {
+        return genericCookie;
+      }
+    }
+
+    if (parsed?.cookie) {
+      return String(parsed.cookie);
+    }
+
+    return "";
   }
 
   async function postCredentialsAndStoreCookie(loginName, password, shopKey) {
@@ -213,10 +250,13 @@
     params.set("shopkey", shopKey || "");
 
     setStatus("Authenticating", "Requesting a fresh product cookie.", "idle");
+    setDiagnostics("Posting login data to the cookie endpoint.");
 
     const response = await fetch(CONFIG.COOKIE_POST_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
       body: params.toString()
     });
 
@@ -225,9 +265,9 @@
     }
 
     const responseText = await response.text();
-    const cookie = formatCookieFromResponse(responseText);
+    const cookie = extractCookieFromResponse(responseText);
     if (!cookie) {
-      throw new Error("The authentication endpoint did not return a usable cookie.");
+      throw new Error("Could not extract a cookie from the JSON response.");
     }
 
     state.authCookie = cookie;
@@ -239,8 +279,10 @@
 
     localStorage.setItem("auth_cookie", cookie);
     localStorage.setItem("auth_credentials", JSON.stringify(state.credentials));
-    showToast("Settings saved", 1800);
-    setStatus("Authenticated", "Cookie saved locally for product lookup.", "success");
+    updateCookieStatus();
+    showToast("Settings saved");
+    setStatus("Authenticated", "Cookie parsed and stored locally.", "success");
+    setDiagnostics(`Cookie saved: ${cookie}`);
   }
 
   function firstDefined() {
@@ -296,12 +338,15 @@
 
     setStatus("Looking Up Product", `Fetching data for ${cleanBarcode}.`, "idle");
 
-    const headers = new Headers({ Accept: "application/json, text/plain, */*" });
+    const headers = new Headers({
+      Accept: "application/json, text/plain, */*"
+    });
+
     if (state.authCookie) {
       try {
         headers.set("Cookie", state.authCookie);
       } catch {
-        // Browsers may block this header.
+        // Browser fetch forbids this header in many cases.
       }
     }
 
@@ -334,101 +379,147 @@
     if (!window.isSecureContext) {
       return 'Camera access requires a secure page. Open this app from "https://" or "http://localhost".';
     }
-    if (!navigator.mediaDevices) {
-      return "This browser does not expose mediaDevices, so camera access is unavailable.";
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return "This browser does not support camera access.";
     }
-    if (!navigator.mediaDevices.getUserMedia) {
-      return "This browser does not support getUserMedia for camera access.";
+    if (!window.ZXingBrowser || !window.ZXingBrowser.BrowserMultiFormatReader) {
+      return "The ZXing scanner library did not load.";
     }
     return "";
   }
 
-  function releaseCurrentStream() {
-    if (!state.stream) return;
-
-    const tracks = state.stream.getTracks();
-    for (let index = 0; index < tracks.length; index += 1) {
-      tracks[index].stop();
+  function buildZxingHints() {
+    const browserApi = window.ZXingBrowser;
+    const coreApi = window.ZXing;
+    if (!browserApi || !coreApi?.DecodeHintType || !coreApi?.BarcodeFormat) {
+      return null;
     }
 
-    state.stream = null;
-    state.els.cameraPreview.srcObject = null;
-  }
+    const formats = [];
+    const formatMap = coreApi.BarcodeFormat;
+    const wantedFormats = [
+      "QR_CODE",
+      "DATA_MATRIX",
+      "AZTEC",
+      "PDF_417",
+      "EAN_13",
+      "EAN_8",
+      "UPC_A",
+      "UPC_E",
+      "CODE_128",
+      "CODE_39",
+      "ITF",
+      "CODABAR"
+    ];
 
-  async function attachStream(stream) {
-    stopScanning(false);
-    releaseCurrentStream();
-
-    state.stream = stream;
-    state.els.cameraPreview.srcObject = stream;
-    await state.els.cameraPreview.play();
-
-    setPreviewState(true, "Live preview");
-    state.els.cameraBtn.textContent = "Restart Camera";
-    updateScanButton();
-    setDiagnostics("Camera stream started successfully.");
-  }
-
-  async function requestCameraAccess() {
-    const supportIssue = getCameraSupportIssue();
-    if (supportIssue) {
-      throw new Error(supportIssue);
+    for (let index = 0; index < wantedFormats.length; index += 1) {
+      const format = formatMap[wantedFormats[index]];
+      if (format !== undefined) {
+        formats.push(format);
+      }
     }
 
-    setStatus("Requesting Camera", "Waiting for browser permission.", "idle");
-    setDiagnostics("Calling getUserMedia...");
-
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(CONFIG.VIDEO_CONSTRAINTS);
-    } catch (error) {
-      const errorName = error && error.name ? error.name : "UnknownError";
-      const errorMessage = error && error.message ? error.message : "";
-      setDiagnostics(`getUserMedia failed with ${errorName}${errorMessage ? `: ${errorMessage}` : ""}`);
-
-      if (errorName === "NotAllowedError") {
-        throw new Error("Camera permission was blocked. Check Chrome site settings for this page and allow Camera.");
-      }
-      if (errorName === "NotFoundError") {
-        throw new Error("No camera device was found on this device.");
-      }
-      if (errorName === "NotReadableError") {
-        throw new Error("The camera is already in use by another app.");
-      }
-      throw error;
+    if (formats.length === 0) {
+      return null;
     }
 
-    await attachStream(stream);
-    state.els.permissionModal.classList.remove("active");
-    setStatus("Camera Ready", "Preview is live. You can start scanning now.", "success");
+    const hints = new Map();
+    hints.set(coreApi.DecodeHintType.POSSIBLE_FORMATS, formats);
+    hints.set(coreApi.DecodeHintType.TRY_HARDER, true);
+    return hints;
   }
 
-  function createDetector() {
-    if (!state.detectorSupported) return null;
-    if (state.detector) return state.detector;
-
-    state.detector = new window.BarcodeDetector({
-      formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "codabar"]
-    });
-
-    return state.detector;
-  }
-
-  function queueNextScan() {
-    if (!state.scanning) return;
-    state.scanLoopHandle = window.setTimeout(scanFrame, CONFIG.SCAN_INTERVAL_MS);
-  }
-
-  async function handleDetectedBarcode(rawValue) {
-    const barcode = String(rawValue || "").trim();
-    if (!barcode) {
-      queueNextScan();
+  async function applyTrackEnhancements() {
+    const videoTrack = state.stream?.getVideoTracks?.()[0];
+    if (!videoTrack || !videoTrack.getCapabilities || !videoTrack.applyConstraints) {
       return;
     }
 
-    stopScanning(false);
+    const capabilities = videoTrack.getCapabilities();
+    const advanced = [];
+
+    if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
+      advanced.push({ focusMode: "continuous" });
+    } else if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("single-shot")) {
+      advanced.push({ focusMode: "single-shot" });
+    }
+
+    if (capabilities.zoom && typeof capabilities.zoom.max === "number") {
+      const zoomValue = Math.min(capabilities.zoom.max, Math.max(capabilities.zoom.min || 1, 1.5));
+      advanced.push({ zoom: zoomValue });
+    }
+
+    if (advanced.length === 0) {
+      return;
+    }
+
+    try {
+      await videoTrack.applyConstraints({ advanced: advanced });
+      setDiagnostics("Camera started with focus/zoom enhancements where supported.");
+    } catch {
+      setDiagnostics("Camera started. Focus enhancements are not supported on this device.");
+    }
+  }
+
+  function releaseCameraSession() {
+    if (state.scanControls && typeof state.scanControls.stop === "function") {
+      try {
+        state.scanControls.stop();
+      } catch {
+        // Ignore cleanup errors.
+      }
+    }
+
+    if (state.stream) {
+      const tracks = state.stream.getTracks();
+      for (let index = 0; index < tracks.length; index += 1) {
+        tracks[index].stop();
+      }
+    }
+
+    state.scanControls = null;
+    state.stream = null;
+    state.scanningActive = false;
+    state.els.cameraPreview.srcObject = null;
+    setPreviewState(false, "Camera idle");
+    updateScanButton();
+  }
+
+  async function ensureReader() {
+    if (state.reader) {
+      return state.reader;
+    }
+
+    const BrowserMultiFormatReader = window.ZXingBrowser?.BrowserMultiFormatReader;
+    if (!BrowserMultiFormatReader) {
+      throw new Error("The ZXing browser reader is unavailable.");
+    }
+
+    const hints = buildZxingHints();
+    state.reader = hints
+      ? new BrowserMultiFormatReader(hints, CONFIG.ZXING_RESTART_DELAY_MS)
+      : new BrowserMultiFormatReader(undefined, CONFIG.ZXING_RESTART_DELAY_MS);
+
+    return state.reader;
+  }
+
+  async function handleDetectedCode(text) {
+    const now = Date.now();
+    if (now - state.lastScanAt < CONFIG.SCAN_COOLDOWN_MS) {
+      return;
+    }
+
+    const barcode = String(text || "").trim();
+    if (!barcode) {
+      return;
+    }
+
+    state.lastScanAt = now;
+    state.scanningActive = false;
+    updateScanButton();
     state.els.barcodeInput.value = barcode;
     playBeep();
+    clearProductInfo();
 
     try {
       const product = await fetchProductByBarcode(barcode, true);
@@ -440,51 +531,49 @@
     }
   }
 
-  async function scanFrame() {
-    if (!state.scanning || !state.stream) return;
-
-    const video = state.els.cameraPreview;
-    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      queueNextScan();
-      return;
+  async function startCameraSession() {
+    const supportIssue = getCameraSupportIssue();
+    if (supportIssue) {
+      throw new Error(supportIssue);
     }
 
-    const detector = createDetector();
-    if (!detector) {
-      stopScanning(false);
-      setStatus("Scanner Unsupported", "This browser can show the preview but cannot scan barcodes.", "error");
-      return;
-    }
+    releaseCameraSession();
+    setStatus("Requesting Camera", "Waiting for browser permission.", "idle");
+    setDiagnostics("Starting ZXing camera session.");
 
-    const width = video.videoWidth;
-    const height = video.videoHeight;
-    if (!width || !height) {
-      queueNextScan();
-      return;
-    }
+    const reader = await ensureReader();
+    state.scanControls = await reader.decodeFromConstraints(
+      CONFIG.CAMERA_CONSTRAINTS,
+      state.els.cameraPreview,
+      async (result, error, controls) => {
+        if (controls) {
+          state.scanControls = controls;
+        }
 
-    state.scannerCanvas.width = width;
-    state.scannerCanvas.height = height;
-    const context = state.scannerCanvas.getContext("2d");
-    if (!context) {
-      stopScanning(false);
-      setStatus("Scan Error", "Could not create a canvas context for barcode detection.", "error");
-      return;
-    }
+        state.stream = state.els.cameraPreview.srcObject || state.stream;
+        if (!state.stream) {
+          return;
+        }
 
-    context.drawImage(video, 0, 0, width, height);
+        if (!result) {
+          return;
+        }
 
-    try {
-      const detections = await detector.detect(state.scannerCanvas);
-      if (detections && detections.length > 0) {
-        await handleDetectedBarcode(detections[0].rawValue);
-        return;
+        if (!state.scanningActive) {
+          return;
+        }
+
+        await handleDetectedCode(result.getText ? result.getText() : result.text);
       }
-    } catch (error) {
-      setStatus("Scan Error", error.message || "Barcode detection failed.", "error");
-    }
+    );
 
-    queueNextScan();
+    state.stream = state.els.cameraPreview.srcObject;
+    await applyTrackEnhancements();
+    state.els.permissionModal.classList.remove("active");
+    state.els.cameraBtn.textContent = "Restart Camera";
+    setPreviewState(true, "Live preview");
+    updateScanButton();
+    setStatus("Camera Ready", "Preview is live. You can start scanning now.", "success");
   }
 
   function startScanning() {
@@ -492,26 +581,18 @@
       setStatus("Camera Required", "Enable the camera before starting the scanner.", "error");
       return;
     }
-    if (!state.detectorSupported) {
-      setStatus("Scanner Unsupported", "This browser does not support automatic barcode scanning.", "error");
-      return;
-    }
-    if (state.scanning) return;
 
+    state.scanningActive = true;
+    state.lastScanAt = 0;
     clearProductInfo();
-    state.scanning = true;
     updateScanButton();
-    setStatus("Scanning", "Hold the barcode inside the guide frame.", "success");
-    queueNextScan();
+    setStatus("Scanning", "ZXing is decoding the live preview.", "success");
   }
 
-  function stopScanning(resetStatus) {
-    state.scanning = false;
-    window.clearTimeout(state.scanLoopHandle);
-    state.scanLoopHandle = 0;
+  function stopScanning() {
+    state.scanningActive = false;
     updateScanButton();
-
-    if (resetStatus && state.stream) {
+    if (state.stream) {
       setStatus("Camera Ready", "Preview is live. You can start scanning now.", "success");
     }
   }
@@ -523,7 +604,7 @@
       return;
     }
 
-    stopScanning(false);
+    stopScanning();
     clearProductInfo();
     playBeep();
 
@@ -565,6 +646,7 @@
       closeSettingsModal();
     } catch (error) {
       setStatus("Settings Failed", error.message || "Could not save settings.", "error");
+      setDiagnostics(error.message || "Cookie parsing failed.");
     } finally {
       state.els.saveSettingsBtn.disabled = false;
     }
@@ -574,11 +656,10 @@
     state.els.allowCameraBtn.addEventListener("click", async function () {
       state.els.allowCameraBtn.disabled = true;
       try {
-        await requestCameraAccess();
+        await startCameraSession();
       } catch (error) {
         setStatus("Camera Blocked", error.message || "Camera access failed.", "error");
         setDiagnostics(error.message || "Camera access failed.");
-        state.els.permissionModal.classList.add("active");
       } finally {
         state.els.allowCameraBtn.disabled = false;
       }
@@ -592,19 +673,18 @@
     state.els.cameraBtn.addEventListener("click", async function () {
       state.els.cameraBtn.disabled = true;
       try {
-        await requestCameraAccess();
+        await startCameraSession();
       } catch (error) {
         setStatus("Camera Blocked", error.message || "Camera access failed.", "error");
         setDiagnostics(error.message || "Camera access failed.");
-        state.els.permissionModal.classList.add("active");
       } finally {
         state.els.cameraBtn.disabled = false;
       }
     });
 
     state.els.scanBtn.addEventListener("click", function () {
-      if (state.scanning) {
-        stopScanning(true);
+      if (state.scanningActive) {
+        stopScanning();
       } else {
         startScanning();
       }
@@ -633,25 +713,25 @@
       }
     });
 
+    window.addEventListener("beforeunload", function () {
+      releaseCameraSession();
+    });
+
     window.addEventListener("error", function (event) {
       setStatus("Runtime Error", event.message || "Unknown JavaScript error.", "error");
       setDiagnostics(`window error: ${event.message || "Unknown error"}`);
-    });
-
-    window.addEventListener("beforeunload", function () {
-      stopScanning(false);
-      releaseCurrentStream();
     });
   }
 
   function init() {
     state.els = queryElements();
     requireElements(state.els);
-
-    updateDetectorStatus();
-    setPreviewState(false, "Camera idle");
+    updateCookieStatus();
     updateScanButton();
     bindEvents();
+
+    state.els.detectorStatus.textContent = "Detector: ZXing browser scanner";
+    setPreviewState(false, "Camera idle");
 
     const supportIssue = getCameraSupportIssue();
     if (supportIssue) {
@@ -660,29 +740,17 @@
       return;
     }
 
-    if (!state.detectorSupported) {
-      setStatus("Preview Only", "BarcodeDetector is not available in this browser.", "idle");
-      setDiagnostics("Camera APIs are available. Automatic scanning is not supported here.");
-      return;
-    }
-
     setStatus("Ready", "Waiting for camera permission.", "idle");
-    setDiagnostics("App initialized. Buttons should now respond.");
+    setDiagnostics("ZXing loaded. Cookie parser is ready.");
   }
 
   try {
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () {
-        try {
-          init();
-        } catch (error) {
-          showBootError(error);
-        }
-      });
+      document.addEventListener("DOMContentLoaded", init);
     } else {
       init();
     }
   } catch (error) {
-    showBootError(error);
+    console.error(error);
   }
 }());
