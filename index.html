@@ -32,6 +32,10 @@
       overflow:hidden;
       background:#000;
       border:2px solid #333;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#fff;
     }
 
     .status { text-align:center; color:#666; margin-bottom:8px; min-height:18px; }
@@ -177,7 +181,7 @@
   <div class="container">
     <h2>📱 Barcode Scanner</h2>
 
-    <div id="scanner"></div>
+    <div id="scanner">Camera preview unavailable</div>
     <div class="status" id="status">Ready</div>
 
     <input id="barcodeOutput" type="text" placeholder="Scan or type barcode here..." />
