@@ -2,9 +2,9 @@
 // CONFIG
 // =====================
 const CONFIG = {
-  COOKIE_POST_URL: "https://lgkiller.mattoteo96.workers.dev/", // POST to obtain cookies
+  COOKIE_POST_URL: "https://lgkiller.mattoteo96.workers.dev/",
   PRODUCT_GET_URL_PREFIX: "https://www.lgerp.cc/goods/ongoodsCode?goodCode=",
-  SCAN_DELAY: 1500 // ms debounce between detections
+  SCAN_DELAY: 1500
 };
 
 // =====================
@@ -31,7 +31,7 @@ const toastEl = document.getElementById("toast");
 let html5QrCode = null;
 let isScanningActive = false;
 let lastScanTime = 0;
-let cameraStartedForPreview = false; // we start preview on load
+let cameraStartedForPreview = false;
 let storedCookie = localStorage.getItem("auth_cookie") || "";
 let storedCredentials = JSON.parse(localStorage.getItem("auth_credentials") || "null");
 
@@ -56,7 +56,6 @@ function playBeep() {
     const g = ctx.createGain();
     o.type = "sine";
     o.frequency.value = 900;
-    g.gain.value = 0.0001;
     o.connect(g);
     g.connect(ctx.destination);
     g.gain.setValueAtTime(0.25, ctx.currentTime);
@@ -75,31 +74,21 @@ function clearProductInfo() {
 }
 
 // =====================
-// COOKIE: format & store
+// COOKIE HANDLING
 // =====================
-
 function formatCookieFromResponse(respContent) {
-  // Try to handle a few shapes:
-  // 1) JSON with fullCookie or cookie field
-  // 2) raw string containing Set-Cookie-like pairs separated by ';'
   try {
     if (!respContent) return "";
-    // if already an object
     if (typeof respContent === "object") {
       if (respContent.fullCookie) return String(respContent.fullCookie);
       if (respContent.cookie) return String(respContent.cookie);
     }
-    // try parse JSON text
     try {
       const p = JSON.parse(respContent);
       if (p.fullCookie) return String(p.fullCookie);
       if (p.cookie) return String(p.cookie);
-    } catch (e) {
-      // not JSON, continue
-    }
-    // respContent as string: extract name=value pairs and drop attributes
-    // split by ';' and collect tokens that look like name=value (no 'path' 'expires' 'httponly' 'secure')
-    const parts = respContent.split(";");
+    } catch (e) {}
+    const parts = String(respContent).split(";");
     const pairs = [];
     for (const part of parts) {
       const t = part.trim();
@@ -111,13 +100,9 @@ function formatCookieFromResponse(respContent) {
         continue;
       }
       if (t.includes("=")) {
-        // keep only name=value
         pairs.push(t);
       }
     }
-    // join reasonable number of pairs (avoid long attributes)
-    if (pairs.length === 0) return "";
-    // join all pairs (or at least first two)
     return pairs.join("; ");
   } catch (e) {
     console.error("formatCookie error", e);
@@ -126,7 +111,6 @@ function formatCookieFromResponse(respContent) {
 }
 
 async function storeCookieFromPostResponse(responseText) {
-  // responseText may be JSON or raw string
   const cookieStr = formatCookieFromResponse(responseText);
   if (cookieStr) {
     storedCookie = cookieStr;
@@ -136,12 +120,7 @@ async function storeCookieFromPostResponse(responseText) {
   return false;
 }
 
-// =====================
-// API calls
-// =====================
-
 async function postCredentialsAndStoreCookie(login_name, password, shopkey) {
-  // Build URL-encoded body as shown in your block image:
   const params = new URLSearchParams();
   params.append("login_name", login_name || "");
   params.append("password", password || "");
@@ -156,7 +135,6 @@ async function postCredentialsAndStoreCookie(login_name, password, shopkey) {
     const text = await res.text();
     const ok = await storeCookieFromPostResponse(text);
     if (!ok) throw new Error("Could not format cookie from response");
-    // Save credentials for refresh if user wants (we store them)
     storedCredentials = { login_name, password, shopkey };
     localStorage.setItem("auth_credentials", JSON.stringify(storedCredentials));
     showToast("Saved");
@@ -169,6 +147,9 @@ async function postCredentialsAndStoreCookie(login_name, password, shopkey) {
   }
 }
 
+// =====================
+// PRODUCT FETCH
+// =====================
 async function fetchProductByBarcode(barcode, allowAuthRefresh = true) {
   if (!barcode) throw new Error("Empty barcode");
   const url = CONFIG.PRODUCT_GET_URL_PREFIX + encodeURIComponent(barcode);
@@ -178,27 +159,18 @@ async function fetchProductByBarcode(barcode, allowAuthRefresh = true) {
     if (storedCookie) headers["Cookie"] = storedCookie;
     const res = await fetch(url, { method: "GET", headers });
     if (!res.ok) {
-      // if unauthorized and credentials exist, try refresh cookie once
       if ((res.status === 401 || res.status === 403 || res.status === 302) && allowAuthRefresh && storedCredentials) {
         setStatus("Auth failed - refreshing cookie...");
-        try {
-          await postCredentialsAndStoreCookie(storedCredentials.login_name, storedCredentials.password, storedCredentials.shopkey);
-        } catch (err) { /* propagate next */ }
-        return fetchProductByBarcode(barcode, false); // retry once
+        try { await postCredentialsAndStoreCookie(storedCredentials.login_name, storedCredentials.password, storedCredentials.shopkey); } catch (e) {}
+        return fetchProductByBarcode(barcode, false);
       }
       throw new Error(`Product request failed (${res.status})`);
     }
     const data = await res.json();
-    // user said search these keys: italian_name, s_price and resporeal_inventoryse
-    // We'll be defensive and look in top-level or nested fields
     let name = data.italian_name ?? data.italianName ?? null;
     let price = data.s_price ?? data.sPrice ?? data.price ?? null;
-    // qty from resporeal_inventoryse - could be nested
     let qty = data.resporeal_inventoryse ?? data.real_inventory ?? data.qty ?? null;
-
-    // try deeper search if not found:
     if (!name || !price || !qty) {
-      // flatten search
       const seen = [data];
       while (seen.length) {
         const node = seen.shift();
@@ -206,17 +178,12 @@ async function fetchProductByBarcode(barcode, allowAuthRefresh = true) {
         if (!name && node.italian_name) name = node.italian_name;
         if (!price && node.s_price) price = node.s_price;
         if (!qty && node.resporeal_inventoryse) qty = node.resporeal_inventoryse;
-        for (const k of Object.keys(node)) {
-          if (node[k] && typeof node[k] === "object") seen.push(node[k]);
-        }
+        for (const k of Object.keys(node)) if (node[k] && typeof node[k] === "object") seen.push(node[k]);
       }
     }
-
-    // fallback defaults
     name = (name === null || name === undefined) ? "" : String(name);
     price = (price === null || price === undefined) ? "" : String(price);
     qty = (qty === null || qty === undefined) ? "" : String(qty);
-
     setStatus("Product loaded");
     return { name, price, qty, raw: data };
   } catch (err) {
@@ -227,14 +194,28 @@ async function fetchProductByBarcode(barcode, allowAuthRefresh = true) {
 }
 
 // =====================
-// Scanner setup (preview always visible)
+// CAMERA PERMISSION & PREVIEW
 // =====================
+async function ensureCameraPermission() {
+  // Ask for permission explicitly using getUserMedia (prompts user)
+  try {
+    setStatus("Requesting camera permission...");
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    // We got permission — stop tracks (we just wanted prompt) and return true
+    stream.getTracks().forEach(t => t.stop());
+    setStatus("Camera permission granted");
+    return true;
+  } catch (err) {
+    console.warn("Camera permission denied or error", err);
+    setStatus("Camera permission denied", true);
+    return false;
+  }
+}
 
 async function getBestCameraId() {
   try {
     const devices = await Html5Qrcode.getCameras();
     if (!devices || devices.length === 0) return null;
-    // prefer a camera with "back" or "rear" in label if available
     const back = devices.find(d => d.label && /back|rear|environment/i.test(d.label));
     return (back || devices[0]).id;
   } catch (e) {
@@ -246,16 +227,13 @@ async function getBestCameraId() {
 async function initPreviewAndScanner() {
   if (html5QrCode) return;
   html5QrCode = new Html5Qrcode(scannerElementId, { verbose: false });
-
   const cameraId = await getBestCameraId();
-
-  // start scanning but we will only act on detections when isScanningActive === true
   try {
     await html5QrCode.start(
       cameraId || { facingMode: "environment" },
       {
         fps: 10,
-        qrbox: { width: 280, height: 280 }, // focused square area (optional)
+        qrbox: { width: 280, height: 280 },
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
@@ -266,26 +244,18 @@ async function initPreviewAndScanner() {
         ],
         experimentalFeatures: { useBarCodeDetectorIfSupported: false }
       },
-      async (decodedText, decodedResult) => {
-        // This callback triggers continuously when html5-qrcode detects; we only accept when scanning active
+      async (decodedText) => {
         if (!isScanningActive) return;
         const now = Date.now();
         if (now - lastScanTime < CONFIG.SCAN_DELAY) return;
         lastScanTime = now;
-
-        if (!decodedText) return;
-        // basic sanity check
-        if (decodedText.length < 6) return;
-
+        if (!decodedText || decodedText.length < 6) return;
         playBeep();
         barcodeInput.value = decodedText;
-        // stop only scanning mode (preview stays)
         isScanningActive = false;
         scanBtn.textContent = "Start Scanning";
         scanBtn.style.backgroundColor = "#007bff";
         setStatus("Detected: " + decodedText);
-
-        // fetch product and populate fields
         clearProductInfo();
         try {
           const product = await fetchProductByBarcode(decodedText);
@@ -293,13 +263,11 @@ async function initPreviewAndScanner() {
           productPriceEl.value = product.price || "";
           productQtyEl.value = product.qty || "";
         } catch (err) {
-          // If fetching fails, we already attempted refresh inside fetchProductByBarcode
           alert("Product lookup failed: " + (err.message || String(err)));
         }
       },
       (errorMessage) => {
-        // silent per-frame failure callback
-        // console.debug("scan fail:", errorMessage);
+        // ignore per-frame failures
       }
     );
     cameraStartedForPreview = true;
@@ -311,11 +279,22 @@ async function initPreviewAndScanner() {
 }
 
 // =====================
-// UI behaviour
+// UI: Start/Stop scanning modes
 // =====================
 
 async function startScanningMode() {
-  // clear field and product info, set scanning active (we already have preview)
+  const ok = await ensureCameraPermission();
+  if (!ok) {
+    // user denied; show instruction
+    if (confirm("Camera permission is required. Please allow camera access in browser settings. Try again?")) {
+      return;
+    } else {
+      return;
+    }
+  }
+  if (!html5QrCode) {
+    await initPreviewAndScanner();
+  }
   barcodeInput.value = "";
   barcodeInput.placeholder = "Scanning... keep barcode in view";
   clearProductInfo();
@@ -334,9 +313,13 @@ async function stopScanningMode() {
   setStatus("Ready");
 }
 
-// click toggle
 scanBtn.addEventListener("click", async () => {
-  if (!html5QrCode) {
+  if (!cameraStartedForPreview) {
+    // ensure permission & preview started
+    const ok = await ensureCameraPermission();
+    if (!ok) {
+      return;
+    }
     await initPreviewAndScanner();
   }
   if (isScanningActive) {
@@ -346,15 +329,12 @@ scanBtn.addEventListener("click", async () => {
   }
 });
 
-// enter in input triggers lookup (and stops scanning if active)
+// Enter key in input triggers lookup
 barcodeInput.addEventListener("keydown", async (ev) => {
   if (ev.key === "Enter") {
     ev.preventDefault();
     const code = barcodeInput.value.trim();
-    if (!code) {
-      alert("Please enter a barcode");
-      return;
-    }
+    if (!code) { alert("Please enter a barcode"); return; }
     if (isScanningActive) await stopScanningMode();
     playBeep();
     setStatus("Looking up product...");
@@ -370,20 +350,15 @@ barcodeInput.addEventListener("keydown", async (ev) => {
   }
 });
 
-// settings modal controls
+// Settings modal
 settingsBtn.addEventListener("click", () => {
-  // populate with stored if available
   const creds = JSON.parse(localStorage.getItem("auth_credentials") || "null");
   shopKeyInput.value = creds?.shopkey || "";
   loginNameInput.value = creds?.login_name || "";
   passwordInput.value = creds?.password || "";
   modalBackdrop.classList.add("active");
 });
-
-closeModalBtn.addEventListener("click", () => {
-  modalBackdrop.classList.remove("active");
-});
-
+closeModalBtn.addEventListener("click", () => modalBackdrop.classList.remove("active"));
 saveSettingsBtn.addEventListener("click", async () => {
   const shopkey = shopKeyInput.value.trim();
   const login_name = loginNameInput.value.trim();
@@ -392,8 +367,8 @@ saveSettingsBtn.addEventListener("click", async () => {
     alert("Please enter login_name and password");
     return;
   }
+  saveSettingsBtn.disabled = true;
   try {
-    saveSettingsBtn.disabled = true;
     setStatus("Saving credentials & requesting cookie...");
     await postCredentialsAndStoreCookie(login_name, password, shopkey);
     saveSettingsBtn.disabled = false;
@@ -412,11 +387,20 @@ window.addEventListener("beforeunload", async () => {
   }
 });
 
-// Initialize preview immediately (so the square preview is always visible)
+// Initialize only permission prompt attempt on load if user gesture allowed.
+// Many browsers block getUserMedia unless triggered by user; we attempt but ignore errors.
 (async () => {
-  setStatus("Initializing camera preview...");
-  await initPreviewAndScanner();
-  // load stored cookie/credentials into memory
+  setStatus("Initializing...");
+  // Attempt to request permission silently (will prompt); if browser blocks, user will be prompted on Start button
+  try {
+    await ensureCameraPermission();
+    // if permission granted, init preview
+    await initPreviewAndScanner();
+  } catch (e) {
+    // ignore; user can click Start Scanning to trigger permission prompt
+    console.warn("Preview init skipped:", e);
+  }
+  // load stored cookie/credentials
   storedCookie = localStorage.getItem("auth_cookie") || "";
   storedCredentials = JSON.parse(localStorage.getItem("auth_credentials") || "null");
   setStatus("Ready");
