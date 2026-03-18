@@ -7,375 +7,263 @@ const CONFIG = {
   LOGIN_ENDPOINT: "/auth/login",
   PRODUCT_ENDPOINT: "/product/",
   USE_CREDENTIALS: true,
-  SCAN_DELAY: 1500
+  SCAN_DELAY: 1500 // ms between accepted scans
 };
 
 // =====================
-// STORAGE
+// STATE & ELEMENTS
 // =====================
 
-const STORAGE_KEY = "app_settings";
-
-// =====================
-// STATE
-// =====================
-
+let html5QrCode = null;
 let isScanningActive = false;
 let lastScanTime = 0;
-let userSettings = null;
-let codeReader = null;
-let mediaStream = null;
 
-// =====================
-// ELEMENTS
-// =====================
+const scannerId = "scanner";
+const statusEl = document.getElementById("status");
+const videoContainer = document.getElementById("scanner");
 
-const videoElement = document.getElementById("video");
-const scannerDiv = document.getElementById("scanner");
-const barcodeInputElement = document.getElementById("barcodeOutput");
-const productNameElement = document.getElementById("productName");
-const productPriceElement = document.getElementById("productPrice");
-const productQtyElement = document.getElementById("productQty");
+const barcodeInput = document.getElementById("barcodeOutput");
 const scanBtn = document.getElementById("scanBtn");
-const statusElement = document.getElementById("status");
 
-const modal = document.getElementById("modal");
-const settingsBtn = document.getElementById("settingsBtn");
-const saveBtn = document.getElementById("saveSettings");
-const closeBtn = document.getElementById("closeModal");
-
-const shopKeyInput = document.getElementById("shopKey");
-const loginNameInput = document.getElementById("loginName");
-const passwordInput = document.getElementById("password");
+const productNameEl = document.getElementById("productName");
+const productPriceEl = document.getElementById("productPrice");
+const productQtyEl = document.getElementById("productQty");
 
 // =====================
-// SOUND - BEEP ON BARCODE DETECTION
+// UTILITIES
 // =====================
 
-function playBarcodeSound() {
+function setStatus(text, isError = false) {
+  statusEl.textContent = text;
+  statusEl.style.color = isError ? "#c0392b" : "#666";
+}
+
+function playBeep() {
   try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.frequency.value = 800;
-    oscillator.type = "sine";
-
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.1);
-
-    console.log("🔊 Beep!");
-  } catch (err) {
-    console.error("Sound error:", err);
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = 900;
+    g.gain.value = 0.0001;
+    o.connect(g);
+    g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.25, ctx.currentTime);
+    o.start();
+    setTimeout(() => {
+      g.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.08);
+      o.stop(ctx.currentTime + 0.09);
+    }, 50);
+  } catch (e) {
+    // ignore audio errors
+    console.warn("Audio not available:", e);
   }
-}
-
-// =====================
-// SETTINGS
-// =====================
-
-function loadSettings() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    userSettings = JSON.parse(saved);
-    shopKeyInput.value = userSettings.shop_key || "";
-    loginNameInput.value = userSettings.login_name || "";
-    passwordInput.value = userSettings.password || "";
-  }
-}
-
-function saveSettings() {
-  userSettings = {
-    shop_key: shopKeyInput.value,
-    login_name: loginNameInput.value,
-    password: passwordInput.value
-  };
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(userSettings));
-  alert("✅ Settings saved successfully!");
-  modal.style.display = "none";
-}
-
-// =====================
-// AUTH
-// =====================
-
-async function login() {
-  if (!userSettings) throw new Error("Missing credentials");
-
-  const response = await fetch(CONFIG.API_BASE_URL + CONFIG.LOGIN_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: CONFIG.USE_CREDENTIALS ? "include" : "same-origin",
-    body: JSON.stringify(userSettings)
-  });
-
-  if (!response.ok) {
-    throw new Error("Login failed");
-  }
-}
-
-// =====================
-// API
-// =====================
-
-async function fetchProduct(barcode) {
-  try {
-    return await requestProduct(barcode);
-  } catch (err) {
-    console.log("Retrying after login...");
-    await login();
-    return await requestProduct(barcode);
-  }
-}
-
-async function requestProduct(barcode) {
-  const response = await fetch(
-    CONFIG.API_BASE_URL + CONFIG.PRODUCT_ENDPOINT + barcode,
-    {
-      method: "GET",
-      credentials: CONFIG.USE_CREDENTIALS ? "include" : "same-origin"
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error("Fetch failed");
-  }
-
-  return await response.json();
-}
-
-// =====================
-// DISPLAY PRODUCT INFO
-// =====================
-
-function displayProductInfo(product) {
-  productNameElement.value = product.name || "";
-  productPriceElement.value = product.price || "";
-  productQtyElement.value = product.qty || "";
 }
 
 function clearProductInfo() {
-  productNameElement.value = "";
-  productPriceElement.value = "";
-  productQtyElement.value = "";
+  productNameEl.value = "";
+  productPriceEl.value = "";
+  productQtyEl.value = "";
 }
 
 // =====================
-// INIT ZXING
+// API: fetch product by barcode
 // =====================
 
-async function initZXing() {
+async function fetchProduct(barcode) {
+  // Replace with your real API; this helper expects JSON { name, price, qty }
+  const url = CONFIG.API_BASE_URL + CONFIG.PRODUCT_ENDPOINT + encodeURIComponent(barcode);
+  const res = await fetch(url, { method: "GET", credentials: CONFIG.USE_CREDENTIALS ? "include" : "same-origin" });
+  if (!res.ok) throw new Error(`Product fetch failed (${res.status})`);
+  return await res.json();
+}
+
+// =====================
+// SCANNER (Html5Qrcode) init & start/stop
+// =====================
+
+async function getBestCameraId() {
   try {
-    statusElement.textContent = "Initializing camera...";
+    const devices = await Html5Qrcode.getCameras();
+    if (!devices || devices.length === 0) return null;
+    // prefer a camera with "back" or "rear" in label if available
+    const back = devices.find(d => d.label && /back|rear|environment/i.test(d.label));
+    return (back || devices[0]).id;
+  } catch (e) {
+    console.warn("Could not enumerate cameras:", e);
+    return null;
+  }
+}
 
-    if (!window.ZXing) {
-      statusElement.textContent = "Loading ZXing library...";
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      if (!window.ZXing) {
-        throw new Error("ZXing library not loaded");
-      }
-    }
+async function startScanner() {
+  if (isScanningActive) return true;
 
-    const { BrowserMultiFormatReader } = window.ZXing;
-    codeReader = new BrowserMultiFormatReader();
+  setStatus("Requesting camera...");
+  if (!html5QrCode) html5QrCode = new Html5Qrcode(scannerId, /* verbose= */ false);
 
-    statusElement.textContent = "Requesting camera access...";
+  let cameraId = await getBestCameraId();
+  const config = {
+    fps: 15,
+    // small scan box (optional) - comment out to use full frame
+    qrbox: { width: 300, height: 200 },
+    // restrict to common 1D formats used
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_39
+    ],
+    // prefer rear camera if using cameraId undefined; but we pass cameraId when available
+    experimentalFeatures: { useBarCodeDetectorIfSupported: false } // avoid native BarcodeDetector variance
+  };
 
-    const result = await codeReader.decodeFromVideoDevice(
-      undefined,
-      videoElement,
-      async (result, err) => {
-        if (result && isScanningActive) {
-          const barcode = result.text;
-          console.log("✅ Barcode detected:", barcode);
-          await handleBarcodeDetection(barcode);
-        }
-      }
+  try {
+    await html5QrCode.start(
+      cameraId || { facingMode: "environment" },
+      config,
+      onScanSuccess,
+      onScanFailure
     );
-
-    statusElement.textContent = "Camera active - ready to scan";
-    console.log("✅ ZXing initialized");
+    isScanningActive = true;
+    setStatus("Scanning... keep barcode in view");
+    scanBtn.textContent = "Stop Scanning";
+    scanBtn.style.backgroundColor = "#dc3545";
     return true;
-
   } catch (err) {
-    console.error("❌ ZXing init error:", err);
-    statusElement.textContent = `Camera Error: ${err.message}`;
-    alert(`Camera Error: ${err.message}`);
+    console.error("start failed:", err);
+    setStatus("Camera start failed: " + (err.message || err), true);
     return false;
   }
 }
 
-// =====================
-// HANDLE BARCODE DETECTION
-// =====================
-
-async function handleBarcodeDetection(barcode) {
-  if (!isScanningActive) return;
-
-  const now = Date.now();
-  if (now - lastScanTime < CONFIG.SCAN_DELAY) return;
-
-  lastScanTime = now;
-
-  console.log("✅ Barcode scanned:", barcode);
-
-  // 🔥 PLAY SOUND
-  playBarcodeSound();
-
-  // 🔥 Display barcode
-  barcodeInputElement.value = barcode;
-
-  // 🔥 Stop scanning
-  stopScanning();
-
-  // 🔥 Clear product info
-  clearProductInfo();
-
-  // 🔥 Fetch product
-  try {
-    const product = await fetchProduct(barcode);
-    console.log("✅ Product:", product);
-    displayProductInfo(product);
-  } catch (error) {
-    console.error("❌ Product fetch error:", error);
-    clearProductInfo();
-  }
-}
-
-// =====================
-// HANDLE BARCODE INPUT - ENTER KEY
-// =====================
-
-async function handleBarcodeSubmit() {
-  const barcode = barcodeInputElement.value.trim();
-
-  if (!barcode || barcode.length < 8) {
-    alert("❌ Please enter a valid barcode");
-    return;
-  }
-
-  console.log("📤 Fetching product for barcode:", barcode);
-
-  // 🔥 Play sound
-  playBarcodeSound();
-
-  // 🔥 Clear product info
-  clearProductInfo();
-
-  try {
-    const product = await fetchProduct(barcode);
-    console.log("✅ Product:", product);
-    displayProductInfo(product);
-  } catch (error) {
-    console.error("❌ Product fetch error:", error);
-    clearProductInfo();
-    alert(`❌ Error: ${error.message}`);
-  }
-}
-
-// =====================
-// START SCANNING
-// =====================
-
-async function startScanning() {
-  if (isScanningActive) return;
-
-  try {
-    console.log("🟢 START SCANNING");
-
-    // 🔥 Clear fields
-    barcodeInputElement.value = "";
-    barcodeInputElement.placeholder = "Scanning...";
-    clearProductInfo();
-
-    // 🔥 Initialize ZXing
-    const initialized = await initZXing();
-    if (!initialized) return;
-
-    // 🔥 Enable scanning
-    isScanningActive = true;
-    scanBtn.textContent = "Stop Scanning";
-    scanBtn.style.backgroundColor = "#dc3545";
-    statusElement.textContent = "🔴 SCANNING - Point barcode at camera";
-
-  } catch (err) {
-    console.error("❌ Error:", err);
-    statusElement.textContent = "Error";
+async function stopScanner() {
+  if (!html5QrCode) {
     isScanningActive = false;
     scanBtn.textContent = "Start Scanning";
     scanBtn.style.backgroundColor = "#007bff";
-    alert(`Error: ${err.message}`);
+    setStatus("Ready");
+    return;
+  }
+  try {
+    await html5QrCode.stop();        // stops camera
+    await html5QrCode.clear();       // clears UI
+  } catch (e) {
+    console.warn("stop error:", e);
+  } finally {
+    isScanningActive = false;
+    scanBtn.textContent = "Start Scanning";
+    scanBtn.style.backgroundColor = "#007bff";
+    setStatus("Stopped");
   }
 }
 
-// =====================
-// STOP SCANNING
-// =====================
-
-function stopScanning() {
+// callback on detection
+async function onScanSuccess(decodedText, decodedResult) {
   if (!isScanningActive) return;
+  // throttle
+  const now = Date.now();
+  if (now - lastScanTime < CONFIG.SCAN_DELAY) return;
+  lastScanTime = now;
 
-  isScanningActive = false;
-  scanBtn.textContent = "Start Scanning";
-  scanBtn.style.backgroundColor = "#007bff";
-  barcodeInputElement.placeholder = "Scan or type barcode here...";
-  statusElement.textContent = "Scanning stopped";
-
-  if (codeReader) {
-    codeReader.reset();
+  // Some devices/readers may return noise; basic length sanity check
+  if (!decodedText || decodedText.length < 6) {
+    console.log("Ignored short decode:", decodedText);
+    return;
   }
 
-  console.log("✅ Scanning stopped");
+  // accept and handle
+  playBeep();
+  barcodeInput.value = decodedText;
+  setStatus("Barcode detected: " + decodedText);
+
+  // stop scanner right away
+  await stopScanner();
+
+  // fetch product and populate
+  clearProductInfo();
+  try {
+    const product = await fetchProduct(decodedText);
+    productNameEl.value = product.name || "";
+    productPriceEl.value = product.price || "";
+    productQtyEl.value = product.qty || "";
+    setStatus("Product loaded");
+  } catch (err) {
+    console.error("fetchProduct error:", err);
+    setStatus("Product lookup failed", true);
+    // leave product fields empty
+  }
+}
+
+// optional per-frame failure callback (we keep silent)
+function onScanFailure(error) {
+  // no-op or small log
+  // console.debug("scan failure:", error);
 }
 
 // =====================
-// EVENTS
+// UI Handlers
 // =====================
 
-scanBtn.addEventListener("click", () => {
+scanBtn.addEventListener("click", async () => {
   if (isScanningActive) {
-    stopScanning();
-  } else {
-    startScanning();
+    await stopScanner();
+    return;
+  }
+
+  // when starting scanning clear input and product info
+  barcodeInput.value = "";
+  clearProductInfo();
+  setStatus("Starting scanner...");
+  const ok = await startScanner();
+  if (!ok) {
+    // fallback message already set in startScanner
   }
 });
 
-barcodeInputElement.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    handleBarcodeSubmit();
+// enter key on input should trigger fetch
+barcodeInput.addEventListener("keydown", async (ev) => {
+  if (ev.key === "Enter") {
+    ev.preventDefault();
+    const barcode = barcodeInput.value.trim();
+    if (!barcode) {
+      alert("Please enter or scan a barcode");
+      return;
+    }
+
+    // stop scanner if running
+    if (isScanningActive) {
+      await stopScanner();
+    }
+
+    playBeep();
+    setStatus("Looking up product...");
+    clearProductInfo();
+    try {
+      const product = await fetchProduct(barcode);
+      productNameEl.value = product.name || "";
+      productPriceEl.value = product.price || "";
+      productQtyEl.value = product.qty || "";
+      setStatus("Product loaded");
+    } catch (err) {
+      console.error("fetch error:", err);
+      setStatus("Product lookup failed", true);
+      alert("Product fetch error: " + (err.message || err));
+    }
   }
 });
 
-settingsBtn.addEventListener("click", () => {
-  modal.style.display = "flex";
-  modal.classList.add("active");
-});
-
-closeBtn.addEventListener("click", () => {
-  modal.style.display = "none";
-  modal.classList.remove("active");
-});
-
-saveBtn.addEventListener("click", saveSettings);
-
-modal.addEventListener("click", (e) => {
-  if (e.target === modal) {
-    modal.style.display = "none";
-    modal.classList.remove("active");
+// when the page is unloaded, ensure we stop camera
+window.addEventListener("beforeunload", async () => {
+  if (html5QrCode && isScanningActive) {
+    try { await html5QrCode.stop(); await html5QrCode.clear(); } catch(e) {}
   }
 });
+
+// quick sanity initialization
+setStatus("Ready");
 
 // =====================
-// INIT
+// End of file
 // =====================
-
-loadSettings();
-console.log("✅ App initialized");
