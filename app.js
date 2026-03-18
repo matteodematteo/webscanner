@@ -24,6 +24,7 @@ const els = {
   cameraStatus: document.getElementById("cameraStatus"),
   closeSettingsBtn: document.getElementById("closeSettingsBtn"),
   detectorStatus: document.getElementById("detectorStatus"),
+  diagnosticsText: document.getElementById("diagnosticsText"),
   dismissPermissionBtn: document.getElementById("dismissPermissionBtn"),
   passwordInput: document.getElementById("password"),
   permissionModal: document.getElementById("permissionModal"),
@@ -68,6 +69,10 @@ function setStatus(title, message, stateName = "idle") {
   els.statusTitle.textContent = title;
   els.statusText.textContent = message;
   els.statusCard.dataset.state = stateName;
+}
+
+function setDiagnostics(message) {
+  els.diagnosticsText.textContent = `Diagnostics: ${message}`;
 }
 
 function showToast(message, duration = 1800) {
@@ -289,18 +294,66 @@ function firstDefined(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== "");
 }
 
+function getCameraSupportIssue() {
+  if (!window.isSecureContext) {
+    return 'Camera access requires a secure page. Open this app from "https://" or "http://localhost", not directly as a local file.';
+  }
+
+  if (window.top !== window.self) {
+    return "This page is embedded inside another page. The parent iframe/webview must explicitly allow camera access.";
+  }
+
+  if (!navigator.mediaDevices) {
+    return "This browser does not expose mediaDevices, so camera access is unavailable here.";
+  }
+
+  if (!navigator.mediaDevices.getUserMedia) {
+    return "This browser does not support getUserMedia for camera access.";
+  }
+
+  return "";
+}
+
 async function requestCameraAccess() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("This browser does not support camera access.");
+  const supportIssue = getCameraSupportIssue();
+  if (supportIssue) {
+    throw new Error(supportIssue);
   }
 
   setStatus("Requesting Camera", "Waiting for browser permission.", "idle");
+  setDiagnostics("Calling navigator.mediaDevices.getUserMedia(...)");
 
-  const stream = await navigator.mediaDevices.getUserMedia(CONFIG.VIDEO_CONSTRAINTS);
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(CONFIG.VIDEO_CONSTRAINTS);
+  } catch (error) {
+    const errorName = error && typeof error === "object" ? error.name || "UnknownError" : "UnknownError";
+    const errorMessage = error && typeof error === "object" ? error.message || "" : "";
+    setDiagnostics(`getUserMedia failed with ${errorName}${errorMessage ? `: ${errorMessage}` : ""}`);
+
+    if (error && typeof error === "object") {
+      if (error.name === "NotAllowedError") {
+        throw new Error("Camera permission was blocked. Check the browser address bar and site permissions, then try again.");
+      }
+      if (error.name === "NotFoundError") {
+        throw new Error("No camera device was found on this computer or phone.");
+      }
+      if (error.name === "NotReadableError") {
+        throw new Error("The camera is already in use by another app.");
+      }
+      if (error.name === "SecurityError") {
+        throw new Error('The browser blocked camera access. Use "https://" or "http://localhost" and try again.');
+      }
+    }
+
+    throw error;
+  }
+
   await attachStream(stream);
 
   els.permissionModal.classList.remove("active");
   setStatus("Camera Ready", "Preview is live. You can start scanning now.", "success");
+  setDiagnostics("Camera stream started successfully.");
 }
 
 async function attachStream(stream) {
@@ -593,16 +646,26 @@ function init() {
   updateScanButton();
   bindEvents();
 
+  const supportIssue = getCameraSupportIssue();
+  if (supportIssue) {
+    setStatus("Camera Unavailable", supportIssue, "error");
+    return;
+  }
+
   if (!state.detectorSupported) {
     setStatus(
       "Preview Only",
       "Your browser can still show the camera preview, but barcode detection is not supported here.",
       "idle"
     );
+    setDiagnostics("Secure context detected. BarcodeDetector is not available in this browser.");
     return;
   }
 
   setStatus("Ready", "Waiting for camera permission.", "idle");
+  setDiagnostics(
+    `secure=${window.isSecureContext}, embedded=${window.top !== window.self}, mediaDevices=${Boolean(navigator.mediaDevices)}, getUserMedia=${Boolean(navigator.mediaDevices?.getUserMedia)}`
+  );
 }
 
 init();
