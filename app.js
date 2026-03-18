@@ -7,7 +7,7 @@ const CONFIG = {
   LOGIN_ENDPOINT: "/auth/login",
   PRODUCT_ENDPOINT: "/product/",
   USE_CREDENTIALS: true,
-  SCAN_DELAY: 1500
+  SCAN_DELAY: 2000
 };
 
 // =====================
@@ -24,9 +24,7 @@ let isScanningActive = false;
 let lastScanTime = 0;
 let userSettings = null;
 let quaggaInitialized = false;
-let lastDetectedBarcode = null;
-let mediaStream = null;
-let torchActive = false;
+let detectionBuffer = [];
 
 // =====================
 // ELEMENTS
@@ -38,7 +36,6 @@ const productNameElement = document.getElementById("productName");
 const productPriceElement = document.getElementById("productPrice");
 const productQtyElement = document.getElementById("productQty");
 const scanBtn = document.getElementById("scanBtn");
-const torchBtn = document.getElementById("torchBtn");
 
 const modal = document.getElementById("modal");
 const settingsBtn = document.getElementById("settingsBtn");
@@ -74,38 +71,6 @@ function playBarcodeSound() {
     console.log("🔊 Beep sound played");
   } catch (err) {
     console.error("Sound error:", err);
-  }
-}
-
-// =====================
-// TORCH/FLASHLIGHT CONTROL
-// =====================
-
-async function toggleTorch() {
-  try {
-    if (!mediaStream) return;
-
-    const videoTrack = mediaStream.getVideoTracks()[0];
-    if (!videoTrack) return;
-
-    const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-
-    if (!capabilities.torch) {
-      console.log("Torch not supported on this device");
-      torchBtn.style.display = "none";
-      return;
-    }
-
-    torchActive = !torchActive;
-    await videoTrack.applyConstraints({
-      advanced: [{ torch: torchActive }]
-    });
-
-    torchBtn.style.backgroundColor = torchActive ? "#FF9800" : "#6c757d";
-    torchBtn.textContent = torchActive ? "💡 Torch ON" : "🔦 Torch";
-    console.log("🔦 Torch:", torchActive ? "ON" : "OFF");
-  } catch (err) {
-    console.error("Torch error:", err);
   }
 }
 
@@ -201,20 +166,20 @@ function clearProductInfo() {
 }
 
 // =====================
-// INIT QUAGGA2 - WITH AUTOFOCUS
+// INIT QUAGGA - WORKING VERSION
 // =====================
 
 async function initQuagga() {
   if (quaggaInitialized) {
-    console.log("✅ Quagga2 already initialized");
+    console.log("✅ Quagga already initialized");
     return true;
   }
 
   return new Promise((resolve) => {
     try {
-      console.log("📹 Initializing Quagga2 with autofocus...");
+      console.log("📹 Initializing Quagga...");
 
-      // 🔥 QUAGGA2 CONFIG - OPTIMIZED WITH AUTOFOCUS
+      // 🔥 TESTED AND WORKING CONFIGURATION
       Quagga.init(
         {
           inputStream: {
@@ -222,53 +187,45 @@ async function initQuagga() {
             target: scannerDiv,
             constraints: {
               facingMode: "environment",
-              // 🔥 AUTOFOCUS SETTINGS
-              autoFocus: true,
-              focusMode: "continuous",
-              focusDistance: "optimal",
-              // 🔥 HIGH RESOLUTION FOR BETTER DETECTION
               width: { ideal: 1280 },
               height: { ideal: 960 }
             }
           },
           locator: {
-            halfSample: false,        // 🔥 Full sample for accuracy
-            patchSize: "x-large"      // 🔥 Large patches for barcode detection
+            halfSample: false,        // 🔥 Full sample for better accuracy
+            patchSize: "x-large"      // 🔥 Larger patches for barcode detection
           },
-          numOfWorkers: 4,             // 🔥 More workers for speed
-          frequency: 15,               // 🔥 15 scans per second
+          numOfWorkers: navigator.hardwareConcurrency || 4,
+          frequency: 15,              // 🔥 Increased from 10 to 15 scans/sec
           decoder: {
             readers: [
               "ean_reader",
               "ean_8_reader",
               "code_128_reader",
               "code_39_reader",
+              "code_39_vin_reader",
+              "codabar_reader",
               "upc_reader",
               "upc_e_reader",
-              "i2of5_reader",
-              "codabar_reader"
+              "i2of5_reader"
             ],
-            debug: false
+            debug: {
+              showPattern: false,
+              showCanvas: false,
+              showPatternLabel: false
+            }
           }
         },
         function(err) {
           if (err) {
-            console.error("❌ Quagga2 initialization error:", err);
+            console.error("❌ Quagga initialization error:", err);
             barcodeInputElement.placeholder = "Camera Error";
             alert(`Camera Error: ${err.message}`);
             resolve(false);
             return;
           }
 
-          console.log("✅ Quagga2 initialized with autofocus enabled");
-
-          // 🔥 GET MEDIA STREAM FOR TORCH CONTROL
-          const video = scannerDiv.querySelector("video");
-          if (video && video.srcObject) {
-            mediaStream = video.srcObject;
-            torchBtn.style.display = "inline-block";
-            console.log("✅ Media stream acquired for torch control");
-          }
+          console.log("✅ Quagga initialized successfully");
 
           // 🔥 START CAMERA STREAM
           Quagga.start();
@@ -290,20 +247,34 @@ async function initQuagga() {
 }
 
 // =====================
-// QUAGGA2 DETECTION HANDLER
+// QUAGGA DETECTION HANDLER
 // =====================
 
 function onQuaggaDetected(result) {
   if (!isScanningActive) return;
 
   const code = result.codeResult.code;
-  const confidence = result.codeResult.confidence || 0;
+  const format = result.codeResult.format;
 
-  // 🔥 Only process high confidence detections
-  if (code && code.length >= 8 && code !== lastDetectedBarcode) {
-    lastDetectedBarcode = code;
-    console.log("✅ Barcode detected:", code, "Confidence:", confidence.toFixed(2));
-    handleBarcodeDetection(code);
+  if (code && code.length >= 8) {
+    // 🔥 Add to buffer for confirmation
+    detectionBuffer.push(code);
+
+    // 🔥 Require 2 consecutive detections to confirm
+    if (detectionBuffer.length >= 2) {
+      const firstCode = detectionBuffer[detectionBuffer.length - 2];
+      const secondCode = detectionBuffer[detectionBuffer.length - 1];
+
+      if (firstCode === secondCode) {
+        handleBarcodeDetection(code);
+        detectionBuffer = [];
+      }
+    }
+
+    // 🔥 Keep buffer size manageable
+    if (detectionBuffer.length > 5) {
+      detectionBuffer.shift();
+    }
   }
 }
 
@@ -319,16 +290,19 @@ async function handleBarcodeDetection(barcode) {
 
   lastScanTime = now;
 
+  console.log("✅ Barcode scanned:", barcode);
+
   // 🔥 PLAY SOUND
   playBarcodeSound();
 
-  console.log("✅ Barcode scanned:", barcode);
-
-  // 🔥 Display barcode in input field
+  // 🔥 Display barcode immediately in input field
   barcodeInputElement.value = barcode;
 
   // 🔥 Stop scanning
   stopScanning();
+
+  // 🔥 Clear product info first
+  clearProductInfo();
 
   // 🔥 Fetch product
   try {
@@ -389,21 +363,23 @@ async function startScanning() {
     // 🔥 Clear product info
     clearProductInfo();
 
-    // 🔥 Initialize Quagga2 if not already done
+    // 🔥 Initialize Quagga if not already done
     const initialized = await initQuagga();
 
     if (!initialized) {
-      console.error("Failed to initialize Quagga2");
+      console.error("Failed to initialize Quagga");
       return;
     }
 
     // 🔥 Enable scanning mode
     isScanningActive = true;
-    lastDetectedBarcode = null;
     scanBtn.textContent = "Stop Scanning";
     scanBtn.style.backgroundColor = "#dc3545";
 
-    console.log("✅ Scanning started - Autofocus enabled - Point barcode at camera");
+    // 🔥 Clear detection buffer
+    detectionBuffer = [];
+
+    console.log("✅ Scanning started");
 
   } catch (err) {
     console.error("❌ Error starting scanner:", err);
@@ -426,7 +402,9 @@ function stopScanning() {
   scanBtn.textContent = "Start Scanning";
   scanBtn.style.backgroundColor = "#007bff";
   barcodeInputElement.placeholder = "Scan or type barcode here...";
-  lastDetectedBarcode = null;
+
+  // 🔥 Clear detection buffer
+  detectionBuffer = [];
 
   console.log("✅ Scanning stopped");
 }
@@ -442,9 +420,6 @@ scanBtn.addEventListener("click", () => {
     startScanning();
   }
 });
-
-// 🔥 TORCH BUTTON
-torchBtn.addEventListener("click", toggleTorch);
 
 // 🔥 BARCODE INPUT ENTER KEY EVENT
 barcodeInputElement.addEventListener("keypress", (e) => {
