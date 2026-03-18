@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
   <title>Barcode Scanner</title>
 
-  <!-- Original Quagga Library - TESTED AND WORKING -->
-  <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+  <!-- ZXing - Most Reliable Barcode Scanner -->
+  <script async src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
 
   <style>
     * {
@@ -32,11 +32,11 @@
       margin: 0 auto;
     }
 
-    /* Scanner container - LARGER FOR BETTER FOCUS AND DETECTION */
+    /* Scanner container - FULL SIZE */
     #scanner {
       width: 100%;
-      max-width: 450px;
-      height: 450px;
+      max-width: 500px;
+      height: 500px;
       margin: 0 auto 20px;
       border: 3px solid #333;
       border-radius: 8px;
@@ -247,6 +247,13 @@
     #closeModal:hover {
       background-color: #5a6268;
     }
+
+    .status {
+      font-size: 14px;
+      color: #666;
+      margin-top: 10px;
+      min-height: 20px;
+    }
   </style>
 </head>
 
@@ -255,8 +262,12 @@
   <div class="container">
     <h2>📱 Barcode Scanner</h2>
 
-    <!-- Scanner - LARGER FOR BETTER AUTOFOCUS -->
-    <div id="scanner"></div>
+    <!-- Scanner -->
+    <div id="scanner">
+      <video id="video" autoplay muted playsinline></video>
+    </div>
+
+    <div class="status" id="status">Ready to scan...</div>
 
     <!-- Barcode Input - Editable -->
     <input type="text" id="barcodeOutput" placeholder="Scan or type barcode here..." />
