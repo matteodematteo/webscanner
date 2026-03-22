@@ -37,7 +37,6 @@
       cameraBadge: document.getElementById("cameraBadge"),
       cameraPreview: document.getElementById("cameraPreview"),
       cameraSelect: document.getElementById("cameraSelect"),
-      cameraSwitchBtn: document.getElementById("cameraSwitchBtn"),
       captureCanvas: document.getElementById("captureCanvas"),
       clearHistoryBtn: document.getElementById("clearHistoryBtn"),
       detectorPill: document.getElementById("detectorPill"),
@@ -75,7 +74,7 @@
 
   function updateScanButton() {
     if (!state.isCameraRunning) {
-      state.els.scanBtn.textContent = "Start Camera";
+      state.els.scanBtn.textContent = "Start Scanning";
       state.els.scanBtn.dataset.mode = "start";
       return;
     }
@@ -129,7 +128,6 @@
     updateModePill();
     updateTorchUi(false, false);
     state.els.cameraSelect.disabled = true;
-    state.els.cameraSwitchBtn.disabled = true;
     setStatus("Camera stopped");
   }
 
@@ -222,9 +220,7 @@
       state.els.cameraSelect.appendChild(option);
     }
 
-    const hasMultiple = state.devices.length > 1;
     state.els.cameraSelect.disabled = state.devices.length === 0;
-    state.els.cameraSwitchBtn.disabled = !hasMultiple;
   }
 
   async function applyTrackEnhancements(track) {
@@ -381,14 +377,6 @@
     }
   }
 
-  function formatTimestamp(date) {
-    return new Intl.DateTimeFormat(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    }).format(date);
-  }
-
   function renderHistory() {
     state.els.historyList.innerHTML = "";
 
@@ -400,37 +388,19 @@
     for (let index = 0; index < state.history.length; index += 1) {
       const item = state.history[index];
       const article = document.createElement("article");
-      const image = document.createElement("img");
-      const copy = document.createElement("div");
-      const title = document.createElement("strong");
-      const meta = document.createElement("span");
-      const tag = document.createElement("span");
-
       article.className = "history-item";
-      image.className = "history-thumb";
-      image.src = item.imageUrl;
-      image.alt = item.detectedText ? `Detected result ${item.detectedText}` : "Recent scan thumbnail";
-
-      copy.className = "history-copy";
-      title.textContent = item.detectedText || "No code detected";
-      tag.className = `history-tag${item.detectedText ? "" : " is-warning"}`;
-      tag.textContent = item.detectedText ? "Detected" : "Snapshot only";
-      meta.appendChild(tag);
-      meta.append(` ${item.timestamp}`);
-
-      copy.appendChild(title);
-      copy.appendChild(meta);
-      article.appendChild(image);
-      article.appendChild(copy);
+      article.textContent = item.detectedText;
       state.els.historyList.appendChild(article);
     }
   }
 
-  function addHistoryItem(imageUrl, detectedText) {
+  function addHistoryItem(detectedText) {
+    if (!detectedText) {
+      return;
+    }
+
     state.history.unshift({
-      imageUrl: imageUrl,
-      detectedText: detectedText,
-      timestamp: formatTimestamp(new Date())
+      detectedText: detectedText
     });
 
     if (state.history.length > CONFIG.historyLimit) {
@@ -442,16 +412,21 @@
 
   async function captureAttempt() {
     if (!state.isCameraRunning || !state.track) {
-      return;
+      return false;
     }
 
     const canvas = drawSquareFrame();
     const detections = await readBarcodeFromCanvas(canvas);
     const detectedText = detections[0]?.rawValue || "";
-    const imageUrl = canvas.toDataURL("image/jpeg", 0.92);
+    if (detectedText) {
+      addHistoryItem(detectedText);
+      setStatus(`Detected: ${detectedText}`);
+      stopScanning(true);
+      return true;
+    }
 
-    addHistoryItem(imageUrl, detectedText);
-    setStatus(detectedText ? `Detected: ${detectedText}` : "No code detected in this frame");
+    setStatus("Scanning... point the barcode inside the square");
+    return false;
   }
 
   async function startScanning() {
@@ -468,28 +443,36 @@
     updateModePill();
     setStatus("Scanning started");
 
-    await captureAttempt();
+    if (await captureAttempt()) {
+      return;
+    }
 
     cleanupScanTimer();
-    state.scanTimer = window.setInterval(() => {
-      captureAttempt().catch(() => {
+    state.scanTimer = window.setInterval(async () => {
+      try {
+        const detected = await captureAttempt();
+        if (detected) {
+          cleanupScanTimer();
+        }
+      } catch {
         setStatus("Scanning had a temporary read error");
-      });
+      }
     }, CONFIG.scanIntervalMs);
   }
 
-  function stopScanning() {
+  function stopScanning(keepStatusMessage) {
     cleanupScanTimer();
     state.isScanning = false;
     updateScanButton();
     updateModePill();
-    setStatus(state.isCameraRunning ? "Scanning stopped, preview still live" : "Camera stopped");
+    if (!keepStatusMessage) {
+      setStatus(state.isCameraRunning ? "Scanning stopped, preview still live" : "Camera stopped");
+    }
   }
 
   async function handleMainButton() {
     if (!state.isCameraRunning) {
       await startCamera(state.activeDeviceId);
-      return;
     }
 
     if (state.isScanning) {
@@ -498,24 +481,6 @@
     }
 
     await startScanning();
-  }
-
-  async function switchToNextCamera() {
-    if (state.devices.length < 2) {
-      return;
-    }
-
-    const currentIndex = Math.max(0, state.devices.findIndex((device) => device.deviceId === state.activeDeviceId));
-    const nextIndex = (currentIndex + 1) % state.devices.length;
-    const nextDevice = state.devices[nextIndex];
-
-    const shouldResumeScanning = state.isScanning;
-    stopScanning();
-    await startCamera(nextDevice.deviceId);
-
-    if (shouldResumeScanning) {
-      await startScanning();
-    }
   }
 
   async function handleSelectChange() {
@@ -555,17 +520,6 @@
         setStatus(error.message || "Could not start the camera");
       } finally {
         state.els.scanBtn.disabled = false;
-      }
-    });
-
-    state.els.cameraSwitchBtn.addEventListener("click", async function () {
-      state.els.cameraSwitchBtn.disabled = true;
-      try {
-        await switchToNextCamera();
-      } catch (error) {
-        setStatus(error.message || "Could not switch camera");
-      } finally {
-        state.els.cameraSwitchBtn.disabled = state.devices.length < 2;
       }
     });
 
@@ -620,14 +574,19 @@
     if (supportIssue) {
       setStatus(supportIssue);
       state.els.scanBtn.disabled = true;
-      state.els.cameraSwitchBtn.disabled = true;
       state.els.cameraSelect.disabled = true;
       state.els.torchBtn.disabled = true;
       return;
     }
 
     await refreshDevices();
-    setStatus("Ready to start camera");
+    setStatus("Opening camera preview...");
+
+    try {
+      await startCamera(state.activeDeviceId);
+    } catch (error) {
+      setStatus(error.message || "Camera preview could not start automatically");
+    }
   }
 
   if (document.readyState === "loading") {
