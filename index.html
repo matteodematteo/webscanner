@@ -205,12 +205,6 @@
       gap: 12px;
     }
 
-    .primary-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1.6fr) minmax(120px, 0.8fr);
-      gap: 12px;
-    }
-
     .secondary-row {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -320,48 +314,14 @@
     }
 
     .history-item {
-      display: grid;
-      grid-template-columns: 92px minmax(0, 1fr);
-      gap: 12px;
-      align-items: center;
-      padding: 10px;
+      padding: 14px 16px;
       border-radius: var(--radius-md);
       background: rgba(255, 255, 255, 0.7);
       border: 1px solid var(--line);
-    }
-
-    .history-thumb {
-      width: 92px;
-      aspect-ratio: 1 / 1;
-      border-radius: 14px;
-      object-fit: cover;
-      background: var(--surface-soft);
-    }
-
-    .history-copy strong,
-    .history-copy span {
-      display: block;
-    }
-
-    .history-copy strong {
-      font-size: 0.96rem;
-      line-height: 1.3;
-      word-break: break-word;
-    }
-
-    .history-copy span {
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 0.84rem;
+      font-size: 1rem;
+      font-weight: 700;
       line-height: 1.35;
-    }
-
-    .history-tag {
-      color: var(--success);
-    }
-
-    .history-tag.is-warning {
-      color: var(--warning);
+      word-break: break-word;
     }
 
     .visually-hidden {
@@ -392,7 +352,6 @@
         align-items: stretch;
       }
 
-      .primary-row,
       .secondary-row {
         grid-template-columns: 1fr;
       }
@@ -422,7 +381,7 @@
         <div>
           <h1>Camera Scanner</h1>
           <p class="subtitle">
-            Large square preview on top, one tap to start scanning, quick camera switch, torch control, and a recent result list underneath.
+            The camera preview stays visible, you tap once to scan, the scan stops right after one barcode is found, and the list below shows only barcode values.
           </p>
         </div>
         <div class="status-pill" id="statusText" aria-live="polite">Waiting to start camera</div>
@@ -440,15 +399,12 @@
         </div>
 
         <div class="preview-placeholder" id="previewPlaceholder">
-          Tap "Start Camera" to open the live camera preview. For the best result, use HTTPS and the rear camera on your phone.
+          The app is trying to open the live camera preview automatically. If permission was blocked, tap "Start Scanning" to try again.
         </div>
       </div>
 
       <div class="controls">
-        <div class="primary-row">
-          <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Camera</button>
-          <button class="btn btn-muted" id="cameraSwitchBtn" type="button" disabled>Switch Camera</button>
-        </div>
+        <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
 
         <div class="secondary-row">
           <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
@@ -472,7 +428,7 @@
         <button class="btn btn-muted" id="clearHistoryBtn" type="button">Clear List</button>
       </div>
       <div class="history-list" id="historyList" aria-live="polite">
-        <p class="history-empty" id="historyEmpty">No scan attempts yet. Once scanning starts, your latest results will appear here.</p>
+        <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
       </div>
     </section>
   </main>
