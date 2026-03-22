@@ -2,6 +2,7 @@
 
 (function bootstrapCameraApp() {
   const CONFIG = {
+    settingsStorageKey: "camera_scanner_settings",
     historyLimit: 10,
     scanIntervalMs: 1200,
     preferredSquareSize: 2160,
@@ -29,7 +30,8 @@
     torchOn: false,
     scanTimer: 0,
     history: [],
-    detector: null
+    detector: null,
+    selectedHistoryIndex: -1
   };
 
   function queryElements() {
@@ -37,20 +39,33 @@
       cameraBadge: document.getElementById("cameraBadge"),
       cameraPreview: document.getElementById("cameraPreview"),
       cameraSelect: document.getElementById("cameraSelect"),
+      cancelDeleteBtn: document.getElementById("cancelDeleteBtn"),
       captureCanvas: document.getElementById("captureCanvas"),
       clearHistoryBtn: document.getElementById("clearHistoryBtn"),
-      detectorPill: document.getElementById("detectorPill"),
+      confirmDeleteBtn: document.getElementById("confirmDeleteBtn"),
+      deleteDialog: document.getElementById("deleteDialog"),
+    deleteDialogText: document.getElementById("deleteDialogText"),
+    deleteRecordBtn: document.getElementById("deleteRecordBtn"),
+    detectorPill: document.getElementById("detectorPill"),
       historyEmpty: document.getElementById("historyEmpty"),
       historyList: document.getElementById("historyList"),
       previewFrame: document.getElementById("previewFrame"),
       previewPlaceholder: document.getElementById("previewPlaceholder"),
-      resolutionBadge: document.getElementById("resolutionBadge"),
-      scanBtn: document.getElementById("scanBtn"),
-      scanModePill: document.getElementById("scanModePill"),
-      statusText: document.getElementById("statusText"),
-      torchBtn: document.getElementById("torchBtn"),
-      torchPill: document.getElementById("torchPill")
-    };
+    resolutionBadge: document.getElementById("resolutionBadge"),
+    closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+    scanBtn: document.getElementById("scanBtn"),
+    scanModePill: document.getElementById("scanModePill"),
+    saveSettingsBtn: document.getElementById("saveSettingsBtn"),
+    settingsBtn: document.getElementById("settingsBtn"),
+    settingsDialog: document.getElementById("settingsDialog"),
+    settingsSaveNote: document.getElementById("settingsSaveNote"),
+    shopKeyInput: document.getElementById("shopKeyInput"),
+    loginInput: document.getElementById("loginInput"),
+    passwordInput: document.getElementById("passwordInput"),
+    statusText: document.getElementById("statusText"),
+    torchBtn: document.getElementById("torchBtn"),
+    torchPill: document.getElementById("torchPill")
+  };
   }
 
   function requireElements(els) {
@@ -65,6 +80,73 @@
 
   function setStatus(message) {
     state.els.statusText.textContent = message;
+  }
+
+  function readSavedSettings() {
+    try {
+      const raw = localStorage.getItem(CONFIG.settingsStorageKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return {
+        shopKey: parsed?.shopKey || "",
+        login: parsed?.login || "",
+        password: parsed?.password || ""
+      };
+    } catch {
+      return {
+        shopKey: "",
+        login: "",
+        password: ""
+      };
+    }
+  }
+
+  function fillSettingsForm(values) {
+    state.els.shopKeyInput.value = values.shopKey || "";
+    state.els.loginInput.value = values.login || "";
+    state.els.passwordInput.value = values.password || "";
+  }
+
+  function openSettingsDialog() {
+    fillSettingsForm(readSavedSettings());
+    state.els.settingsSaveNote.textContent = "";
+    state.els.settingsDialog.classList.add("is-open");
+    state.els.settingsDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closeSettingsDialog() {
+    state.els.settingsDialog.classList.remove("is-open");
+    state.els.settingsDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function saveSettings() {
+    const values = {
+      shopKey: state.els.shopKeyInput.value.trim(),
+      login: state.els.loginInput.value.trim(),
+      password: state.els.passwordInput.value
+    };
+
+    localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(values));
+    state.els.settingsSaveNote.textContent = "Saved successfully on this device.";
+    setStatus("Settings saved");
+  }
+
+  function updateDeleteButton() {
+    state.els.deleteRecordBtn.disabled = state.selectedHistoryIndex < 0;
+  }
+
+  function closeDeleteDialog() {
+    state.els.deleteDialog.classList.remove("is-open");
+    state.els.deleteDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function openDeleteDialog() {
+    if (state.selectedHistoryIndex < 0 || !state.history[state.selectedHistoryIndex]) {
+      return;
+    }
+
+    state.els.deleteDialogText.textContent = `Do you want to delete this record: ${state.history[state.selectedHistoryIndex].detectedText}?`;
+    state.els.deleteDialog.classList.add("is-open");
+    state.els.deleteDialog.setAttribute("aria-hidden", "false");
   }
 
   function setPreviewActive(active) {
@@ -381,6 +463,8 @@
     state.els.historyList.innerHTML = "";
 
     if (state.history.length === 0) {
+      state.selectedHistoryIndex = -1;
+      updateDeleteButton();
       state.els.historyList.appendChild(state.els.historyEmpty);
       return;
     }
@@ -389,9 +473,18 @@
       const item = state.history[index];
       const article = document.createElement("article");
       article.className = "history-item";
+      if (index === state.selectedHistoryIndex) {
+        article.classList.add("is-selected");
+      }
       article.textContent = item.detectedText;
+      article.dataset.index = String(index);
+      article.setAttribute("tabindex", "0");
+      article.setAttribute("role", "button");
+      article.setAttribute("aria-label", `Barcode record ${item.detectedText}`);
       state.els.historyList.appendChild(article);
     }
+
+    updateDeleteButton();
   }
 
   function addHistoryItem(detectedText) {
@@ -407,6 +500,7 @@
       state.history.length = CONFIG.historyLimit;
     }
 
+    state.selectedHistoryIndex = 0;
     renderHistory();
   }
 
@@ -507,8 +601,36 @@
 
   function clearHistory() {
     state.history = [];
+    state.selectedHistoryIndex = -1;
     renderHistory();
     setStatus("Recent attempt list cleared");
+  }
+
+  function selectHistoryItem(index) {
+    if (index < 0 || index >= state.history.length) {
+      return;
+    }
+
+    state.selectedHistoryIndex = index;
+    renderHistory();
+  }
+
+  function deleteSelectedRecord() {
+    if (state.selectedHistoryIndex < 0 || !state.history[state.selectedHistoryIndex]) {
+      closeDeleteDialog();
+      return;
+    }
+
+    state.history.splice(state.selectedHistoryIndex, 1);
+    if (state.history.length === 0) {
+      state.selectedHistoryIndex = -1;
+    } else if (state.selectedHistoryIndex >= state.history.length) {
+      state.selectedHistoryIndex = state.history.length - 1;
+    }
+
+    closeDeleteDialog();
+    renderHistory();
+    setStatus("Record deleted");
   }
 
   function bindEvents() {
@@ -544,6 +666,53 @@
     });
 
     state.els.clearHistoryBtn.addEventListener("click", clearHistory);
+    state.els.deleteRecordBtn.addEventListener("click", openDeleteDialog);
+    state.els.cancelDeleteBtn.addEventListener("click", closeDeleteDialog);
+    state.els.confirmDeleteBtn.addEventListener("click", deleteSelectedRecord);
+    state.els.settingsBtn.addEventListener("click", openSettingsDialog);
+    state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
+    state.els.saveSettingsBtn.addEventListener("click", saveSettings);
+
+    state.els.historyList.addEventListener("click", function (event) {
+      const record = event.target.closest(".history-item");
+      if (!record) {
+        return;
+      }
+
+      const index = Number(record.dataset.index);
+      if (!Number.isNaN(index)) {
+        selectHistoryItem(index);
+      }
+    });
+
+    state.els.historyList.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+
+      const record = event.target.closest(".history-item");
+      if (!record) {
+        return;
+      }
+
+      event.preventDefault();
+      const index = Number(record.dataset.index);
+      if (!Number.isNaN(index)) {
+        selectHistoryItem(index);
+      }
+    });
+
+    state.els.deleteDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.deleteDialog) {
+        closeDeleteDialog();
+      }
+    });
+
+    state.els.settingsDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.settingsDialog) {
+        closeSettingsDialog();
+      }
+    });
 
     window.addEventListener("beforeunload", function () {
       stopScanning();
@@ -567,6 +736,7 @@
     updateScanButton();
     updateModePill();
     renderHistory();
+    fillSettingsForm(readSavedSettings());
     bindEvents();
     await initDetectorStatus();
 
