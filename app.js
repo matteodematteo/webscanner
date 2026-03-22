@@ -202,10 +202,12 @@
     const shopKey = (settings.shopKey || "").trim();
     const login = (settings.login || "").trim();
     const password = settings.password || "";
+    const targetSite = "www.lgerp.cc";
 
     if (!shopKey || !login || !password) {
       const message = "Fill shop key, login, and password first.";
       state.els.settingsSaveNote.textContent = message;
+      saveCookieState(state.authCookie, message);
       setStatus(message);
       return;
     }
@@ -215,7 +217,8 @@
     params.set("login_name", login);
     params.set("password", password);
 
-    state.els.settingsSaveNote.textContent = "Sending login request through cookie proxy...";
+    state.els.settingsSaveNote.textContent = `Sending login request for ${login} on ${targetSite}...`;
+    saveCookieState(state.authCookie, `Refreshing cookie for ${login} on ${targetSite}...`);
     setStatus("Requesting new cookie...");
 
     try {
@@ -243,18 +246,18 @@
       const cookie = extractCookieFromResponse(parsed);
 
       if (cookie) {
-        saveCookieState(cookie, "Cookie loaded and saved on this device.");
+        saveCookieState(cookie, `Cookie refreshed successfully for ${login} on ${targetSite}.`);
         state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
         setStatus("Cookie refreshed");
         return;
       }
 
-      saveCookieState("", "Proxy answered, but it did not return a usable cookie.");
+      saveCookieState("", `Refresh failed for ${login} on ${targetSite}: proxy returned no usable cookie.`);
       state.els.settingsSaveNote.textContent = "Proxy answered, but no usable cookie was returned.";
       setStatus("Cookie not returned");
     } catch (error) {
       const message = error.message || "Login request failed.";
-      saveCookieState("", `Login failed: ${message}`);
+      saveCookieState("", `Refresh failed for ${login} on ${targetSite}: ${message}`);
       state.els.settingsSaveNote.textContent = message;
       setStatus("Login failed");
     }
