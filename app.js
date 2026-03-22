@@ -2,7 +2,10 @@
 
 (function bootstrapCameraApp() {
   const CONFIG = {
+    loginEndpoint: "https://www.lgerp.cc/login.do",
     settingsStorageKey: "camera_scanner_settings",
+    cookieStorageKey: "camera_scanner_cookie",
+    cookieStatusStorageKey: "camera_scanner_cookie_status",
     historyLimit: 10,
     scanIntervalMs: 1200,
     preferredSquareSize: 2160,
@@ -31,11 +34,14 @@
     scanTimer: 0,
     history: [],
     detector: null,
-    selectedHistoryIndex: -1
+    selectedHistoryIndex: -1,
+    authCookie: "",
+    authStatus: ""
   };
 
   function queryElements() {
     return {
+      authStatusText: document.getElementById("authStatusText"),
       cameraBadge: document.getElementById("cameraBadge"),
       cameraPreview: document.getElementById("cameraPreview"),
       cameraSelect: document.getElementById("cameraSelect"),
@@ -52,10 +58,13 @@
       previewFrame: document.getElementById("previewFrame"),
       previewPlaceholder: document.getElementById("previewPlaceholder"),
     resolutionBadge: document.getElementById("resolutionBadge"),
-    closeSettingsBtn: document.getElementById("closeSettingsBtn"),
-    scanBtn: document.getElementById("scanBtn"),
-    scanModePill: document.getElementById("scanModePill"),
-    saveSettingsBtn: document.getElementById("saveSettingsBtn"),
+      closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+      cookieOutput: document.getElementById("cookieOutput"),
+      scanBtn: document.getElementById("scanBtn"),
+      scanModePill: document.getElementById("scanModePill"),
+      loginSettingsBtn: document.getElementById("loginSettingsBtn"),
+      refreshCookieBtn: document.getElementById("refreshCookieBtn"),
+      saveSettingsBtn: document.getElementById("saveSettingsBtn"),
     settingsBtn: document.getElementById("settingsBtn"),
     settingsDialog: document.getElementById("settingsDialog"),
     settingsSaveNote: document.getElementById("settingsSaveNote"),
@@ -80,6 +89,24 @@
 
   function setStatus(message) {
     state.els.statusText.textContent = message;
+  }
+
+  function saveCookieState(cookie, status) {
+    state.authCookie = cookie || "";
+    state.authStatus = status || "";
+    localStorage.setItem(CONFIG.cookieStorageKey, state.authCookie);
+    localStorage.setItem(CONFIG.cookieStatusStorageKey, state.authStatus);
+    renderCookieState();
+  }
+
+  function loadCookieState() {
+    state.authCookie = localStorage.getItem(CONFIG.cookieStorageKey) || "";
+    state.authStatus = localStorage.getItem(CONFIG.cookieStatusStorageKey) || "No cookie saved yet.";
+  }
+
+  function renderCookieState() {
+    state.els.authStatusText.textContent = state.authStatus || "No cookie saved yet.";
+    state.els.cookieOutput.value = state.authCookie || "";
   }
 
   function readSavedSettings() {
@@ -128,6 +155,85 @@
     localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(values));
     state.els.settingsSaveNote.textContent = "Saved successfully on this device.";
     setStatus("Settings saved");
+  }
+
+  function extractCookieFromText(text) {
+    const value = String(text || "");
+    const parsedPairs = value.match(/[A-Za-z0-9_.-]+=([^;,\r\n]|"[^"]*")+/g);
+    if (!parsedPairs || parsedPairs.length === 0) {
+      return "";
+    }
+
+    const filtered = parsedPairs.filter((part) => {
+      const lower = part.toLowerCase();
+      return !(
+        lower.startsWith("path=") ||
+        lower.startsWith("expires=") ||
+        lower.startsWith("domain=") ||
+        lower.startsWith("max-age=") ||
+        lower.startsWith("samesite=") ||
+        lower.startsWith("httponly")
+      );
+    });
+
+    return filtered.join("; ");
+  }
+
+  async function loginAndRefreshCookie(settingsOverride) {
+    const settings = settingsOverride || readSavedSettings();
+    const shopKey = (settings.shopKey || "").trim();
+    const login = (settings.login || "").trim();
+    const password = settings.password || "";
+
+    if (!shopKey || !login || !password) {
+      const message = "Fill shop key, login, and password first.";
+      state.els.settingsSaveNote.textContent = message;
+      setStatus(message);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("shopkey", shopKey);
+    formData.append("login_name", login);
+    formData.append("password", password);
+
+    state.els.settingsSaveNote.textContent = "Sending login request...";
+    setStatus("Requesting new cookie...");
+
+    try {
+      const response = await fetch(CONFIG.loginEndpoint, {
+        method: "POST",
+        body: formData,
+        headers: {
+          Accept: "application/json, text/javascript, */*; q=0.01",
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        credentials: "include"
+      });
+
+      const responseText = await response.text();
+      let cookie = extractCookieFromText(responseText);
+
+      if (!cookie && document.cookie) {
+        cookie = document.cookie;
+      }
+
+      if (cookie) {
+        saveCookieState(cookie, "Cookie loaded and saved on this device.");
+        state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
+        setStatus("Cookie refreshed");
+        return;
+      }
+
+      saveCookieState("", "Login request sent, but this browser could not read the cookie header directly.");
+      state.els.settingsSaveNote.textContent = "Login sent, but cookie was not readable from this page.";
+      setStatus("Cookie not readable");
+    } catch (error) {
+      const message = error.message || "Login request failed.";
+      saveCookieState("", `Login failed: ${message}`);
+      state.els.settingsSaveNote.textContent = message;
+      setStatus("Login failed");
+    }
   }
 
   function updateDeleteButton() {
@@ -672,6 +778,19 @@
     state.els.settingsBtn.addEventListener("click", openSettingsDialog);
     state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
     state.els.saveSettingsBtn.addEventListener("click", saveSettings);
+    state.els.loginSettingsBtn.addEventListener("click", async function () {
+      const values = {
+        shopKey: state.els.shopKeyInput.value.trim(),
+        login: state.els.loginInput.value.trim(),
+        password: state.els.passwordInput.value
+      };
+
+      localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(values));
+      await loginAndRefreshCookie(values);
+    });
+    state.els.refreshCookieBtn.addEventListener("click", async function () {
+      await loginAndRefreshCookie();
+    });
 
     state.els.historyList.addEventListener("click", function (event) {
       const record = event.target.closest(".history-item");
@@ -737,6 +856,8 @@
     updateModePill();
     renderHistory();
     fillSettingsForm(readSavedSettings());
+    loadCookieState();
+    renderCookieState();
     bindEvents();
     await initDetectorStatus();
 
