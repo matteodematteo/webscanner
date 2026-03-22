@@ -3,6 +3,7 @@
 (function bootstrapCameraApp() {
   const CONFIG = {
     loginEndpoint: "https://www.lgerp.cc/login.do",
+    cookieProxyEndpoint: "https://lgkiller.mattoteo96.workers.dev/",
     settingsStorageKey: "camera_scanner_settings",
     cookieStorageKey: "camera_scanner_cookie",
     cookieStatusStorageKey: "camera_scanner_cookie_status",
@@ -50,14 +51,14 @@
       clearHistoryBtn: document.getElementById("clearHistoryBtn"),
       confirmDeleteBtn: document.getElementById("confirmDeleteBtn"),
       deleteDialog: document.getElementById("deleteDialog"),
-    deleteDialogText: document.getElementById("deleteDialogText"),
-    deleteRecordBtn: document.getElementById("deleteRecordBtn"),
-    detectorPill: document.getElementById("detectorPill"),
+      deleteDialogText: document.getElementById("deleteDialogText"),
+      deleteRecordBtn: document.getElementById("deleteRecordBtn"),
+      detectorPill: document.getElementById("detectorPill"),
       historyEmpty: document.getElementById("historyEmpty"),
       historyList: document.getElementById("historyList"),
       previewFrame: document.getElementById("previewFrame"),
       previewPlaceholder: document.getElementById("previewPlaceholder"),
-    resolutionBadge: document.getElementById("resolutionBadge"),
+      resolutionBadge: document.getElementById("resolutionBadge"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
       cookieOutput: document.getElementById("cookieOutput"),
       scanBtn: document.getElementById("scanBtn"),
@@ -65,16 +66,16 @@
       loginSettingsBtn: document.getElementById("loginSettingsBtn"),
       refreshCookieBtn: document.getElementById("refreshCookieBtn"),
       saveSettingsBtn: document.getElementById("saveSettingsBtn"),
-    settingsBtn: document.getElementById("settingsBtn"),
-    settingsDialog: document.getElementById("settingsDialog"),
-    settingsSaveNote: document.getElementById("settingsSaveNote"),
-    shopKeyInput: document.getElementById("shopKeyInput"),
-    loginInput: document.getElementById("loginInput"),
-    passwordInput: document.getElementById("passwordInput"),
-    statusText: document.getElementById("statusText"),
-    torchBtn: document.getElementById("torchBtn"),
-    torchPill: document.getElementById("torchPill")
-  };
+      settingsBtn: document.getElementById("settingsBtn"),
+      settingsDialog: document.getElementById("settingsDialog"),
+      settingsSaveNote: document.getElementById("settingsSaveNote"),
+      shopKeyInput: document.getElementById("shopKeyInput"),
+      loginInput: document.getElementById("loginInput"),
+      passwordInput: document.getElementById("passwordInput"),
+      statusText: document.getElementById("statusText"),
+      torchBtn: document.getElementById("torchBtn"),
+      torchPill: document.getElementById("torchPill")
+    };
   }
 
   function requireElements(els) {
@@ -157,8 +158,25 @@
     setStatus("Settings saved");
   }
 
-  function extractCookieFromText(text) {
-    const value = String(text || "");
+  function extractCookieFromResponse(payload) {
+    if (!payload) {
+      return "";
+    }
+
+    if (typeof payload === "object" && payload !== null) {
+      const directCookie =
+        payload.cookie ||
+        payload.fullCookie ||
+        payload.data?.cookie ||
+        payload.data?.fullCookie ||
+        "";
+
+      if (directCookie) {
+        return String(directCookie);
+      }
+    }
+
+    const value = String(payload || "");
     const parsedPairs = value.match(/[A-Za-z0-9_.-]+=([^;,\r\n]|"[^"]*")+/g);
     if (!parsedPairs || parsedPairs.length === 0) {
       return "";
@@ -192,31 +210,37 @@
       return;
     }
 
-    const formData = new FormData();
-    formData.append("shopkey", shopKey);
-    formData.append("login_name", login);
-    formData.append("password", password);
+    const params = new URLSearchParams();
+    params.set("shopkey", shopKey);
+    params.set("login_name", login);
+    params.set("password", password);
 
-    state.els.settingsSaveNote.textContent = "Sending login request...";
+    state.els.settingsSaveNote.textContent = "Sending login request through cookie proxy...";
     setStatus("Requesting new cookie...");
 
     try {
-      const response = await fetch(CONFIG.loginEndpoint, {
+      const response = await fetch(CONFIG.cookieProxyEndpoint, {
         method: "POST",
-        body: formData,
+        body: params.toString(),
         headers: {
-          Accept: "application/json, text/javascript, */*; q=0.01",
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        credentials: "include"
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
       });
 
-      const responseText = await response.text();
-      let cookie = extractCookieFromText(responseText);
-
-      if (!cookie && document.cookie) {
-        cookie = document.cookie;
+      if (!response.ok) {
+        throw new Error(`Proxy request failed with status ${response.status}`);
       }
+
+      const responseText = await response.text();
+      let parsed = responseText;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch {
+        // Keep plain text fallback.
+      }
+
+      const cookie = extractCookieFromResponse(parsed);
 
       if (cookie) {
         saveCookieState(cookie, "Cookie loaded and saved on this device.");
@@ -225,9 +249,9 @@
         return;
       }
 
-      saveCookieState("", "Login request sent, but this browser could not read the cookie header directly.");
-      state.els.settingsSaveNote.textContent = "Login sent, but cookie was not readable from this page.";
-      setStatus("Cookie not readable");
+      saveCookieState("", "Proxy answered, but it did not return a usable cookie.");
+      state.els.settingsSaveNote.textContent = "Proxy answered, but no usable cookie was returned.";
+      setStatus("Cookie not returned");
     } catch (error) {
       const message = error.message || "Login request failed.";
       saveCookieState("", `Login failed: ${message}`);
