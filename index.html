@@ -84,6 +84,33 @@
       white-space: nowrap;
     }
 
+    .auth-panel {
+      margin-top: 14px;
+      padding: 14px;
+      border-radius: var(--radius-md);
+      background: rgba(24, 31, 42, 0.05);
+      border: 1px solid rgba(24, 31, 42, 0.08);
+    }
+
+    .auth-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .auth-head strong {
+      font-size: 0.95rem;
+    }
+
+    .auth-copy {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
     .preview-frame {
       position: relative;
       aspect-ratio: 1 / 1;
@@ -373,7 +400,7 @@
 
     .dialog-actions {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
       gap: 10px;
       margin-top: 16px;
     }
@@ -403,6 +430,11 @@
       background: rgba(255, 255, 255, 0.95);
       color: var(--text);
       font: inherit;
+    }
+
+    .textarea {
+      min-height: 100px;
+      resize: vertical;
     }
 
     .input:focus,
@@ -492,10 +524,19 @@
   <main class="app-shell">
     <section class="top-card">
       <div class="title-row">
-        <div>
+      <div>
           <h1>Camera Scanner</h1>
           <div class="status-pill" id="statusText" aria-live="polite">Waiting to start camera</div>
         </div>
+      </div>
+
+      <div class="auth-panel">
+        <div class="auth-head">
+          <strong>Cookie Status</strong>
+          <button class="btn btn-muted" id="refreshCookieBtn" type="button">Refresh Cookie</button>
+        </div>
+        <p class="auth-copy" id="authStatusText">No cookie saved yet.</p>
+        <textarea class="input textarea" id="cookieOutput" readonly placeholder="Saved cookie will appear here on this device."></textarea>
       </div>
 
       <div class="preview-frame" id="previewFrame">
@@ -585,6 +626,7 @@
       </div>
       <div class="save-note" id="settingsSaveNote" aria-live="polite"></div>
       <div class="dialog-actions">
+        <button class="btn btn-primary" id="loginSettingsBtn" type="button">Login</button>
         <button class="btn btn-primary" id="saveSettingsBtn" type="button">Save</button>
         <button class="btn btn-muted" id="closeSettingsBtn" type="button">Back</button>
       </div>
