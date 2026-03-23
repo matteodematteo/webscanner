@@ -57,15 +57,14 @@
       cameraPreview: document.getElementById("cameraPreview"),
       cameraSelect: document.getElementById("cameraSelect"),
       clearAllBtn: document.getElementById("clearAllBtn"),
+      clearBarcodeBtn: document.getElementById("clearBarcodeBtn"),
       clearSelectedBtn: document.getElementById("clearSelectedBtn"),
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
-      detectorPill: document.getElementById("detectorPill"),
       historyEmpty: document.getElementById("historyEmpty"),
       historyList: document.getElementById("historyList"),
       loginInput: document.getElementById("loginInput"),
       loginSettingsBtn: document.getElementById("loginSettingsBtn"),
-      lookupBtn: document.getElementById("lookupBtn"),
       passwordInput: document.getElementById("passwordInput"),
       previewFrame: document.getElementById("previewFrame"),
       previewPlaceholder: document.getElementById("previewPlaceholder"),
@@ -73,14 +72,12 @@
       resolutionBadge: document.getElementById("resolutionBadge"),
       saveSettingsBtn: document.getElementById("saveSettingsBtn"),
       scanBtn: document.getElementById("scanBtn"),
-      scanModePill: document.getElementById("scanModePill"),
       settingsBtn: document.getElementById("settingsBtn"),
       settingsDialog: document.getElementById("settingsDialog"),
       settingsSaveNote: document.getElementById("settingsSaveNote"),
       shopKeyInput: document.getElementById("shopKeyInput"),
       statusText: document.getElementById("statusText"),
-      torchBtn: document.getElementById("torchBtn"),
-      torchPill: document.getElementById("torchPill")
+      torchBtn: document.getElementById("torchBtn")
     };
   }
 
@@ -479,7 +476,6 @@
   }
 
   function updateModePill() {
-    state.els.scanModePill.textContent = state.isScanning ? "Mode: scanning" : "Mode: preview only";
     state.els.previewFrame.classList.toggle("is-scanning", state.isScanning);
   }
 
@@ -569,9 +565,6 @@
   function updateTorchUi(supported, enabled) {
     state.els.torchBtn.disabled = !supported || !state.isCameraRunning;
     state.els.torchBtn.textContent = enabled ? "Torch On" : "Torch Off";
-    state.els.torchPill.textContent = supported
-      ? `Torch: ${enabled ? "enabled" : "ready"}`
-      : "Torch: unavailable";
   }
 
   async function syncTorchSupport() {
@@ -769,13 +762,6 @@
     }
   }
 
-  async function initDetectorStatus() {
-    const detector = await createDetector();
-    state.els.detectorPill.textContent = detector
-      ? "Detector: BarcodeDetector ready"
-      : "Detector: snapshots only";
-  }
-
   function bindEvents() {
     state.els.scanBtn.addEventListener("click", async function () {
       state.els.scanBtn.disabled = true;
@@ -788,15 +774,9 @@
       }
     });
 
-    state.els.lookupBtn.addEventListener("click", async function () {
-      state.els.lookupBtn.disabled = true;
-      try {
-        await fetchProductInfo(state.els.barcodeInput.value);
-      } catch (error) {
-        setStatus(error.message || "Could not load product info");
-      } finally {
-        state.els.lookupBtn.disabled = false;
-      }
+    state.els.clearBarcodeBtn.addEventListener("click", function () {
+      state.els.barcodeInput.value = "";
+      setStatus("Barcode field cleared");
     });
 
     state.els.clearSelectedBtn.addEventListener("click", clearSelectedHistory);
@@ -825,7 +805,11 @@
     state.els.barcodeInput.addEventListener("keydown", async function (event) {
       if (event.key !== "Enter") return;
       event.preventDefault();
-      state.els.lookupBtn.click();
+      try {
+        await fetchProductInfo(state.els.barcodeInput.value);
+      } catch (error) {
+        setStatus(error.message || "Could not load product info");
+      }
     });
 
     state.els.cameraSelect.addEventListener("change", async function () {
@@ -919,13 +903,11 @@
     clearResultFields();
     renderHistory();
     bindEvents();
-    await initDetectorStatus();
 
     const supportIssue = getCameraSupportIssue();
     if (supportIssue) {
       setStatus(supportIssue);
       state.els.scanBtn.disabled = true;
-      state.els.lookupBtn.disabled = true;
       state.els.cameraSelect.disabled = true;
       state.els.torchBtn.disabled = true;
       return;
