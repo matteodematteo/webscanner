@@ -235,33 +235,40 @@
   function extractCookieFromResponse(payload) {
     if (!payload) return "";
 
+    let rawCookie = "";
     if (typeof payload === "object" && payload !== null) {
-      const directCookie =
+      rawCookie =
         payload.cookie ||
         payload.fullCookie ||
         payload.data?.cookie ||
         payload.data?.fullCookie ||
         "";
-      if (directCookie) return String(directCookie);
+    } else {
+      rawCookie = String(payload);
     }
 
-    const value = String(payload);
-    const parts = value.match(/[A-Za-z0-9_.-]+=([^;,\r\n]|"[^"]*")+/g);
-    if (!parts || parts.length === 0) return "";
+    if (!rawCookie) return "";
 
-    return parts
-      .filter((part) => {
-        const lower = part.toLowerCase();
-        return !(
-          lower.startsWith("path=") ||
-          lower.startsWith("expires=") ||
-          lower.startsWith("domain=") ||
-          lower.startsWith("max-age=") ||
-          lower.startsWith("samesite=") ||
-          lower.startsWith("httponly")
-        );
-      })
-      .join("; ");
+    const sessionMatch = rawCookie.match(/SESSION=([^;,\r\n]+)/i);
+    const rememberMatches = [...rawCookie.matchAll(/rememberMe=([^;,\r\n]+)/gi)];
+    let rememberValue = "";
+
+    for (let index = 0; index < rememberMatches.length; index += 1) {
+      const candidate = rememberMatches[index]?.[1] || "";
+      if (candidate && candidate !== "deleteMe") {
+        rememberValue = candidate;
+      }
+    }
+
+    const cookieParts = [];
+    if (sessionMatch?.[1]) {
+      cookieParts.push(`SESSION=${sessionMatch[1]}`);
+    }
+    if (rememberValue) {
+      cookieParts.push(`rememberMe=${rememberValue}`);
+    }
+
+    return cookieParts.join("; ");
   }
 
   async function loginAndRefreshCookie(settingsOverride) {
