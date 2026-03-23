@@ -325,8 +325,7 @@
     const response = await fetch(CONFIG.sendTxtEndpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json"
+        "Content-Type": "text/plain"
       },
       body: JSON.stringify(payload)
     });
