@@ -481,6 +481,7 @@
 <body>
   <main class="app-shell">
     <section class="card">
+      <h1>Web Barcode Scanner</h1>
       <div class="top-status" id="statusText" aria-live="polite">Opening camera preview...</div>
 
       <div class="preview-frame" id="previewFrame">
@@ -526,9 +527,9 @@
         <div class="field-card span-half"><label for="field_goods_code">Goods Code</label><div class="field-value" id="field_goods_code"></div></div>
         <div class="field-card span-half"><label for="field_supplier_name">Supplier Name</label><div class="field-value" id="field_supplier_name"></div></div>
         <div class="field-card span-full"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
-        <div class="field-card span-third"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
-        <div class="field-card span-third"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
-        <div class="field-card span-third"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
+        <div class="field-card span-third"><label for="field_p_price">P Price</label><div class="field-value" id="field_p_price"></div></div>
+        <div class="field-card span-third"><label for="field_s_price">S Price</label><div class="field-value" id="field_s_price"></div></div>
+        <div class="field-card span-third"><label for="field_real_inventory">Real Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
         <div class="field-card span-half" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
         <div class="field-card span-half" id="field_discount_percent_card" hidden><label for="field_discount_percent">Discount%</label><div class="field-value is-discount" id="field_discount_percent"></div></div>
         <div class="field-card span-half"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
@@ -543,6 +544,7 @@
       <div class="history-actions">
         <button class="btn btn-muted" id="clearSelectedBtn" type="button" disabled>Clean Selected</button>
         <button class="btn btn-muted" id="clearAllBtn" type="button">Clean All</button>
+        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
       </div>
       <div class="history-list" id="historyList" aria-live="polite">
         <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
@@ -584,7 +586,18 @@
     </div>
   </div>
 
+  <div class="dialog-backdrop" id="confirmDialog" aria-hidden="true">
+    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle">
+      <h2 id="confirmDialogTitle">Confirm action</h2>
+      <p id="confirmDialogText">Are you sure?</p>
+      <div class="dialog-actions">
+        <button class="btn btn-primary" id="confirmDialogOkBtn" type="button">Confirm</button>
+        <button class="btn btn-muted" id="confirmDialogCancelBtn" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=15" defer></script>
+  <script src="app.js?v=17" defer></script>
 </body>
 </html>
