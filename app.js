@@ -5,6 +5,7 @@
     cookieProxyEndpoint: "https://lgkiller.mattoteo96.workers.dev/",
     infoEndpoint: "https://lgerp.cc/goods/ongoodsCode",
     infoProxyEndpoint: "https://lgkillergetinfo.mattoteo96.workers.dev/",
+    discountProxyEndpoint: "https://lgkillerdiscountinfo.mattoteo96.workers.dev/",
     settingsStorageKey: "web_barcode_scanner_settings",
     cookieStorageKey: "web_barcode_scanner_cookie",
     cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
@@ -206,6 +207,26 @@
     return response.text();
   }
 
+  async function fetchDiscountInfoThroughProxy(code, cookie) {
+    const response = await fetch(CONFIG.discountProxyEndpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        barcode: code,
+        cookie: cookie
+      }),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Discount proxy request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
   function selectHistoryItem(index) {
     if (index < 0 || index >= state.history.length) return;
     state.selectedHistoryIndex = index;
@@ -389,7 +410,7 @@
   }
 
   function normalizeSaleData(rawData) {
-    const saleSource = rawData?.sale;
+    const saleSource = rawData?.sale || rawData?.discount;
     if (!saleSource) {
       return null;
     }
@@ -486,16 +507,29 @@
     saveCookieState(cookie, `Requesting info for ${code} through ${CONFIG.infoProxyEndpoint}...`);
     setStatus("Requesting product info...");
 
-    const responseText = await fetchProductInfoThroughProxy(code, cookie);
+    const [productResponseText, discountResponseText] = await Promise.all([
+      fetchProductInfoThroughProxy(code, cookie),
+      fetchDiscountInfoThroughProxy(code, cookie)
+    ]);
 
-    let parsed;
+    let parsedProduct;
+    let parsedDiscount;
     try {
-      parsed = JSON.parse(responseText);
+      parsedProduct = JSON.parse(productResponseText);
     } catch {
-      throw new Error("Info response was not valid JSON.");
+      throw new Error("Product info response was not valid JSON.");
     }
 
-    renderProductData(parsed);
+    try {
+      parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
+    } catch {
+      parsedDiscount = null;
+    }
+
+    renderProductData({
+      product: parsedProduct?.product || parsedProduct,
+      sale: parsedDiscount
+    });
     saveCookieState(cookie, `Info loaded successfully for barcode ${code}.`);
     setStatus("Product info loaded");
   }
