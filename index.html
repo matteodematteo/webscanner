@@ -18,10 +18,10 @@
       --success: #136f63;
       --danger: #9c3041;
       --shadow: 0 22px 50px rgba(18, 24, 31, 0.14);
-      --radius-xl: 28px;
-      --radius-lg: 22px;
-      --radius-md: 16px;
-      --radius-sm: 12px;
+      --radius-xl: 22px;
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-sm: 10px;
       --font: "Aptos", "Segoe UI", sans-serif;
     }
 
@@ -43,7 +43,7 @@
     .app-shell {
       width: min(820px, calc(100% - 24px));
       margin: 0 auto;
-      padding: max(16px, env(safe-area-inset-top)) 0 max(24px, env(safe-area-inset-bottom));
+      padding: max(10px, env(safe-area-inset-top)) 0 max(16px, env(safe-area-inset-bottom));
     }
 
     .card,
@@ -55,7 +55,7 @@
       backdrop-filter: blur(14px);
     }
 
-    .card { padding: 18px; }
+    .card { padding: 12px; }
 
     h1,
     h2 {
@@ -64,29 +64,29 @@
     }
 
     h1 {
-      font-size: clamp(1.8rem, 5vw, 2.8rem);
-      line-height: 1;
+      font-size: clamp(1.2rem, 3.8vw, 1.7rem);
+      line-height: 1.05;
     }
 
     h2 {
-      font-size: 1.1rem;
+      font-size: 0.96rem;
       line-height: 1.1;
     }
 
     .top-status {
       display: inline-flex;
-      margin-top: 10px;
-      padding: 10px 14px;
+      margin-top: 6px;
+      padding: 6px 10px;
       border-radius: 999px;
       background: rgba(20, 28, 36, 0.06);
       color: var(--muted);
-      font-size: 0.9rem;
+      font-size: 0.78rem;
     }
 
     .preview-frame {
       position: relative;
-      margin-top: 16px;
-      width: 100%;
+      margin: 10px auto 0;
+      width: min(100%, 38vh);
       aspect-ratio: 1 / 1;
       overflow: hidden;
       border-radius: var(--radius-lg);
@@ -156,10 +156,11 @@
     .preview-placeholder {
       display: grid;
       place-items: center;
-      padding: 24px;
+      padding: 16px;
       text-align: center;
       color: rgba(255, 255, 255, 0.9);
       background: linear-gradient(180deg, rgba(10, 16, 22, 0.16), rgba(10, 16, 22, 0.78));
+      font-size: 0.82rem;
     }
 
     .preview-placeholder[hidden] { display: none; }
@@ -177,9 +178,9 @@
 
     .badge,
     .mini-pill {
-      padding: 8px 12px;
+      padding: 5px 9px;
       border-radius: 999px;
-      font-size: 0.84rem;
+      font-size: 0.72rem;
     }
 
     .badge {
@@ -199,17 +200,14 @@
       gap: 12px;
     }
 
-    .controls { margin-top: 16px; }
+    .controls { margin-top: 10px; }
 
-    .button-row,
-    .secondary-row,
-    .lookup-row {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+    .button-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .lookup-row { grid-template-columns: 1fr; }
 
     .field-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      margin-top: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 10px;
     }
 
     .field-grid .field-card:last-child:nth-child(odd) {
@@ -217,8 +215,8 @@
     }
 
     .helper-row {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      margin-top: 12px;
+      grid-template-columns: 1fr;
+      margin-top: 8px;
     }
 
     .dialog-actions {
@@ -236,7 +234,7 @@
     .btn,
     .input,
     .select {
-      min-height: 52px;
+      min-height: 42px;
       border-radius: var(--radius-md);
       border: 1px solid transparent;
       width: 100%;
@@ -244,9 +242,10 @@
 
     .btn {
       cursor: pointer;
-      padding: 0 16px;
+      padding: 0 10px;
       font-weight: 700;
       transition: transform 150ms ease, opacity 150ms ease;
+      font-size: 0.82rem;
     }
 
     .btn:hover { transform: translateY(-1px); }
@@ -274,10 +273,11 @@
 
     .input,
     .textarea {
-      padding: 12px 14px;
+      padding: 9px 10px;
       border-color: rgba(20, 28, 36, 0.12);
       background: rgba(255, 255, 255, 0.96);
       color: var(--text);
+      font-size: 0.84rem;
     }
 
     .textarea {
@@ -299,11 +299,11 @@
     }
 
     .section-card {
-      margin-top: 16px;
+      margin-top: 10px;
     }
 
     .field-card {
-      padding: 14px;
+      padding: 9px 10px;
       border-radius: var(--radius-md);
       background: rgba(255, 255, 255, 0.68);
       border: 1px solid rgba(20, 28, 36, 0.08);
@@ -312,18 +312,18 @@
     .field-card label {
       display: block;
       color: var(--muted);
-      font-size: 0.82rem;
-      margin-bottom: 8px;
+      font-size: 0.68rem;
+      margin-bottom: 5px;
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
 
     .field-value {
-      font-size: 1rem;
+      font-size: 0.8rem;
       font-weight: 700;
-      line-height: 1.4;
+      line-height: 1.28;
       word-break: break-word;
-      min-height: 1.4em;
+      min-height: 1.25em;
     }
 
     .history-head {
@@ -331,18 +331,18 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
     .history-actions {
       display: flex;
       gap: 10px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
     .history-empty {
       margin: 0;
-      padding: 18px;
+      padding: 14px;
       border-radius: var(--radius-md);
       background: rgba(20, 28, 36, 0.04);
       color: var(--muted);
@@ -350,7 +350,7 @@
     }
 
     .history-item {
-      padding: 14px 16px;
+      padding: 10px 12px;
       border-radius: var(--radius-md);
       background: rgba(255, 255, 255, 0.68);
       border: 1px solid rgba(20, 28, 36, 0.08);
@@ -376,8 +376,8 @@
       position: fixed;
       right: max(16px, env(safe-area-inset-right));
       bottom: max(16px, env(safe-area-inset-bottom));
-      width: 58px;
-      height: 58px;
+      width: 50px;
+      height: 50px;
       border: none;
       border-radius: 999px;
       display: grid;
@@ -407,8 +407,8 @@
     .dialog-backdrop.is-open { display: flex; }
 
     .dialog-card {
-      width: min(100%, 440px);
-      padding: 18px;
+      width: min(100%, 400px);
+      padding: 14px;
     }
 
     .dialog-card p {
@@ -438,12 +438,28 @@
 
     @media (max-width: 680px) {
       .app-shell { width: min(100%, calc(100% - 16px)); }
-      .button-row,
-      .secondary-row,
-      .lookup-row,
-      .field-grid,
+      .button-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .lookup-row { grid-template-columns: 1fr; }
+      .field-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .helper-row { grid-template-columns: 1fr; }
       .card { border-radius: 22px; }
+      .preview-meta { top: 8px; left: 8px; right: 8px; }
+      .preview-placeholder { font-size: 0.74rem; }
+      .field-card:last-child { grid-column: span 3; }
+    }
+
+    @media (max-width: 430px) {
+      .button-row { gap: 8px; }
+      .btn,
+      .input,
+      .select { min-height: 38px; }
+      .btn { font-size: 0.74rem; padding: 0 8px; }
+      .field-grid { gap: 8px; }
+      .field-card { padding: 8px; }
+      .field-value { font-size: 0.74rem; }
+      .mini-pill:nth-child(1),
+      .mini-pill:nth-child(2),
+      .mini-pill:nth-child(3) { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -483,9 +499,6 @@
         <div class="button-row">
           <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
           <button class="btn btn-muted" id="lookupBtn" type="button">Get Info</button>
-        </div>
-
-        <div class="secondary-row">
           <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
           <label>
             <span class="visually-hidden">Choose camera</span>
@@ -495,7 +508,6 @@
 
         <div class="lookup-row">
           <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Barcode value" />
-          <div></div>
         </div>
       </div>
 
@@ -570,6 +582,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=9" defer></script>
+  <script src="app.js?v=10" defer></script>
 </body>
 </html>
