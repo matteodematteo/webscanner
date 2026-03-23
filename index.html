@@ -202,17 +202,17 @@
 
     .controls { margin-top: 10px; }
 
-    .button-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .lookup-row { grid-template-columns: 1fr; }
+    .button-row { grid-template-columns: 1.2fr 0.8fr 1fr; }
+    .lookup-row { grid-template-columns: minmax(0, 1fr) 88px; }
 
     .field-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       margin-top: 10px;
     }
 
-    .field-grid .field-card:last-child:nth-child(odd) {
-      grid-column: 1 / -1;
-    }
+    .span-half { grid-column: span 3; }
+    .span-full { grid-column: 1 / -1; }
+    .span-third { grid-column: span 2; }
 
     .helper-row {
       grid-template-columns: 1fr;
@@ -438,14 +438,13 @@
 
     @media (max-width: 680px) {
       .app-shell { width: min(100%, calc(100% - 16px)); }
-      .button-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-      .lookup-row { grid-template-columns: 1fr; }
-      .field-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .button-row { grid-template-columns: 1.1fr 0.9fr 1fr; }
+      .lookup-row { grid-template-columns: minmax(0, 1fr) 74px; }
+      .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
       .helper-row { grid-template-columns: 1fr; }
       .card { border-radius: 22px; }
       .preview-meta { top: 8px; left: 8px; right: 8px; }
       .preview-placeholder { font-size: 0.74rem; }
-      .field-card:last-child { grid-column: span 3; }
     }
 
     @media (max-width: 430px) {
@@ -457,9 +456,6 @@
       .field-grid { gap: 8px; }
       .field-card { padding: 8px; }
       .field-value { font-size: 0.74rem; }
-      .mini-pill:nth-child(1),
-      .mini-pill:nth-child(2),
-      .mini-pill:nth-child(3) { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -498,7 +494,6 @@
       <div class="controls">
         <div class="button-row">
           <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
-          <button class="btn btn-muted" id="lookupBtn" type="button">Get Info</button>
           <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
           <label>
             <span class="visually-hidden">Choose camera</span>
@@ -508,13 +503,11 @@
 
         <div class="lookup-row">
           <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Barcode value" />
+          <button class="btn btn-muted" id="clearBarcodeBtn" type="button">Clear</button>
         </div>
       </div>
 
       <div class="helper-row">
-        <div class="mini-pill" id="detectorPill">Detector: checking support</div>
-        <div class="mini-pill" id="torchPill">Torch: unavailable</div>
-        <div class="mini-pill" id="scanModePill">Mode: preview only</div>
         <button class="btn btn-muted" id="refreshCookieBtn" type="button">Refresh Cookie</button>
       </div>
     </section>
@@ -522,14 +515,14 @@
     <section class="card section-card">
       <h2>Product Info</h2>
       <div class="field-grid">
-        <div class="field-card"><label for="field_id">ID</label><div class="field-value" id="field_id"></div></div>
-        <div class="field-card"><label for="field_goods_code">Goods Code</label><div class="field-value" id="field_goods_code"></div></div>
-        <div class="field-card"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
-        <div class="field-card"><label for="field_p_price">P Price</label><div class="field-value" id="field_p_price"></div></div>
-        <div class="field-card"><label for="field_s_price">S Price</label><div class="field-value" id="field_s_price"></div></div>
-        <div class="field-card"><label for="field_real_inventory">Real Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
-        <div class="field-card"><label for="field_supplier_name">Supplier Name</label><div class="field-value" id="field_supplier_name"></div></div>
-        <div class="field-card"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
+        <div class="field-card span-half"><label for="field_goods_code">Goods Code</label><div class="field-value" id="field_goods_code"></div></div>
+        <div class="field-card span-half"><label for="field_supplier_name">Supplier Name</label><div class="field-value" id="field_supplier_name"></div></div>
+        <div class="field-card span-full"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
+        <div class="field-card span-third"><label for="field_p_price">P Price</label><div class="field-value" id="field_p_price"></div></div>
+        <div class="field-card span-third"><label for="field_s_price">S Price</label><div class="field-value" id="field_s_price"></div></div>
+        <div class="field-card span-third"><label for="field_real_inventory">Real Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
+        <div class="field-card span-half"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
+        <div class="field-card span-half"><label for="field_id">ID</label><div class="field-value" id="field_id"></div></div>
       </div>
     </section>
 
@@ -582,6 +575,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=10" defer></script>
+  <script src="app.js?v=11" defer></script>
 </body>
 </html>
