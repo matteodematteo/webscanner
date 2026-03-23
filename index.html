@@ -334,6 +334,12 @@
       margin-bottom: 12px;
     }
 
+    .history-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
     .history-empty {
       margin: 0;
       padding: 18px;
@@ -352,6 +358,18 @@
       font-weight: 700;
       line-height: 1.35;
       word-break: break-word;
+      cursor: pointer;
+      transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+    }
+
+    .history-item:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .history-item.is-selected {
+      border-color: rgba(191, 90, 49, 0.44);
+      background: rgba(191, 90, 49, 0.1);
     }
 
     .fab {
@@ -477,7 +495,7 @@
 
         <div class="lookup-row">
           <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Barcode value" />
-          <input class="input" id="requestCountInput" type="text" readonly value="0" aria-label="Request counter" />
+          <div></div>
         </div>
       </div>
 
@@ -506,6 +524,10 @@
     <section class="card section-card">
       <div class="history-head">
         <h2>Barcode List View</h2>
+      </div>
+      <div class="history-actions">
+        <button class="btn btn-muted" id="clearSelectedBtn" type="button" disabled>Clean Selected</button>
+        <button class="btn btn-muted" id="clearAllBtn" type="button">Clean All</button>
       </div>
       <div class="history-list" id="historyList" aria-live="polite">
         <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
