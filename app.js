@@ -45,20 +45,21 @@
     scanTimer: 0,
     authCookie: "",
     authStatus: "",
-    requestCount: 0
+    requestCount: 0,
+    history: []
   };
 
   function queryElements() {
     return {
-      authStatusText: document.getElementById("authStatusText"),
       barcodeInput: document.getElementById("barcodeInput"),
       cameraBadge: document.getElementById("cameraBadge"),
       cameraPreview: document.getElementById("cameraPreview"),
       cameraSelect: document.getElementById("cameraSelect"),
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
-      cookieOutput: document.getElementById("cookieOutput"),
       detectorPill: document.getElementById("detectorPill"),
+      historyEmpty: document.getElementById("historyEmpty"),
+      historyList: document.getElementById("historyList"),
       loginInput: document.getElementById("loginInput"),
       loginSettingsBtn: document.getElementById("loginSettingsBtn"),
       lookupBtn: document.getElementById("lookupBtn"),
@@ -135,8 +136,7 @@
   }
 
   function renderCookieState() {
-    state.els.authStatusText.textContent = state.authStatus || "No cookie saved yet.";
-    state.els.cookieOutput.value = state.authCookie || "";
+    // Cookie state is kept in storage and surfaced through the top status text only.
   }
 
   function loadCookieState() {
@@ -150,6 +150,32 @@
     localStorage.setItem(CONFIG.cookieStorageKey, state.authCookie);
     localStorage.setItem(CONFIG.cookieStatusStorageKey, state.authStatus);
     renderCookieState();
+  }
+
+  function renderHistory() {
+    state.els.historyList.innerHTML = "";
+    if (state.history.length === 0) {
+      state.els.historyList.appendChild(state.els.historyEmpty);
+      return;
+    }
+
+    for (let index = 0; index < state.history.length; index += 1) {
+      const item = state.history[index];
+      const article = document.createElement("article");
+      article.className = "history-item";
+      article.textContent = item;
+      state.els.historyList.appendChild(article);
+    }
+  }
+
+  function addHistoryItem(barcode) {
+    const value = String(barcode || "").trim();
+    if (!value) return;
+    state.history.unshift(value);
+    if (state.history.length > 12) {
+      state.history.length = 12;
+    }
+    renderHistory();
   }
 
   function extractCookieFromResponse(payload) {
@@ -305,11 +331,13 @@
     saveCookieState(cookie, `Requesting info for ${code} on ${CONFIG.infoEndpoint}...`);
     setStatus("Requesting product info...");
 
+    const targetUrl = `${CONFIG.infoEndpoint}?goodCode=${encodeURIComponent(code)}`;
     const params = new URLSearchParams();
-    params.set("action", "goods_info");
-    params.set("endpoint", CONFIG.infoEndpoint);
-    params.set("goodCode", code);
+    params.set("url", targetUrl);
+    params.set("method", "GET");
     params.set("cookie", cookie);
+    params.set("accept", "*/*");
+    params.set("x_requested_with", "XMLHttpRequest");
 
     const response = await fetch(CONFIG.cookieProxyEndpoint, {
       method: "POST",
@@ -333,6 +361,7 @@
     }
 
     renderProductData(parsed);
+    addHistoryItem(code);
     saveCookieState(cookie, `Info loaded successfully for barcode ${code}.`);
     setStatus("Product info loaded");
   }
@@ -799,10 +828,10 @@
     requireElements(state.els);
 
     loadCookieState();
-    renderCookieState();
     fillSettingsForm(readSavedSettings());
     clearResultFields();
     updateRequestCount();
+    renderHistory();
     bindEvents();
     await initDetectorStatus();
 
