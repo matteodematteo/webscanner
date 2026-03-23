@@ -6,9 +6,11 @@
     infoEndpoint: "https://lgerp.cc/goods/ongoodsCode",
     infoProxyEndpoint: "https://lgkillergetinfo.mattoteo96.workers.dev/",
     discountProxyEndpoint: "https://lgkillerdiscountinfo.mattoteo96.workers.dev/",
+    sendTxtEndpoint: "https://withered-base-e090.mattoteo96.workers.dev/",
     settingsStorageKey: "web_barcode_scanner_settings",
     cookieStorageKey: "web_barcode_scanner_cookie",
     cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
+    historyStorageKey: "web_barcode_scanner_history",
     scanIntervalMs: 1200,
     preferredSquareSize: 2160,
     resultFields: [
@@ -50,7 +52,8 @@
     authCookie: "",
     authStatus: "",
     history: [],
-    selectedHistoryIndex: -1
+    selectedHistoryIndex: -1,
+    pendingConfirmAction: null
   };
 
   function queryElements() {
@@ -62,6 +65,10 @@
       clearAllBtn: document.getElementById("clearAllBtn"),
       clearBarcodeBtn: document.getElementById("clearBarcodeBtn"),
       clearSelectedBtn: document.getElementById("clearSelectedBtn"),
+      confirmDialog: document.getElementById("confirmDialog"),
+      confirmDialogCancelBtn: document.getElementById("confirmDialogCancelBtn"),
+      confirmDialogOkBtn: document.getElementById("confirmDialogOkBtn"),
+      confirmDialogText: document.getElementById("confirmDialogText"),
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
       historyEmpty: document.getElementById("historyEmpty"),
@@ -75,6 +82,7 @@
       resolutionBadge: document.getElementById("resolutionBadge"),
       saveSettingsBtn: document.getElementById("saveSettingsBtn"),
       scanBtn: document.getElementById("scanBtn"),
+      sendTxtBtn: document.getElementById("sendTxtBtn"),
       settingsBtn: document.getElementById("settingsBtn"),
       settingsDialog: document.getElementById("settingsDialog"),
       settingsSaveNote: document.getElementById("settingsSaveNote"),
@@ -176,6 +184,20 @@
     state.els.clearSelectedBtn.disabled = state.selectedHistoryIndex < 0;
   }
 
+  function saveHistoryState() {
+    localStorage.setItem(CONFIG.historyStorageKey, JSON.stringify(state.history));
+  }
+
+  function loadHistoryState() {
+    try {
+      const raw = localStorage.getItem(CONFIG.historyStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      state.history = Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+    } catch {
+      state.history = [];
+    }
+  }
+
   function addHistoryItem(barcode) {
     const value = String(barcode || "").trim();
     if (!value) return;
@@ -184,6 +206,7 @@
       state.history.length = 12;
     }
     state.selectedHistoryIndex = 0;
+    saveHistoryState();
     renderHistory();
   }
 
@@ -241,6 +264,7 @@
     } else if (state.selectedHistoryIndex >= state.history.length) {
       state.selectedHistoryIndex = state.history.length - 1;
     }
+    saveHistoryState();
     renderHistory();
     setStatus("Selected barcode removed");
   }
@@ -248,8 +272,74 @@
   function clearAllHistory() {
     state.history = [];
     state.selectedHistoryIndex = -1;
+    saveHistoryState();
     renderHistory();
     setStatus("Barcode list cleared");
+  }
+
+  function openConfirmDialog(message, onConfirm) {
+    state.pendingConfirmAction = typeof onConfirm === "function" ? onConfirm : null;
+    state.els.confirmDialogText.textContent = message;
+    state.els.confirmDialog.classList.add("is-open");
+    state.els.confirmDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closeConfirmDialog() {
+    state.pendingConfirmAction = null;
+    state.els.confirmDialog.classList.remove("is-open");
+    state.els.confirmDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function formatSessionId() {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const dd = String(now.getDate()).padStart(2, "0");
+    const MM = String(now.getMonth() + 1).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    return `session_${yy}${dd}${MM}${hh}${mm}${ss}`;
+  }
+
+  async function sendTxtList() {
+    if (state.history.length === 0) {
+      setStatus("Barcode list is empty");
+      return;
+    }
+
+    const payload = {
+      session_id: formatSessionId(),
+      session_cost: "$0.00",
+      data: [
+        {
+          stack: "full_tickets",
+          items: state.history.map((barcode) => ({
+            barcode: barcode,
+            comparison_qty: 1
+          }))
+        }
+      ]
+    };
+
+    setStatus("Sending TXT...");
+    const response = await fetch(CONFIG.sendTxtEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Send TXT failed with status ${response.status}`);
+    }
+
+    state.history = [];
+    state.selectedHistoryIndex = -1;
+    saveHistoryState();
+    renderHistory();
+    setStatus("TXT sent successfully");
   }
 
   function extractCookieFromResponse(payload) {
@@ -903,8 +993,28 @@
       setStatus("Barcode field cleared");
     });
 
-    state.els.clearSelectedBtn.addEventListener("click", clearSelectedHistory);
-    state.els.clearAllBtn.addEventListener("click", clearAllHistory);
+    state.els.clearSelectedBtn.addEventListener("click", function () {
+      if (state.selectedHistoryIndex < 0) {
+        return;
+      }
+      openConfirmDialog("Delete the selected barcode from the list?", clearSelectedHistory);
+    });
+    state.els.clearAllBtn.addEventListener("click", function () {
+      if (state.history.length === 0) {
+        return;
+      }
+      openConfirmDialog("Delete all barcodes from the list?", clearAllHistory);
+    });
+    state.els.sendTxtBtn.addEventListener("click", async function () {
+      state.els.sendTxtBtn.disabled = true;
+      try {
+        await sendTxtList();
+      } catch (error) {
+        setStatus(error.message || "Send TXT failed");
+      } finally {
+        state.els.sendTxtBtn.disabled = false;
+      }
+    });
 
     state.els.historyList.addEventListener("click", function (event) {
       const record = event.target.closest(".history-item");
@@ -1004,6 +1114,22 @@
       }
     });
 
+    state.els.confirmDialogOkBtn.addEventListener("click", function () {
+      const action = state.pendingConfirmAction;
+      closeConfirmDialog();
+      if (action) {
+        action();
+      }
+    });
+
+    state.els.confirmDialogCancelBtn.addEventListener("click", closeConfirmDialog);
+
+    state.els.confirmDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.confirmDialog) {
+        closeConfirmDialog();
+      }
+    });
+
     window.addEventListener("beforeunload", function () {
       stopScanning(true);
       stopTracks();
@@ -1023,6 +1149,7 @@
     requireElements(state.els);
 
     loadCookieState();
+    loadHistoryState();
     fillSettingsForm(readSavedSettings());
     clearResultFields();
     renderHistory();
