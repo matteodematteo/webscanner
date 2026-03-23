@@ -445,7 +445,7 @@
     const sDiscount2 = numberFromValue(productData.s_discount2 || 1);
     const sDiscount3 = numberFromValue(productData.s_discount3 || 1);
     const sDiscount4 = numberFromValue(productData.s_discount4 || 1);
-    const totalDiscount = (sDiscount/100) * (sDiscount2/100) * (sDiscount3/100) * (sDiscount4/100);
+    const totalDiscount = (1-(sDiscount/100)) * (1-(sDiscount2/100)) * (1-(sDiscount3/100)) * (1-(sDiscount4/100));
 
     return {
       discountPrice: formatPrice(sPrice * totalDiscount),
