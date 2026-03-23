@@ -380,12 +380,24 @@
         element.textContent = "";
       }
     }
+    setDiscountVisibility(false);
   }
 
   function setResultField(key, value) {
     const element = document.getElementById(`field_${key}`);
     if (element) {
       element.textContent = value === undefined || value === null ? "" : String(value);
+    }
+  }
+
+  function setDiscountVisibility(visible) {
+    const priceCard = document.getElementById("field_discount_price_card");
+    const percentCard = document.getElementById("field_discount_percent_card");
+    if (priceCard) {
+      priceCard.hidden = !visible;
+    }
+    if (percentCard) {
+      percentCard.hidden = !visible;
     }
   }
 
@@ -484,8 +496,13 @@
     }
 
     const discountFields = getDiscountFields(data, normalized);
-    setResultField("discount_price", discountFields.discountPrice);
-    setResultField("discount_percent", discountFields.discountPercent);
+    const sPrice = numberFromValue(normalized.s_price);
+    const discountPrice = numberFromValue(discountFields.discountPrice);
+    const hasVisibleDiscount = Boolean(discountPrice) && Boolean(sPrice) && discountPrice < sPrice;
+
+    setDiscountVisibility(hasVisibleDiscount);
+    setResultField("discount_price", hasVisibleDiscount ? discountFields.discountPrice : "");
+    setResultField("discount_percent", hasVisibleDiscount ? discountFields.discountPercent : "");
   }
 
   async function fetchProductInfo(barcode) {
