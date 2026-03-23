@@ -193,7 +193,8 @@
     .field-grid,
     .helper-row,
     .dialog-actions,
-    .field-list {
+    .field-list,
+    .history-list {
       display: grid;
       gap: 12px;
     }
@@ -216,7 +217,7 @@
     }
 
     .helper-row {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       margin-top: 12px;
     }
 
@@ -297,31 +298,6 @@
       text-align: center;
     }
 
-    .status-box {
-      margin-top: 12px;
-      padding: 14px;
-      border-radius: var(--radius-md);
-      background: rgba(20, 28, 36, 0.05);
-      border: 1px solid rgba(20, 28, 36, 0.08);
-    }
-
-    .status-box strong,
-    .status-box p {
-      display: block;
-    }
-
-    .status-box strong {
-      font-size: 0.95rem;
-      margin-bottom: 8px;
-    }
-
-    .status-box p {
-      margin: 0 0 10px;
-      color: var(--muted);
-      line-height: 1.45;
-      font-size: 0.9rem;
-    }
-
     .section-card {
       margin-top: 16px;
     }
@@ -348,6 +324,34 @@
       line-height: 1.4;
       word-break: break-word;
       min-height: 1.4em;
+    }
+
+    .history-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .history-empty {
+      margin: 0;
+      padding: 18px;
+      border-radius: var(--radius-md);
+      background: rgba(20, 28, 36, 0.04);
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .history-item {
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.68);
+      border: 1px solid rgba(20, 28, 36, 0.08);
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.35;
+      word-break: break-word;
     }
 
     .fab {
@@ -481,13 +485,7 @@
         <div class="mini-pill" id="detectorPill">Detector: checking support</div>
         <div class="mini-pill" id="torchPill">Torch: unavailable</div>
         <div class="mini-pill" id="scanModePill">Mode: preview only</div>
-      </div>
-
-      <div class="status-box">
-        <strong>Cookie Status</strong>
-        <p id="authStatusText">No cookie saved yet.</p>
         <button class="btn btn-muted" id="refreshCookieBtn" type="button">Refresh Cookie</button>
-        <textarea class="input textarea" id="cookieOutput" readonly placeholder="Saved cookie will appear here on this device."></textarea>
       </div>
     </section>
 
@@ -502,6 +500,15 @@
         <div class="field-card"><label for="field_real_inventory">Real Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
         <div class="field-card"><label for="field_supplier_name">Supplier Name</label><div class="field-value" id="field_supplier_name"></div></div>
         <div class="field-card"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
+      </div>
+    </section>
+
+    <section class="card section-card">
+      <div class="history-head">
+        <h2>Barcode List View</h2>
+      </div>
+      <div class="history-list" id="historyList" aria-live="polite">
+        <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
       </div>
     </section>
   </main>
@@ -541,6 +548,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=3" defer></script>
+  <script src="app.js?v=4" defer></script>
 </body>
 </html>
