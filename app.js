@@ -45,8 +45,8 @@
     scanTimer: 0,
     authCookie: "",
     authStatus: "",
-    requestCount: 0,
-    history: []
+    history: [],
+    selectedHistoryIndex: -1
   };
 
   function queryElements() {
@@ -55,6 +55,8 @@
       cameraBadge: document.getElementById("cameraBadge"),
       cameraPreview: document.getElementById("cameraPreview"),
       cameraSelect: document.getElementById("cameraSelect"),
+      clearAllBtn: document.getElementById("clearAllBtn"),
+      clearSelectedBtn: document.getElementById("clearSelectedBtn"),
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
       detectorPill: document.getElementById("detectorPill"),
@@ -67,7 +69,6 @@
       previewFrame: document.getElementById("previewFrame"),
       previewPlaceholder: document.getElementById("previewPlaceholder"),
       refreshCookieBtn: document.getElementById("refreshCookieBtn"),
-      requestCountInput: document.getElementById("requestCountInput"),
       resolutionBadge: document.getElementById("resolutionBadge"),
       saveSettingsBtn: document.getElementById("saveSettingsBtn"),
       scanBtn: document.getElementById("scanBtn"),
@@ -91,10 +92,6 @@
 
   function setStatus(message) {
     state.els.statusText.textContent = message;
-  }
-
-  function updateRequestCount() {
-    state.els.requestCountInput.value = String(state.requestCount);
   }
 
   function readSavedSettings() {
@@ -155,6 +152,8 @@
   function renderHistory() {
     state.els.historyList.innerHTML = "";
     if (state.history.length === 0) {
+      state.selectedHistoryIndex = -1;
+      state.els.clearSelectedBtn.disabled = true;
       state.els.historyList.appendChild(state.els.historyEmpty);
       return;
     }
@@ -163,9 +162,17 @@
       const item = state.history[index];
       const article = document.createElement("article");
       article.className = "history-item";
+      if (index === state.selectedHistoryIndex) {
+        article.classList.add("is-selected");
+      }
       article.textContent = item;
+      article.dataset.index = String(index);
+      article.setAttribute("tabindex", "0");
+      article.setAttribute("role", "button");
       state.els.historyList.appendChild(article);
     }
+
+    state.els.clearSelectedBtn.disabled = state.selectedHistoryIndex < 0;
   }
 
   function addHistoryItem(barcode) {
@@ -175,7 +182,33 @@
     if (state.history.length > 12) {
       state.history.length = 12;
     }
+    state.selectedHistoryIndex = 0;
     renderHistory();
+  }
+
+  function selectHistoryItem(index) {
+    if (index < 0 || index >= state.history.length) return;
+    state.selectedHistoryIndex = index;
+    renderHistory();
+  }
+
+  function clearSelectedHistory() {
+    if (state.selectedHistoryIndex < 0 || !state.history[state.selectedHistoryIndex]) return;
+    state.history.splice(state.selectedHistoryIndex, 1);
+    if (state.history.length === 0) {
+      state.selectedHistoryIndex = -1;
+    } else if (state.selectedHistoryIndex >= state.history.length) {
+      state.selectedHistoryIndex = state.history.length - 1;
+    }
+    renderHistory();
+    setStatus("Selected barcode removed");
+  }
+
+  function clearAllHistory() {
+    state.history = [];
+    state.selectedHistoryIndex = -1;
+    renderHistory();
+    setStatus("Barcode list cleared");
   }
 
   function extractCookieFromResponse(payload) {
@@ -326,26 +359,25 @@
       cookie = await loginAndRefreshCookie();
     }
 
-    state.requestCount += 1;
-    updateRequestCount();
     saveCookieState(cookie, `Requesting info for ${code} on ${CONFIG.infoEndpoint}...`);
     setStatus("Requesting product info...");
 
-    const targetUrl = `${CONFIG.infoEndpoint}?goodCode=${encodeURIComponent(code)}`;
-    const params = new URLSearchParams();
-    params.set("url", targetUrl);
-    params.set("method", "GET");
-    params.set("cookie", cookie);
-    params.set("accept", "*/*");
-    params.set("x_requested_with", "XMLHttpRequest");
+    const requestUrl = `${CONFIG.infoEndpoint}?goodCode=${encodeURIComponent(code)}`;
+    const headers = new Headers({
+      Accept: "*/*",
+      "X-Requested-With": "XMLHttpRequest"
+    });
 
-    const response = await fetch(CONFIG.cookieProxyEndpoint, {
-      method: "POST",
-      body: params.toString(),
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Content-Type": "application/x-www-form-urlencoded"
-      }
+    try {
+      headers.set("Cookie", cookie);
+    } catch {
+      // Browsers often block setting Cookie manually.
+    }
+
+    const response = await fetch(requestUrl, {
+      method: "GET",
+      headers: headers,
+      credentials: "include"
     });
 
     if (!response.ok) {
@@ -735,6 +767,29 @@
       }
     });
 
+    state.els.clearSelectedBtn.addEventListener("click", clearSelectedHistory);
+    state.els.clearAllBtn.addEventListener("click", clearAllHistory);
+
+    state.els.historyList.addEventListener("click", function (event) {
+      const record = event.target.closest(".history-item");
+      if (!record) return;
+      const index = Number(record.dataset.index);
+      if (!Number.isNaN(index)) {
+        selectHistoryItem(index);
+      }
+    });
+
+    state.els.historyList.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const record = event.target.closest(".history-item");
+      if (!record) return;
+      event.preventDefault();
+      const index = Number(record.dataset.index);
+      if (!Number.isNaN(index)) {
+        selectHistoryItem(index);
+      }
+    });
+
     state.els.barcodeInput.addEventListener("keydown", async function (event) {
       if (event.key !== "Enter") return;
       event.preventDefault();
@@ -830,7 +885,6 @@
     loadCookieState();
     fillSettingsForm(readSavedSettings());
     clearResultFields();
-    updateRequestCount();
     renderHistory();
     bindEvents();
     await initDetectorStatus();
