@@ -1,15 +1,24 @@
 "use strict";
 
-(function bootstrapCameraApp() {
+(function bootstrapWebBarcodeScanner() {
   const CONFIG = {
-    loginEndpoint: "https://www.lgerp.cc/login.do",
     cookieProxyEndpoint: "https://lgkiller.mattoteo96.workers.dev/",
-    settingsStorageKey: "camera_scanner_settings",
-    cookieStorageKey: "camera_scanner_cookie",
-    cookieStatusStorageKey: "camera_scanner_cookie_status",
-    historyLimit: 10,
+    infoEndpoint: "https://lgerp.cc/goods/ongoodsCode",
+    settingsStorageKey: "web_barcode_scanner_settings",
+    cookieStorageKey: "web_barcode_scanner_cookie",
+    cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
     scanIntervalMs: 1200,
     preferredSquareSize: 2160,
+    resultFields: [
+      "id",
+      "goods_code",
+      "italian_name",
+      "p_price",
+      "s_price",
+      "real_inventory",
+      "supplier_name",
+      "spec"
+    ],
     videoConstraints: {
       audio: false,
       video: {
@@ -29,49 +38,43 @@
     track: null,
     devices: [],
     activeDeviceId: "",
+    detector: null,
     isCameraRunning: false,
     isScanning: false,
     torchOn: false,
     scanTimer: 0,
-    history: [],
-    detector: null,
-    selectedHistoryIndex: -1,
     authCookie: "",
-    authStatus: ""
+    authStatus: "",
+    requestCount: 0
   };
 
   function queryElements() {
     return {
       authStatusText: document.getElementById("authStatusText"),
+      barcodeInput: document.getElementById("barcodeInput"),
       cameraBadge: document.getElementById("cameraBadge"),
       cameraPreview: document.getElementById("cameraPreview"),
       cameraSelect: document.getElementById("cameraSelect"),
-      cancelDeleteBtn: document.getElementById("cancelDeleteBtn"),
       captureCanvas: document.getElementById("captureCanvas"),
-      clearHistoryBtn: document.getElementById("clearHistoryBtn"),
-      confirmDeleteBtn: document.getElementById("confirmDeleteBtn"),
-      deleteDialog: document.getElementById("deleteDialog"),
-      deleteDialogText: document.getElementById("deleteDialogText"),
-      deleteRecordBtn: document.getElementById("deleteRecordBtn"),
-      detectorPill: document.getElementById("detectorPill"),
-      historyEmpty: document.getElementById("historyEmpty"),
-      historyList: document.getElementById("historyList"),
-      previewFrame: document.getElementById("previewFrame"),
-      previewPlaceholder: document.getElementById("previewPlaceholder"),
-      resolutionBadge: document.getElementById("resolutionBadge"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
       cookieOutput: document.getElementById("cookieOutput"),
+      detectorPill: document.getElementById("detectorPill"),
+      loginInput: document.getElementById("loginInput"),
+      loginSettingsBtn: document.getElementById("loginSettingsBtn"),
+      lookupBtn: document.getElementById("lookupBtn"),
+      passwordInput: document.getElementById("passwordInput"),
+      previewFrame: document.getElementById("previewFrame"),
+      previewPlaceholder: document.getElementById("previewPlaceholder"),
+      refreshCookieBtn: document.getElementById("refreshCookieBtn"),
+      requestCountInput: document.getElementById("requestCountInput"),
+      resolutionBadge: document.getElementById("resolutionBadge"),
+      saveSettingsBtn: document.getElementById("saveSettingsBtn"),
       scanBtn: document.getElementById("scanBtn"),
       scanModePill: document.getElementById("scanModePill"),
-      loginSettingsBtn: document.getElementById("loginSettingsBtn"),
-      refreshCookieBtn: document.getElementById("refreshCookieBtn"),
-      saveSettingsBtn: document.getElementById("saveSettingsBtn"),
       settingsBtn: document.getElementById("settingsBtn"),
       settingsDialog: document.getElementById("settingsDialog"),
       settingsSaveNote: document.getElementById("settingsSaveNote"),
       shopKeyInput: document.getElementById("shopKeyInput"),
-      loginInput: document.getElementById("loginInput"),
-      passwordInput: document.getElementById("passwordInput"),
       statusText: document.getElementById("statusText"),
       torchBtn: document.getElementById("torchBtn"),
       torchPill: document.getElementById("torchPill")
@@ -79,10 +82,7 @@
   }
 
   function requireElements(els) {
-    const missing = Object.entries(els)
-      .filter(([, value]) => !value)
-      .map(([key]) => key);
-
+    const missing = Object.entries(els).filter(([, value]) => !value).map(([key]) => key);
     if (missing.length > 0) {
       throw new Error(`Missing DOM elements: ${missing.join(", ")}`);
     }
@@ -92,22 +92,8 @@
     state.els.statusText.textContent = message;
   }
 
-  function saveCookieState(cookie, status) {
-    state.authCookie = cookie || "";
-    state.authStatus = status || "";
-    localStorage.setItem(CONFIG.cookieStorageKey, state.authCookie);
-    localStorage.setItem(CONFIG.cookieStatusStorageKey, state.authStatus);
-    renderCookieState();
-  }
-
-  function loadCookieState() {
-    state.authCookie = localStorage.getItem(CONFIG.cookieStorageKey) || "";
-    state.authStatus = localStorage.getItem(CONFIG.cookieStatusStorageKey) || "No cookie saved yet.";
-  }
-
-  function renderCookieState() {
-    state.els.authStatusText.textContent = state.authStatus || "No cookie saved yet.";
-    state.els.cookieOutput.value = state.authCookie || "";
+  function updateRequestCount() {
+    state.els.requestCountInput.value = String(state.requestCount);
   }
 
   function readSavedSettings() {
@@ -120,12 +106,14 @@
         password: parsed?.password || ""
       };
     } catch {
-      return {
-        shopKey: "",
-        login: "",
-        password: ""
-      };
+      return { shopKey: "", login: "", password: "" };
     }
+  }
+
+  function saveSettings(values) {
+    localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(values));
+    state.els.settingsSaveNote.textContent = "Saved successfully on this device.";
+    setStatus("Settings saved");
   }
 
   function fillSettingsForm(values) {
@@ -146,22 +134,26 @@
     state.els.settingsDialog.setAttribute("aria-hidden", "true");
   }
 
-  function saveSettings() {
-    const values = {
-      shopKey: state.els.shopKeyInput.value.trim(),
-      login: state.els.loginInput.value.trim(),
-      password: state.els.passwordInput.value
-    };
+  function renderCookieState() {
+    state.els.authStatusText.textContent = state.authStatus || "No cookie saved yet.";
+    state.els.cookieOutput.value = state.authCookie || "";
+  }
 
-    localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(values));
-    state.els.settingsSaveNote.textContent = "Saved successfully on this device.";
-    setStatus("Settings saved");
+  function loadCookieState() {
+    state.authCookie = localStorage.getItem(CONFIG.cookieStorageKey) || "";
+    state.authStatus = localStorage.getItem(CONFIG.cookieStatusStorageKey) || "No cookie saved yet.";
+  }
+
+  function saveCookieState(cookie, status) {
+    state.authCookie = cookie || "";
+    state.authStatus = status || "";
+    localStorage.setItem(CONFIG.cookieStorageKey, state.authCookie);
+    localStorage.setItem(CONFIG.cookieStatusStorageKey, state.authStatus);
+    renderCookieState();
   }
 
   function extractCookieFromResponse(payload) {
-    if (!payload) {
-      return "";
-    }
+    if (!payload) return "";
 
     if (typeof payload === "object" && payload !== null) {
       const directCookie =
@@ -170,31 +162,26 @@
         payload.data?.cookie ||
         payload.data?.fullCookie ||
         "";
-
-      if (directCookie) {
-        return String(directCookie);
-      }
+      if (directCookie) return String(directCookie);
     }
 
-    const value = String(payload || "");
-    const parsedPairs = value.match(/[A-Za-z0-9_.-]+=([^;,\r\n]|"[^"]*")+/g);
-    if (!parsedPairs || parsedPairs.length === 0) {
-      return "";
-    }
+    const value = String(payload);
+    const parts = value.match(/[A-Za-z0-9_.-]+=([^;,\r\n]|"[^"]*")+/g);
+    if (!parts || parts.length === 0) return "";
 
-    const filtered = parsedPairs.filter((part) => {
-      const lower = part.toLowerCase();
-      return !(
-        lower.startsWith("path=") ||
-        lower.startsWith("expires=") ||
-        lower.startsWith("domain=") ||
-        lower.startsWith("max-age=") ||
-        lower.startsWith("samesite=") ||
-        lower.startsWith("httponly")
-      );
-    });
-
-    return filtered.join("; ");
+    return parts
+      .filter((part) => {
+        const lower = part.toLowerCase();
+        return !(
+          lower.startsWith("path=") ||
+          lower.startsWith("expires=") ||
+          lower.startsWith("domain=") ||
+          lower.startsWith("max-age=") ||
+          lower.startsWith("samesite=") ||
+          lower.startsWith("httponly")
+        );
+      })
+      .join("; ");
   }
 
   async function loginAndRefreshCookie(settingsOverride) {
@@ -202,14 +189,14 @@
     const shopKey = (settings.shopKey || "").trim();
     const login = (settings.login || "").trim();
     const password = settings.password || "";
-    const targetSite = "www.lgerp.cc";
+    const targetSite = "lgerp.cc";
 
     if (!shopKey || !login || !password) {
       const message = "Fill shop key, login, and password first.";
       state.els.settingsSaveNote.textContent = message;
       saveCookieState(state.authCookie, message);
       setStatus(message);
-      return;
+      return "";
     }
 
     const params = new URLSearchParams();
@@ -221,65 +208,161 @@
     saveCookieState(state.authCookie, `Refreshing cookie for ${login} on ${targetSite}...`);
     setStatus("Requesting new cookie...");
 
+    const response = await fetch(CONFIG.cookieProxyEndpoint, {
+      method: "POST",
+      body: params.toString(),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Proxy request failed with status ${response.status}`);
+    }
+
+    const responseText = await response.text();
+    let parsed = responseText;
     try {
-      const response = await fetch(CONFIG.cookieProxyEndpoint, {
-        method: "POST",
-        body: params.toString(),
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "Content-Type": "application/x-www-form-urlencoded"
-        }
-      });
+      parsed = JSON.parse(responseText);
+    } catch {
+      // Keep plain text fallback.
+    }
 
-      if (!response.ok) {
-        throw new Error(`Proxy request failed with status ${response.status}`);
+    const cookie = extractCookieFromResponse(parsed);
+    if (!cookie) {
+      throw new Error("Proxy answered, but no usable cookie was returned.");
+    }
+
+    saveCookieState(cookie, `Cookie refreshed successfully for ${login} on ${targetSite}.`);
+    state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
+    setStatus("Cookie refreshed");
+    return cookie;
+  }
+
+  function clearResultFields() {
+    for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
+      const key = CONFIG.resultFields[index];
+      const element = document.getElementById(`field_${key}`);
+      if (element) {
+        element.textContent = "";
       }
-
-      const responseText = await response.text();
-      let parsed = responseText;
-      try {
-        parsed = JSON.parse(responseText);
-      } catch {
-        // Keep plain text fallback.
-      }
-
-      const cookie = extractCookieFromResponse(parsed);
-
-      if (cookie) {
-        saveCookieState(cookie, `Cookie refreshed successfully for ${login} on ${targetSite}.`);
-        state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
-        setStatus("Cookie refreshed");
-        return;
-      }
-
-      saveCookieState("", `Refresh failed for ${login} on ${targetSite}: proxy returned no usable cookie.`);
-      state.els.settingsSaveNote.textContent = "Proxy answered, but no usable cookie was returned.";
-      setStatus("Cookie not returned");
-    } catch (error) {
-      const message = error.message || "Login request failed.";
-      saveCookieState("", `Refresh failed for ${login} on ${targetSite}: ${message}`);
-      state.els.settingsSaveNote.textContent = message;
-      setStatus("Login failed");
     }
   }
 
-  function updateDeleteButton() {
-    state.els.deleteRecordBtn.disabled = state.selectedHistoryIndex < 0;
+  function setResultField(key, value) {
+    const element = document.getElementById(`field_${key}`);
+    if (element) {
+      element.textContent = value === undefined || value === null ? "" : String(value);
+    }
   }
 
-  function closeDeleteDialog() {
-    state.els.deleteDialog.classList.remove("is-open");
-    state.els.deleteDialog.setAttribute("aria-hidden", "true");
+  function normalizeProductData(rawData) {
+    const queue = [rawData];
+    while (queue.length > 0) {
+      const item = queue.shift();
+      if (!item || typeof item !== "object") continue;
+
+      if (item.goods_code || item.italian_name || item.real_inventory) {
+        return item;
+      }
+
+      const values = Object.values(item);
+      for (let index = 0; index < values.length; index += 1) {
+        if (values[index] && typeof values[index] === "object") {
+          queue.push(values[index]);
+        }
+      }
+    }
+    return rawData || {};
   }
 
-  function openDeleteDialog() {
-    if (state.selectedHistoryIndex < 0 || !state.history[state.selectedHistoryIndex]) {
+  function renderProductData(data) {
+    const normalized = normalizeProductData(data);
+    for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
+      const key = CONFIG.resultFields[index];
+      setResultField(key, normalized[key]);
+    }
+  }
+
+  async function fetchProductInfo(barcode) {
+    const code = String(barcode || "").trim();
+    if (!code) {
+      setStatus("Type or scan a barcode first");
       return;
     }
 
-    state.els.deleteDialogText.textContent = `Do you want to delete this record: ${state.history[state.selectedHistoryIndex].detectedText}?`;
-    state.els.deleteDialog.classList.add("is-open");
-    state.els.deleteDialog.setAttribute("aria-hidden", "false");
+    state.els.barcodeInput.value = code;
+    clearResultFields();
+
+    let cookie = state.authCookie;
+    if (!cookie) {
+      cookie = await loginAndRefreshCookie();
+    }
+
+    state.requestCount += 1;
+    updateRequestCount();
+    saveCookieState(cookie, `Requesting info for ${code} on ${CONFIG.infoEndpoint}...`);
+    setStatus("Requesting product info...");
+
+    const params = new URLSearchParams();
+    params.set("action", "goods_info");
+    params.set("endpoint", CONFIG.infoEndpoint);
+    params.set("goodCode", code);
+    params.set("cookie", cookie);
+
+    const response = await fetch(CONFIG.cookieProxyEndpoint, {
+      method: "POST",
+      body: params.toString(),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Info request failed with status ${response.status}`);
+    }
+
+    const responseText = await response.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      throw new Error("Info response was not valid JSON.");
+    }
+
+    renderProductData(parsed);
+    saveCookieState(cookie, `Info loaded successfully for barcode ${code}.`);
+    setStatus("Product info loaded");
+  }
+
+  function supportsBarcodeDetector() {
+    return "BarcodeDetector" in window;
+  }
+
+  async function createDetector() {
+    if (!supportsBarcodeDetector()) return null;
+    if (state.detector) return state.detector;
+
+    try {
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      if (!formats || formats.length === 0) return null;
+      state.detector = new window.BarcodeDetector({ formats: formats.filter(Boolean) });
+      return state.detector;
+    } catch {
+      return null;
+    }
+  }
+
+  function getCameraSupportIssue() {
+    if (!window.isSecureContext) {
+      return 'Camera access needs a secure page, like "https://" or "http://localhost".';
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return "This browser does not support camera access.";
+    }
+    return "";
   }
 
   function setPreviewActive(active) {
@@ -293,13 +376,11 @@
       state.els.scanBtn.dataset.mode = "start";
       return;
     }
-
     if (state.isScanning) {
       state.els.scanBtn.textContent = "Stop Scanning";
       state.els.scanBtn.dataset.mode = "stop";
       return;
     }
-
     state.els.scanBtn.textContent = "Start Scanning";
     state.els.scanBtn.dataset.mode = "start";
   }
@@ -317,79 +398,13 @@
   }
 
   function stopTracks() {
-    if (!state.stream) {
-      return;
-    }
-
+    if (!state.stream) return;
     const tracks = state.stream.getTracks();
     for (let index = 0; index < tracks.length; index += 1) {
       tracks[index].stop();
     }
-
     state.stream = null;
     state.track = null;
-  }
-
-  async function stopCamera() {
-    cleanupScanTimer();
-    state.isCameraRunning = false;
-    state.isScanning = false;
-    state.torchOn = false;
-    state.els.cameraPreview.srcObject = null;
-    stopTracks();
-    setPreviewActive(false);
-    updateResolutionBadge();
-    updateScanButton();
-    updateModePill();
-    updateTorchUi(false, false);
-    state.els.cameraSelect.disabled = true;
-    setStatus("Camera stopped");
-  }
-
-  function supportsBarcodeDetector() {
-    return "BarcodeDetector" in window;
-  }
-
-  async function createDetector() {
-    if (!supportsBarcodeDetector()) {
-      return null;
-    }
-
-    if (state.detector) {
-      return state.detector;
-    }
-
-    try {
-      const formats = await window.BarcodeDetector.getSupportedFormats();
-      if (!formats || formats.length === 0) {
-        return null;
-      }
-
-      state.detector = new window.BarcodeDetector({
-        formats: formats.filter(Boolean)
-      });
-      return state.detector;
-    } catch {
-      return null;
-    }
-  }
-
-  function getCameraSupportIssue() {
-    if (!window.isSecureContext) {
-      return 'Camera access needs a secure page, like "https://" or "http://localhost".';
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      return "This browser does not support camera access.";
-    }
-
-    return "";
-  }
-
-  function getSquareCropSize(video) {
-    const width = video.videoWidth || CONFIG.preferredSquareSize;
-    const height = video.videoHeight || CONFIG.preferredSquareSize;
-    return Math.max(1, Math.min(width, height));
   }
 
   function updateResolutionBadge() {
@@ -404,26 +419,21 @@
     state.els.resolutionBadge.textContent = `${width} x ${height}`;
   }
 
-  function chooseBestDefaultDevice(devices) {
-    if (!devices || devices.length === 0) {
-      return "";
-    }
-
-    const rear = devices.find((device) => /back|rear|environment/i.test(device.label));
-    return (rear || devices[0]).deviceId;
-  }
-
   function buildDeviceLabel(device, index) {
     return device.label || `Camera ${index + 1}`;
+  }
+
+  function chooseBestDefaultDevice(devices) {
+    if (!devices || devices.length === 0) return "";
+    const rear = devices.find((device) => /back|rear|environment/i.test(device.label));
+    return (rear || devices[0]).deviceId;
   }
 
   async function refreshDevices(preferredDeviceId) {
     const devices = await navigator.mediaDevices.enumerateDevices();
     state.devices = devices.filter((device) => device.kind === "videoinput");
-
     const currentId = preferredDeviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
     state.activeDeviceId = currentId;
-
     state.els.cameraSelect.innerHTML = "";
 
     for (let index = 0; index < state.devices.length; index += 1) {
@@ -439,9 +449,7 @@
   }
 
   async function applyTrackEnhancements(track) {
-    if (!track?.getCapabilities || !track.applyConstraints) {
-      return;
-    }
+    if (!track?.getCapabilities || !track.applyConstraints) return;
 
     const capabilities = track.getCapabilities();
     const advanced = [];
@@ -456,14 +464,12 @@
       advanced.push({ zoom: desiredZoom });
     }
 
-    if (advanced.length === 0) {
-      return;
-    }
+    if (advanced.length === 0) return;
 
     try {
       await track.applyConstraints({ advanced: advanced });
     } catch {
-      // Device-dependent. Ignore if unsupported.
+      // Device-specific support.
     }
   }
 
@@ -490,9 +496,7 @@
   }
 
   async function toggleTorch() {
-    if (!state.track?.applyConstraints || !state.track.getCapabilities) {
-      return;
-    }
+    if (!state.track?.applyConstraints || !state.track.getCapabilities) return;
 
     const capabilities = state.track.getCapabilities();
     if (!capabilities.torch) {
@@ -502,11 +506,8 @@
     }
 
     state.torchOn = !state.torchOn;
-
     try {
-      await state.track.applyConstraints({
-        advanced: [{ torch: state.torchOn }]
-      });
+      await state.track.applyConstraints({ advanced: [{ torch: state.torchOn }] });
       updateTorchUi(true, state.torchOn);
       setStatus(state.torchOn ? "Torch enabled" : "Torch disabled");
     } catch {
@@ -518,9 +519,7 @@
 
   async function startCamera(deviceId) {
     const supportIssue = getCameraSupportIssue();
-    if (supportIssue) {
-      throw new Error(supportIssue);
-    }
+    if (supportIssue) throw new Error(supportIssue);
 
     cleanupScanTimer();
     stopTracks();
@@ -542,11 +541,8 @@
       constraints.video.facingMode = { ideal: CONFIG.videoConstraints.video.facingMode.ideal };
     }
 
-    setStatus("Opening camera...");
-
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     const track = stream.getVideoTracks()[0];
-
     state.stream = stream;
     state.track = track;
     state.activeDeviceId = track?.getSettings?.().deviceId || deviceId || state.activeDeviceId;
@@ -565,6 +561,12 @@
     setStatus("Camera ready");
   }
 
+  function getSquareCropSize(video) {
+    const width = video.videoWidth || CONFIG.preferredSquareSize;
+    const height = video.videoHeight || CONFIG.preferredSquareSize;
+    return Math.max(1, Math.min(width, height));
+  }
+
   function drawSquareFrame() {
     const video = state.els.cameraPreview;
     const canvas = state.els.captureCanvas;
@@ -581,10 +583,7 @@
 
   async function readBarcodeFromCanvas(canvas) {
     const detector = await createDetector();
-    if (!detector) {
-      return [];
-    }
-
+    if (!detector) return [];
     try {
       return await detector.detect(canvas);
     } catch {
@@ -592,68 +591,27 @@
     }
   }
 
-  function renderHistory() {
-    state.els.historyList.innerHTML = "";
-
-    if (state.history.length === 0) {
-      state.selectedHistoryIndex = -1;
-      updateDeleteButton();
-      state.els.historyList.appendChild(state.els.historyEmpty);
-      return;
-    }
-
-    for (let index = 0; index < state.history.length; index += 1) {
-      const item = state.history[index];
-      const article = document.createElement("article");
-      article.className = "history-item";
-      if (index === state.selectedHistoryIndex) {
-        article.classList.add("is-selected");
-      }
-      article.textContent = item.detectedText;
-      article.dataset.index = String(index);
-      article.setAttribute("tabindex", "0");
-      article.setAttribute("role", "button");
-      article.setAttribute("aria-label", `Barcode record ${item.detectedText}`);
-      state.els.historyList.appendChild(article);
-    }
-
-    updateDeleteButton();
-  }
-
-  function addHistoryItem(detectedText) {
-    if (!detectedText) {
-      return;
-    }
-
-    state.history.unshift({
-      detectedText: detectedText
-    });
-
-    if (state.history.length > CONFIG.historyLimit) {
-      state.history.length = CONFIG.historyLimit;
-    }
-
-    state.selectedHistoryIndex = 0;
-    renderHistory();
-  }
-
   async function captureAttempt() {
-    if (!state.isCameraRunning || !state.track) {
-      return false;
-    }
+    if (!state.isCameraRunning || !state.track) return false;
 
     const canvas = drawSquareFrame();
     const detections = await readBarcodeFromCanvas(canvas);
     const detectedText = detections[0]?.rawValue || "";
-    if (detectedText) {
-      addHistoryItem(detectedText);
-      setStatus(`Detected: ${detectedText}`);
-      stopScanning(true);
-      return true;
+    if (!detectedText) {
+      setStatus("Scanning... point the barcode inside the square");
+      return false;
     }
 
-    setStatus("Scanning... point the barcode inside the square");
-    return false;
+    state.els.barcodeInput.value = detectedText;
+    stopScanning(true);
+
+    try {
+      await fetchProductInfo(detectedText);
+      return true;
+    } catch (error) {
+      setStatus(error.message || "Barcode was captured, but info request failed");
+      return true;
+    }
   }
 
   async function startScanning() {
@@ -661,9 +619,7 @@
       await startCamera(state.activeDeviceId);
     }
 
-    if (state.isScanning) {
-      return;
-    }
+    if (state.isScanning) return;
 
     state.isScanning = true;
     updateScanButton();
@@ -678,9 +634,7 @@
     state.scanTimer = window.setInterval(async () => {
       try {
         const detected = await captureAttempt();
-        if (detected) {
-          cleanupScanTimer();
-        }
+        if (detected) cleanupScanTimer();
       } catch {
         setStatus("Scanning had a temporary read error");
       }
@@ -712,14 +666,11 @@
 
   async function handleSelectChange() {
     const selectedId = state.els.cameraSelect.value;
-    if (!selectedId || selectedId === state.activeDeviceId) {
-      return;
-    }
+    if (!selectedId || selectedId === state.activeDeviceId) return;
 
     const shouldResumeScanning = state.isScanning;
-    stopScanning();
+    stopScanning(true);
     await startCamera(selectedId);
-
     if (shouldResumeScanning) {
       await startScanning();
     }
@@ -729,41 +680,7 @@
     const detector = await createDetector();
     state.els.detectorPill.textContent = detector
       ? "Detector: BarcodeDetector ready"
-      : "Detector: snapshots only on this browser";
-  }
-
-  function clearHistory() {
-    state.history = [];
-    state.selectedHistoryIndex = -1;
-    renderHistory();
-    setStatus("Recent attempt list cleared");
-  }
-
-  function selectHistoryItem(index) {
-    if (index < 0 || index >= state.history.length) {
-      return;
-    }
-
-    state.selectedHistoryIndex = index;
-    renderHistory();
-  }
-
-  function deleteSelectedRecord() {
-    if (state.selectedHistoryIndex < 0 || !state.history[state.selectedHistoryIndex]) {
-      closeDeleteDialog();
-      return;
-    }
-
-    state.history.splice(state.selectedHistoryIndex, 1);
-    if (state.history.length === 0) {
-      state.selectedHistoryIndex = -1;
-    } else if (state.selectedHistoryIndex >= state.history.length) {
-      state.selectedHistoryIndex = state.history.length - 1;
-    }
-
-    closeDeleteDialog();
-    renderHistory();
-    setStatus("Record deleted");
+      : "Detector: snapshots only";
   }
 
   function bindEvents() {
@@ -776,6 +693,23 @@
       } finally {
         state.els.scanBtn.disabled = false;
       }
+    });
+
+    state.els.lookupBtn.addEventListener("click", async function () {
+      state.els.lookupBtn.disabled = true;
+      try {
+        await fetchProductInfo(state.els.barcodeInput.value);
+      } catch (error) {
+        setStatus(error.message || "Could not load product info");
+      } finally {
+        state.els.lookupBtn.disabled = false;
+      }
+    });
+
+    state.els.barcodeInput.addEventListener("keydown", async function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      state.els.lookupBtn.click();
     });
 
     state.els.cameraSelect.addEventListener("change", async function () {
@@ -798,13 +732,17 @@
       }
     });
 
-    state.els.clearHistoryBtn.addEventListener("click", clearHistory);
-    state.els.deleteRecordBtn.addEventListener("click", openDeleteDialog);
-    state.els.cancelDeleteBtn.addEventListener("click", closeDeleteDialog);
-    state.els.confirmDeleteBtn.addEventListener("click", deleteSelectedRecord);
     state.els.settingsBtn.addEventListener("click", openSettingsDialog);
     state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
-    state.els.saveSettingsBtn.addEventListener("click", saveSettings);
+
+    state.els.saveSettingsBtn.addEventListener("click", function () {
+      saveSettings({
+        shopKey: state.els.shopKeyInput.value.trim(),
+        login: state.els.loginInput.value.trim(),
+        password: state.els.passwordInput.value
+      });
+    });
+
     state.els.loginSettingsBtn.addEventListener("click", async function () {
       const values = {
         shopKey: state.els.shopKeyInput.value.trim(),
@@ -812,45 +750,27 @@
         password: state.els.passwordInput.value
       };
 
-      localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(values));
-      await loginAndRefreshCookie(values);
+      saveSettings(values);
+      try {
+        await loginAndRefreshCookie(values);
+      } catch (error) {
+        const message = error.message || "Login request failed.";
+        saveCookieState("", `Login failed: ${message}`);
+        state.els.settingsSaveNote.textContent = message;
+        setStatus("Login failed");
+      }
     });
+
     state.els.refreshCookieBtn.addEventListener("click", async function () {
-      await loginAndRefreshCookie();
-    });
-
-    state.els.historyList.addEventListener("click", function (event) {
-      const record = event.target.closest(".history-item");
-      if (!record) {
-        return;
-      }
-
-      const index = Number(record.dataset.index);
-      if (!Number.isNaN(index)) {
-        selectHistoryItem(index);
-      }
-    });
-
-    state.els.historyList.addEventListener("keydown", function (event) {
-      if (event.key !== "Enter" && event.key !== " ") {
-        return;
-      }
-
-      const record = event.target.closest(".history-item");
-      if (!record) {
-        return;
-      }
-
-      event.preventDefault();
-      const index = Number(record.dataset.index);
-      if (!Number.isNaN(index)) {
-        selectHistoryItem(index);
-      }
-    });
-
-    state.els.deleteDialog.addEventListener("click", function (event) {
-      if (event.target === state.els.deleteDialog) {
-        closeDeleteDialog();
+      state.els.refreshCookieBtn.disabled = true;
+      try {
+        await loginAndRefreshCookie();
+      } catch (error) {
+        const message = error.message || "Cookie refresh failed.";
+        saveCookieState("", `Cookie refresh failed: ${message}`);
+        setStatus("Cookie refresh failed");
+      } finally {
+        state.els.refreshCookieBtn.disabled = false;
       }
     });
 
@@ -861,7 +781,7 @@
     });
 
     window.addEventListener("beforeunload", function () {
-      stopScanning();
+      stopScanning(true);
       stopTracks();
     });
 
@@ -878,13 +798,11 @@
     state.els = queryElements();
     requireElements(state.els);
 
-    setPreviewActive(false);
-    updateScanButton();
-    updateModePill();
-    renderHistory();
-    fillSettingsForm(readSavedSettings());
     loadCookieState();
     renderCookieState();
+    fillSettingsForm(readSavedSettings());
+    clearResultFields();
+    updateRequestCount();
     bindEvents();
     await initDetectorStatus();
 
@@ -892,15 +810,14 @@
     if (supportIssue) {
       setStatus(supportIssue);
       state.els.scanBtn.disabled = true;
+      state.els.lookupBtn.disabled = true;
       state.els.cameraSelect.disabled = true;
       state.els.torchBtn.disabled = true;
       return;
     }
 
-    await refreshDevices();
-    setStatus("Opening camera preview...");
-
     try {
+      await refreshDevices();
       await startCamera(state.activeDeviceId);
     } catch (error) {
       setStatus(error.message || "Camera preview could not start automatically");
@@ -911,14 +828,14 @@
     document.addEventListener("DOMContentLoaded", function () {
       init().catch((error) => {
         if (state.els?.statusText) {
-          setStatus(error.message || "The camera app could not start");
+          setStatus(error.message || "The app could not start");
         }
       });
     });
   } else {
     init().catch((error) => {
       if (state.els?.statusText) {
-        setStatus(error.message || "The camera app could not start");
+        setStatus(error.message || "The app could not start");
       }
     });
   }
