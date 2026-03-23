@@ -186,6 +186,66 @@
     renderHistory();
   }
 
+  function isDirectInfoRequestAllowed() {
+    try {
+      return window.location.hostname === "lgerp.cc" || window.location.hostname === "www.lgerp.cc";
+    } catch {
+      return false;
+    }
+  }
+
+  async function fetchProductInfoThroughProxy(code, cookie) {
+    const targetUrl = `${CONFIG.infoEndpoint}?goodCode=${encodeURIComponent(code)}`;
+    const params = new URLSearchParams();
+    params.set("url", targetUrl);
+    params.set("method", "GET");
+    params.set("cookie", cookie);
+    params.set("accept", "*/*");
+    params.set("x_requested_with", "XMLHttpRequest");
+    params.set("referer", "https://lgerp.cc/index");
+
+    const response = await fetch(CONFIG.cookieProxyEndpoint, {
+      method: "POST",
+      body: params.toString(),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Info proxy request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
+  async function fetchProductInfoDirect(code, cookie) {
+    const requestUrl = `${CONFIG.infoEndpoint}?goodCode=${encodeURIComponent(code)}`;
+    const headers = new Headers({
+      Accept: "*/*",
+      "X-Requested-With": "XMLHttpRequest"
+    });
+
+    try {
+      headers.set("Cookie", cookie);
+    } catch {
+      // Browsers usually block manual Cookie headers.
+    }
+
+    const response = await fetch(requestUrl, {
+      method: "GET",
+      headers: headers,
+      credentials: "include"
+    });
+
+    if (!response.ok) {
+      throw new Error(`Info request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
   function selectHistoryItem(index) {
     if (index < 0 || index >= state.history.length) return;
     state.selectedHistoryIndex = index;
@@ -359,32 +419,17 @@
       cookie = await loginAndRefreshCookie();
     }
 
+    addHistoryItem(code);
     saveCookieState(cookie, `Requesting info for ${code} on ${CONFIG.infoEndpoint}...`);
     setStatus("Requesting product info...");
 
-    const requestUrl = `${CONFIG.infoEndpoint}?goodCode=${encodeURIComponent(code)}`;
-    const headers = new Headers({
-      Accept: "*/*",
-      "X-Requested-With": "XMLHttpRequest"
-    });
-
-    try {
-      headers.set("Cookie", cookie);
-    } catch {
-      // Browsers often block setting Cookie manually.
+    let responseText = "";
+    if (isDirectInfoRequestAllowed()) {
+      responseText = await fetchProductInfoDirect(code, cookie);
+    } else {
+      responseText = await fetchProductInfoThroughProxy(code, cookie);
     }
 
-    const response = await fetch(requestUrl, {
-      method: "GET",
-      headers: headers,
-      credentials: "include"
-    });
-
-    if (!response.ok) {
-      throw new Error(`Info request failed with status ${response.status}`);
-    }
-
-    const responseText = await response.text();
     let parsed;
     try {
       parsed = JSON.parse(responseText);
@@ -393,7 +438,6 @@
     }
 
     renderProductData(parsed);
-    addHistoryItem(code);
     saveCookieState(cookie, `Info loaded successfully for barcode ${code}.`);
     setStatus("Product info loaded");
   }
