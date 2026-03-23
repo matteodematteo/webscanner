@@ -17,6 +17,8 @@
       "p_price",
       "s_price",
       "real_inventory",
+      "discount_price",
+      "discount_percent",
       "supplier_name",
       "spec"
     ],
@@ -367,7 +369,7 @@
   }
 
   function normalizeProductData(rawData) {
-    const queue = [rawData];
+    const queue = [rawData?.product || rawData];
     while (queue.length > 0) {
       const item = queue.shift();
       if (!item || typeof item !== "object") continue;
@@ -386,12 +388,81 @@
     return rawData || {};
   }
 
+  function normalizeSaleData(rawData) {
+    const saleSource = rawData?.sale;
+    if (!saleSource) {
+      return null;
+    }
+
+    if (Array.isArray(saleSource)) {
+      return saleSource.length > 0 ? saleSource[0] : null;
+    }
+
+    if (typeof saleSource === "object") {
+      const values = Object.values(saleSource);
+      for (let index = 0; index < values.length; index += 1) {
+        const value = values[index];
+        if (Array.isArray(value) && value.length > 0) {
+          return value[0];
+        }
+      }
+      return Object.keys(saleSource).length > 0 ? saleSource : null;
+    }
+
+    return null;
+  }
+
+  function numberFromValue(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : 0;
+  }
+
+  function formatPercent(value) {
+    const numeric = numberFromValue(value);
+    if (!numeric) return "";
+    const percent = numeric <= 1 ? numeric * 100 : numeric;
+    return `${percent.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}%`;
+  }
+
+  function formatPrice(value) {
+    const numeric = numberFromValue(value);
+    if (!numeric) return "";
+    return numeric.toFixed(2).replace(/\.00$/, "");
+  }
+
+  function getDiscountFields(rawData, productData) {
+    const saleData = normalizeSaleData(rawData);
+
+    if (saleData && (saleData.discountPrice !== undefined || saleData.sdiscount !== undefined)) {
+      return {
+        discountPrice: formatPrice(saleData.discountPrice),
+        discountPercent: formatPercent(saleData.sdiscount)
+      };
+    }
+
+    const sPrice = numberFromValue(productData.s_price);
+    const sDiscount = numberFromValue(productData.s_discount);
+    const sDiscount2 = numberFromValue(productData.s_discount2 || 1);
+    const sDiscount3 = numberFromValue(productData.s_discount3 || 1);
+    const sDiscount4 = numberFromValue(productData.s_discount4 || 1);
+    const totalDiscount = sDiscount * sDiscount2 * sDiscount3 * sDiscount4;
+
+    return {
+      discountPrice: formatPrice(sPrice * sDiscount),
+      discountPercent: formatPercent(totalDiscount)
+    };
+  }
+
   function renderProductData(data) {
     const normalized = normalizeProductData(data);
     for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
       const key = CONFIG.resultFields[index];
       setResultField(key, normalized[key]);
     }
+
+    const discountFields = getDiscountFields(data, normalized);
+    setResultField("discount_price", discountFields.discountPrice);
+    setResultField("discount_percent", discountFields.discountPercent);
   }
 
   async function fetchProductInfo(barcode) {
