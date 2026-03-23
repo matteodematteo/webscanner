@@ -238,43 +238,34 @@
     let rawCookie = "";
 
     if (typeof payload === "object" && payload !== null) {
-      const queue = [payload];
-      while (queue.length > 0 && !rawCookie) {
-        const item = queue.shift();
-        if (!item || typeof item !== "object") {
-          continue;
-        }
-
-        const directCandidate =
-          item.cookie ||
-          item.fullCookie ||
-          item.data?.cookie ||
-          item.data?.fullCookie ||
-          "";
-
-        if (directCandidate) {
-          rawCookie = String(directCandidate);
-          break;
-        }
-
-        const values = Object.values(item);
-        for (let index = 0; index < values.length; index += 1) {
-          const value = values[index];
-          if (typeof value === "string" && /SESSION=|rememberMe=/i.test(value)) {
-            rawCookie = value;
-            break;
-          }
-          if (value && typeof value === "object") {
-            queue.push(value);
-          }
-        }
-      }
+      rawCookie =
+        payload.fullCookie ||
+        payload.data?.fullCookie ||
+        payload.cookieString ||
+        payload.data?.cookieString ||
+        payload.cookie ||
+        payload.data?.cookie ||
+        "";
 
       if (!rawCookie) {
-        try {
-          rawCookie = JSON.stringify(payload);
-        } catch {
-          rawCookie = "";
+        const queue = [payload];
+        while (queue.length > 0 && !rawCookie) {
+          const item = queue.shift();
+          if (!item || typeof item !== "object") {
+            continue;
+          }
+
+          const values = Object.values(item);
+          for (let index = 0; index < values.length; index += 1) {
+            const value = values[index];
+            if (typeof value === "string" && /SESSION=|rememberMe=/i.test(value)) {
+              rawCookie = value;
+              break;
+            }
+            if (value && typeof value === "object") {
+              queue.push(value);
+            }
+          }
         }
       }
     } else {
