@@ -440,17 +440,18 @@
       };
     }
 
-    const sPrice = numberFromValue(productData.s_price);
-    const sDiscount = numberFromValue(productData.s_discount);
-    const sDiscount2 = numberFromValue(productData.s_discount2 || 1);
-    const sDiscount3 = numberFromValue(productData.s_discount3 || 1);
-    const sDiscount4 = numberFromValue(productData.s_discount4 || 1);
-    const totalDiscount = (1-(sDiscount/100)) * (1-(sDiscount2/100)) * (1-(sDiscount3/100)) * (1-(sDiscount4/100));
+const sPrice = numberFromValue(productData.s_price);
+const sDiscount = numberFromValue(productData.s_discount || 100) / 100;
+const sDiscount2 = numberFromValue(productData.s_discount2 || 100) / 100;
+const sDiscount3 = numberFromValue(productData.s_discount3 || 100) / 100;
+const sDiscount4 = numberFromValue(productData.s_discount4 || 100) / 100;
+const totalDiscount = sDiscount * sDiscount2 * sDiscount3 * sDiscount4;
 
-    return {
-      discountPrice: formatPrice(sPrice * totalDiscount),
-      discountPercent: formatPercent(totalDiscount)
-    };
+return {
+  discountPrice: formatPrice(sPrice * totalDiscount),
+  discountPercent: formatPercent(totalDiscount)
+};
+
   }
 
   function renderProductData(data) {
