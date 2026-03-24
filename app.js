@@ -11,6 +11,7 @@
     cookieStorageKey: "web_barcode_scanner_cookie",
     cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
     historyStorageKey: "web_barcode_scanner_history",
+    cameraStorageKey: "web_barcode_scanner_camera",
     scanIntervalMs: 1200,
     preferredSquareSize: 2160,
     resultFields: [
@@ -53,7 +54,8 @@
     authStatus: "",
     history: [],
     selectedHistoryIndex: -1,
-    pendingConfirmAction: null
+    pendingConfirmAction: null,
+    currentProductRecord: null
   };
 
   function queryElements() {
@@ -76,6 +78,11 @@
       loginInput: document.getElementById("loginInput"),
       loginSettingsBtn: document.getElementById("loginSettingsBtn"),
       passwordInput: document.getElementById("passwordInput"),
+      printBackBtn: document.getElementById("printBackBtn"),
+      printBigBtn: document.getElementById("printBigBtn"),
+      printBtn: document.getElementById("printBtn"),
+      printDialog: document.getElementById("printDialog"),
+      printStickerBtn: document.getElementById("printStickerBtn"),
       previewFrame: document.getElementById("previewFrame"),
       previewPlaceholder: document.getElementById("previewPlaceholder"),
       refreshCookieBtn: document.getElementById("refreshCookieBtn"),
@@ -145,6 +152,15 @@
     // Cookie state is kept in storage and surfaced through the top status text only.
   }
 
+  function readSavedCameraId() {
+    return localStorage.getItem(CONFIG.cameraStorageKey) || "";
+  }
+
+  function saveCameraId(deviceId) {
+    if (!deviceId) return;
+    localStorage.setItem(CONFIG.cameraStorageKey, deviceId);
+  }
+
   function loadCookieState() {
     state.authCookie = localStorage.getItem(CONFIG.cookieStorageKey) || "";
     state.authStatus = localStorage.getItem(CONFIG.cookieStatusStorageKey) || "No cookie saved yet.";
@@ -160,6 +176,9 @@
 
   function renderHistory() {
     state.els.historyList.innerHTML = "";
+    state.els.clearAllBtn.disabled = state.history.length === 0;
+    state.els.sendTxtBtn.disabled = state.history.length === 0;
+    state.els.printBtn.disabled = state.history.length === 0;
     if (state.history.length === 0) {
       state.selectedHistoryIndex = -1;
       state.els.clearSelectedBtn.disabled = true;
@@ -174,7 +193,7 @@
       if (index === state.selectedHistoryIndex) {
         article.classList.add("is-selected");
       }
-      article.textContent = item;
+      article.textContent = item.barcode || "";
       article.dataset.index = String(index);
       article.setAttribute("tabindex", "0");
       article.setAttribute("role", "button");
@@ -192,20 +211,68 @@
     try {
       const raw = localStorage.getItem(CONFIG.historyStorageKey);
       const parsed = raw ? JSON.parse(raw) : [];
-      state.history = Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+      state.history = Array.isArray(parsed)
+        ? parsed
+            .map(normalizeHistoryItem)
+            .filter((item) => item.barcode)
+        : [];
     } catch {
       state.history = [];
     }
   }
 
+  function normalizeHistoryItem(item) {
+    if (typeof item === "string") {
+      return {
+        id: `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+        barcode: item.trim(),
+        italian_name: "",
+        comparison_qty: 1,
+        s_price: "",
+        discount_price: "",
+        has_discount: false
+      };
+    }
+
+    const barcode = String(item?.barcode || "").trim();
+    return {
+      id: String(item?.id || `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`),
+      barcode: barcode,
+      italian_name: String(item?.italian_name || ""),
+      comparison_qty: 1,
+      s_price: String(item?.s_price || ""),
+      discount_price: String(item?.discount_price || ""),
+      has_discount: Boolean(item?.has_discount)
+    };
+  }
+
+  function createHistoryEntry(barcode) {
+    return normalizeHistoryItem({
+      id: `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+      barcode: barcode
+    });
+  }
+
   function addHistoryItem(barcode) {
-    const value = String(barcode || "").trim();
-    if (!value) return;
-    state.history.unshift(value);
+    const entry = createHistoryEntry(barcode);
+    if (!entry.barcode) return null;
+    state.history.unshift(entry);
     if (state.history.length > 12) {
       state.history.length = 12;
     }
     state.selectedHistoryIndex = 0;
+    saveHistoryState();
+    renderHistory();
+    return entry.id;
+  }
+
+  function updateHistoryItem(entryId, updates) {
+    const index = state.history.findIndex((item) => item.id === entryId);
+    if (index < 0) return;
+    state.history[index] = normalizeHistoryItem({
+      ...state.history[index],
+      ...updates
+    });
     saveHistoryState();
     renderHistory();
   }
@@ -290,15 +357,44 @@
     state.els.confirmDialog.setAttribute("aria-hidden", "true");
   }
 
-  function formatSessionId() {
+  function openPrintDialog() {
+    state.els.printDialog.classList.add("is-open");
+    state.els.printDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closePrintDialog() {
+    state.els.printDialog.classList.remove("is-open");
+    state.els.printDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function formatTimestamp() {
     const now = new Date();
     const yy = String(now.getFullYear()).slice(-2);
-    const dd = String(now.getDate()).padStart(2, "0");
     const MM = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
     const hh = String(now.getHours()).padStart(2, "0");
     const mm = String(now.getMinutes()).padStart(2, "0");
     const ss = String(now.getSeconds()).padStart(2, "0");
-    return `session_${yy}${dd}${MM}${hh}${mm}${ss}`;
+    return `${yy}${MM}${dd}${hh}${mm}${ss}`;
+  }
+
+  function formatSessionId() {
+    return `session_${formatTimestamp()}`;
+  }
+
+  function buildHistoryPayloadItem(item) {
+    const entry = normalizeHistoryItem(item);
+    const sPrice = numberFromValue(entry.s_price);
+    const discountPrice = numberFromValue(entry.discount_price);
+    const hasDiscountPrice = entry.has_discount && discountPrice > 0 && (!sPrice || discountPrice < sPrice);
+    const selectedPrice = hasDiscountPrice ? discountPrice : sPrice;
+
+    return {
+      barcode: entry.barcode,
+      italian_name: entry.italian_name || "",
+      comparison_qty: 1,
+      s_price: formatPrice(selectedPrice)
+    };
   }
 
   async function sendTxtList() {
@@ -313,10 +409,7 @@
       data: [
         {
           stack: "full_tickets",
-          items: state.history.map((barcode) => ({
-            barcode: barcode,
-            comparison_qty: 1
-          }))
+          items: state.history.map(buildHistoryPayloadItem)
         }
       ]
     };
@@ -339,6 +432,45 @@
     saveHistoryState();
     renderHistory();
     setStatus("TXT sent successfully");
+  }
+
+  async function printHistoryList(printType) {
+    if (state.history.length === 0) {
+      setStatus("Barcode list is empty");
+      return;
+    }
+
+    const normalizedType = printType === "40*25" ? "40*25" : "60*38";
+    const payload = {
+      session_id: `directPrint_${normalizedType}_${formatTimestamp()}`,
+      session_cost: "$1.00",
+      print_type: normalizedType,
+      data: [
+        {
+          stack: normalizedType === "40*25" ? "sticker_tickets" : "big_tickets",
+          items: state.history.map(buildHistoryPayloadItem)
+        }
+      ]
+    };
+
+    setStatus(`Sending print ${normalizedType}...`);
+    const response = await fetch(CONFIG.sendTxtEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Print failed with status ${response.status}`);
+    }
+
+    state.history = [];
+    state.selectedHistoryIndex = -1;
+    saveHistoryState();
+    renderHistory();
+    setStatus(`Print ${normalizedType} sent successfully`);
   }
 
   function extractCookieFromResponse(payload) {
@@ -469,6 +601,7 @@
         element.textContent = "";
       }
     }
+    state.currentProductRecord = null;
     setDiscountVisibility(false);
   }
 
@@ -592,6 +725,14 @@
     setDiscountVisibility(hasVisibleDiscount);
     setResultField("discount_price", hasVisibleDiscount ? discountFields.discountPrice : "");
     setResultField("discount_percent", hasVisibleDiscount ? discountFields.discountPercent : "");
+
+    state.currentProductRecord = {
+      barcode: String(normalized.goods_code || state.els.barcodeInput.value || "").trim(),
+      italian_name: String(normalized.italian_name || ""),
+      s_price: String(normalized.s_price || ""),
+      discount_price: hasVisibleDiscount ? String(discountFields.discountPrice || "") : "",
+      has_discount: hasVisibleDiscount
+    };
   }
 
   async function fetchProductInfo(barcode) {
@@ -609,7 +750,7 @@
       cookie = await loginAndRefreshCookie();
     }
 
-    addHistoryItem(code);
+    const historyEntryId = addHistoryItem(code);
     saveCookieState(cookie, `Requesting info for ${code} through ${CONFIG.infoProxyEndpoint}...`);
     setStatus("Requesting product info...");
 
@@ -636,6 +777,7 @@
       product: parsedProduct?.product || parsedProduct,
       sale: parsedDiscount
     });
+    updateHistoryItem(historyEntryId, state.currentProductRecord);
     saveCookieState(cookie, `Info loaded successfully for barcode ${code}.`);
     setStatus("Product info loaded");
   }
@@ -734,7 +876,10 @@
   async function refreshDevices(preferredDeviceId) {
     const devices = await navigator.mediaDevices.enumerateDevices();
     state.devices = devices.filter((device) => device.kind === "videoinput");
-    const currentId = preferredDeviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
+    const savedCameraId = readSavedCameraId();
+    const fallbackId = preferredDeviceId || state.activeDeviceId || savedCameraId || chooseBestDefaultDevice(state.devices);
+    const hasMatch = state.devices.some((device) => device.deviceId === fallbackId);
+    const currentId = hasMatch ? fallbackId : chooseBestDefaultDevice(state.devices);
     state.activeDeviceId = currentId;
     state.els.cameraSelect.innerHTML = "";
 
@@ -748,6 +893,9 @@
     }
 
     state.els.cameraSelect.disabled = state.devices.length === 0;
+    if (currentId) {
+      saveCameraId(currentId);
+    }
   }
 
   async function applyTrackEnhancements(track) {
@@ -845,6 +993,7 @@
     state.stream = stream;
     state.track = track;
     state.activeDeviceId = track?.getSettings?.().deviceId || deviceId || state.activeDeviceId;
+    saveCameraId(state.activeDeviceId);
     state.els.cameraPreview.srcObject = stream;
 
     await state.els.cameraPreview.play();
@@ -968,6 +1117,7 @@
     if (!selectedId || selectedId === state.activeDeviceId) return;
 
     const shouldResumeScanning = state.isScanning;
+    saveCameraId(selectedId);
     stopScanning(true);
     await startCamera(selectedId);
     if (shouldResumeScanning) {
@@ -1014,6 +1164,44 @@
         state.els.sendTxtBtn.disabled = false;
       }
     });
+
+    state.els.printBtn.addEventListener("click", function () {
+      if (state.history.length === 0) {
+        setStatus("Barcode list is empty");
+        return;
+      }
+      openPrintDialog();
+    });
+
+    state.els.printBigBtn.addEventListener("click", async function () {
+      state.els.printBigBtn.disabled = true;
+      state.els.printStickerBtn.disabled = true;
+      try {
+        await printHistoryList("60*38");
+        closePrintDialog();
+      } catch (error) {
+        setStatus(error.message || "Print failed");
+      } finally {
+        state.els.printBigBtn.disabled = false;
+        state.els.printStickerBtn.disabled = false;
+      }
+    });
+
+    state.els.printStickerBtn.addEventListener("click", async function () {
+      state.els.printBigBtn.disabled = true;
+      state.els.printStickerBtn.disabled = true;
+      try {
+        await printHistoryList("40*25");
+        closePrintDialog();
+      } catch (error) {
+        setStatus(error.message || "Print failed");
+      } finally {
+        state.els.printBigBtn.disabled = false;
+        state.els.printStickerBtn.disabled = false;
+      }
+    });
+
+    state.els.printBackBtn.addEventListener("click", closePrintDialog);
 
     state.els.historyList.addEventListener("click", function (event) {
       const record = event.target.closest(".history-item");
@@ -1129,6 +1317,12 @@
       }
     });
 
+    state.els.printDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.printDialog) {
+        closePrintDialog();
+      }
+    });
+
     window.addEventListener("beforeunload", function () {
       stopScanning(true);
       stopTracks();
@@ -1164,7 +1358,7 @@
     }
 
     try {
-      await refreshDevices();
+      await refreshDevices(readSavedCameraId());
       await startCamera(state.activeDeviceId);
     } catch (error) {
       setStatus(error.message || "Camera preview could not start automatically");
