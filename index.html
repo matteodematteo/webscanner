@@ -374,11 +374,23 @@
 
     .history-primary {
       display: flex;
-      align-items: baseline;
+      align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
       font-size: 0.96rem;
       font-weight: 800;
+    }
+
+    .history-code {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .history-qty {
+      color: var(--accent-strong);
+      font-size: 0.74rem;
+      font-weight: 800;
+      white-space: nowrap;
     }
 
     .history-name {
@@ -499,6 +511,7 @@
       .field-value { font-size: 0.74rem; }
       .history-actions { gap: 8px; }
       .history-primary { font-size: 0.88rem; }
+      .history-qty { font-size: 0.68rem; }
       .history-name { font-size: 0.68rem; }
       .history-meta { gap: 10px; font-size: 0.68rem; }
     }
@@ -651,27 +664,35 @@
       <h2 id="historyEditDialogTitle">Edit Barcode</h2>
       <div class="field-list">
         <label>
-          <span class="visually-hidden">ID</span>
+          <span>ID</span>
           <input class="input" id="historyEditIdInput" type="text" placeholder="ID" readonly />
         </label>
         <label>
-          <span class="visually-hidden">Barcode</span>
+          <span>Barcode</span>
           <input class="input" id="historyEditBarcodeInput" type="text" placeholder="Barcode" readonly />
         </label>
         <label>
-          <span class="visually-hidden">Italian Name</span>
+          <span>Italian Name</span>
           <input class="input" id="historyEditItalianNameInput" type="text" placeholder="Italian name" />
         </label>
         <label>
-          <span class="visually-hidden">P Price</span>
+          <span>P Price</span>
           <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" placeholder="P price" />
         </label>
         <label>
-          <span class="visually-hidden">S Price</span>
+          <span>S Price</span>
           <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" placeholder="S price" />
         </label>
         <label>
-          <span class="visually-hidden">Comparison Qty</span>
+          <span>S Discount %</span>
+          <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" placeholder="S discount %" />
+        </label>
+        <label>
+          <span>Disc. Price</span>
+          <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" placeholder="Disc. price" readonly />
+        </label>
+        <label>
+          <span>Comparison Qty</span>
           <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" placeholder="Comparison qty" />
         </label>
       </div>
@@ -684,6 +705,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=20" defer></script>
+  <script src="app.js?v=21" defer></script>
 </body>
 </html>
