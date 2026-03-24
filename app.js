@@ -62,7 +62,6 @@
     detector: null,
     isCameraRunning: false,
     isScanning: false,
-    catMode: false,
     torchOn: false,
     scanTimer: 0,
     authCookie: "",
@@ -86,7 +85,6 @@
       cameraBadge: document.getElementById("cameraBadge"),
       cameraPreview: document.getElementById("cameraPreview"),
       cameraSelect: document.getElementById("cameraSelect"),
-      catModeBtn: document.getElementById("catModeBtn"),
       clearAllBtn: document.getElementById("clearAllBtn"),
       clearBarcodeBtn: document.getElementById("clearBarcodeBtn"),
       clearSelectedBtn: document.getElementById("clearSelectedBtn"),
@@ -168,11 +166,6 @@
   }
 
   function playCaptureSound() {
-    if (state.catMode) {
-      playCatCaptureSound();
-      return;
-    }
-
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) {
@@ -209,66 +202,6 @@
     } catch {
       // Audio is optional.
     }
-  }
-
-  function playCatCaptureSound() {
-    try {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) {
-        return;
-      }
-
-      if (!state.audioContext) {
-        state.audioContext = new AudioContextClass();
-      }
-
-      const context = state.audioContext;
-      if (context.state === "suspended") {
-        context.resume().catch(() => {
-          // Ignore resume errors triggered by browser policies.
-        });
-      }
-
-      const now = context.currentTime;
-      const oscillator1 = context.createOscillator();
-      const oscillator2 = context.createOscillator();
-      const gainNode = context.createGain();
-      const filter = context.createBiquadFilter();
-
-      oscillator1.type = "triangle";
-      oscillator1.frequency.setValueAtTime(620, now);
-      oscillator1.frequency.exponentialRampToValueAtTime(980, now + 0.08);
-      oscillator1.frequency.exponentialRampToValueAtTime(760, now + 0.16);
-
-      oscillator2.type = "sine";
-      oscillator2.frequency.setValueAtTime(1240, now);
-      oscillator2.frequency.exponentialRampToValueAtTime(1560, now + 0.07);
-      oscillator2.frequency.exponentialRampToValueAtTime(1180, now + 0.16);
-
-      filter.type = "lowpass";
-      filter.frequency.setValueAtTime(1800, now);
-
-      gainNode.gain.setValueAtTime(0.0001, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.055, now + 0.02);
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-
-      oscillator1.connect(filter);
-      oscillator2.connect(filter);
-      filter.connect(gainNode);
-      gainNode.connect(context.destination);
-
-      oscillator1.start(now);
-      oscillator2.start(now);
-      oscillator1.stop(now + 0.18);
-      oscillator2.stop(now + 0.18);
-    } catch {
-      // Audio is optional.
-    }
-  }
-
-  function updateCatModeUi() {
-    state.els.catModeBtn.textContent = state.catMode ? "Cat Mode 🐱 On" : "Cat Mode 🐱 Off";
-    state.els.catModeBtn.setAttribute("aria-pressed", state.catMode ? "true" : "false");
   }
 
   function readSavedSettings() {
@@ -1768,12 +1701,6 @@
       }
     });
 
-    state.els.catModeBtn.addEventListener("click", function () {
-      state.catMode = !state.catMode;
-      updateCatModeUi();
-      setStatus(state.catMode ? "Cat mode enabled" : "Classic capture sound enabled");
-    });
-
     state.els.clearBarcodeBtn.addEventListener("click", function () {
       state.els.barcodeInput.value = "";
       setStatus("Barcode field cleared");
@@ -2012,7 +1939,6 @@
     requireElements(state.els);
     state.isMobileUi = detectMobileUi();
     cacheResultFieldElements();
-    updateCatModeUi();
 
     loadCookieState();
     loadHistoryState();
