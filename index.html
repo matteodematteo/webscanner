@@ -605,7 +605,7 @@
         <div class="field-card span-full"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
         <div class="field-card span-third"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
         <div class="field-card span-third"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
-        <div class="field-card span-third"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
+        <div class="field-card span-third"><label for="field_real_inventory">Real Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
         <div class="field-card span-half" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
         <div class="field-card span-half" id="field_discount_percent_card" hidden><label for="field_discount_percent">Discount%</label><div class="field-value is-discount" id="field_discount_percent"></div></div>
         <div class="field-card span-half"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
@@ -657,7 +657,6 @@
       <div class="save-note" id="settingsSaveNote" aria-live="polite"></div>
       <div class="dialog-actions">
         <button class="btn btn-primary" id="loginSettingsBtn" type="button">Login</button>
-        <button class="btn btn-primary" id="saveSettingsBtn" type="button">Save</button>
         <button class="btn btn-muted" id="closeSettingsBtn" type="button">Back</button>
       </div>
     </div>
@@ -688,6 +687,7 @@
 
   <div class="dialog-backdrop" id="historyEditDialog" aria-hidden="true">
     <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="historyEditDialogTitle">
+      <h2 id="historyEditDialogTitle">Edit Barcode</h2>
       <div class="field-list">
         <label>
           <span>ID</span>
@@ -731,6 +731,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=31" defer></script>
+  <script src="app.js?v=32" defer></script>
 </body>
 </html>
