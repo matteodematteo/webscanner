@@ -259,12 +259,23 @@
       meta.className = "history-meta";
       meta.innerHTML = `<span>Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>Price: ${escapeHtml(getHistoryDisplayPrice(item))}</span>`;
 
+      const footer = document.createElement("div");
+      footer.className = "history-footer";
+      footer.appendChild(meta);
+
+      const detailButton = document.createElement("button");
+      detailButton.className = "btn btn-muted history-detail-btn";
+      detailButton.type = "button";
+      detailButton.textContent = "Detail";
+      detailButton.dataset.action = "detail";
+      detailButton.dataset.index = String(index);
+      footer.appendChild(detailButton);
+
       article.appendChild(primary);
       article.appendChild(name);
-      article.appendChild(meta);
+      article.appendChild(footer);
       article.dataset.index = String(index);
       article.setAttribute("tabindex", "0");
-      article.setAttribute("role", "button");
       fragment.appendChild(article);
     }
 
@@ -1716,13 +1727,22 @@
     state.els.printBackBtn.addEventListener("click", closePrintDialog);
 
     state.els.historyList.addEventListener("click", function (event) {
+      const detailButton = event.target.closest('[data-action="detail"]');
+      if (detailButton) {
+        const detailIndex = Number(detailButton.dataset.index);
+        if (!Number.isNaN(detailIndex)) {
+          openHistoryEditor(detailIndex).catch((error) => {
+            setStatus(error.message || "Could not open barcode row");
+          });
+        }
+        return;
+      }
+
       const record = event.target.closest(".history-item");
       if (!record) return;
       const index = Number(record.dataset.index);
       if (!Number.isNaN(index)) {
-        openHistoryEditor(index).catch((error) => {
-          setStatus(error.message || "Could not open barcode row");
-        });
+        selectHistoryItem(index);
       }
     });
 
@@ -1733,9 +1753,7 @@
       event.preventDefault();
       const index = Number(record.dataset.index);
       if (!Number.isNaN(index)) {
-        openHistoryEditor(index).catch((error) => {
-          setStatus(error.message || "Could not open barcode row");
-        });
+        selectHistoryItem(index);
       }
     });
 
