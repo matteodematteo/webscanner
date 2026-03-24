@@ -80,12 +80,14 @@
       historyEditBackBtn: document.getElementById("historyEditBackBtn"),
       historyEditBarcodeInput: document.getElementById("historyEditBarcodeInput"),
       historyEditDialog: document.getElementById("historyEditDialog"),
+      historyEditDiscountPriceInput: document.getElementById("historyEditDiscountPriceInput"),
       historyEditIdInput: document.getElementById("historyEditIdInput"),
       historyEditItalianNameInput: document.getElementById("historyEditItalianNameInput"),
       historyEditPPriceInput: document.getElementById("historyEditPPriceInput"),
       historyEditQtyInput: document.getElementById("historyEditQtyInput"),
       historyEditSaveBtn: document.getElementById("historyEditSaveBtn"),
       historyEditSaveNote: document.getElementById("historyEditSaveNote"),
+      historyEditSDiscountInput: document.getElementById("historyEditSDiscountInput"),
       historyEditSPriceInput: document.getElementById("historyEditSPriceInput"),
       historyList: document.getElementById("historyList"),
       loginInput: document.getElementById("loginInput"),
@@ -208,7 +210,7 @@
       }
       const primary = document.createElement("div");
       primary.className = "history-primary";
-      primary.innerHTML = `<span>${escapeHtml(item.barcode || "")}</span><span>${escapeHtml(getHistoryDisplayPrice(item))}</span>`;
+      primary.innerHTML = `<span class="history-code">${escapeHtml(item.barcode || "")}</span><span class="history-qty">Qty ${escapeHtml(String(item.comparison_qty || 1))}</span>`;
 
       const name = document.createElement("div");
       name.className = "history-name";
@@ -216,7 +218,7 @@
 
       const meta = document.createElement("div");
       meta.className = "history-meta";
-      meta.innerHTML = `<span>Qty ${escapeHtml(String(item.comparison_qty || 1))}</span><span>P ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>S ${escapeHtml(formatPrice(item.s_price) || "-")}</span>`;
+      meta.innerHTML = `<span>Price ${escapeHtml(getHistoryDisplayPrice(item))}</span><span>P ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>S ${escapeHtml(formatPrice(item.s_price) || "-")}</span>`;
 
       article.appendChild(primary);
       article.appendChild(name);
@@ -258,6 +260,7 @@
         comparison_qty: 1,
         p_price: "",
         s_price: "",
+        s_discount: "",
         discount_price: "",
         has_discount: false
       };
@@ -272,6 +275,7 @@
       comparison_qty: Math.max(1, Number(item?.comparison_qty || 1) || 1),
       p_price: String(item?.p_price || ""),
       s_price: String(item?.s_price || ""),
+      s_discount: String(item?.s_discount || ""),
       discount_price: String(item?.discount_price || ""),
       has_discount: Boolean(item?.has_discount)
     };
@@ -356,6 +360,7 @@
         italian_name: payload.italian_name,
         p_price: payload.p_price,
         s_price: payload.s_price,
+        s_discount: payload.s_discount,
         cookie: cookie
       }),
       headers: {
@@ -379,6 +384,7 @@
         italian_name: payload.italian_name,
         p_price: payload.p_price,
         s_price: payload.s_price,
+        s_discount: payload.s_discount,
         cookie: cookie
       }),
       headers: {
@@ -499,7 +505,9 @@
     state.els.historyEditItalianNameInput.value = entry.italian_name || "";
     state.els.historyEditPPriceInput.value = entry.p_price || "";
     state.els.historyEditSPriceInput.value = entry.s_price || "";
+    state.els.historyEditSDiscountInput.value = entry.s_discount || "";
     state.els.historyEditQtyInput.value = String(entry.comparison_qty || 1);
+    refreshHistoryEditDiscountPrice();
   }
 
   function openHistoryEditDialog(item) {
@@ -848,11 +856,26 @@
 
   function getHistoryDisplayPrice(item) {
     const entry = normalizeHistoryItem(item);
-    const pPrice = numberFromValue(entry.p_price);
+    const sPrice = numberFromValue(entry.s_price);
     const discountPrice = numberFromValue(entry.discount_price);
-    const showDiscountPrice = entry.has_discount && discountPrice > 0 && (!pPrice || discountPrice < pPrice);
-    const value = showDiscountPrice ? discountPrice : pPrice;
+    const showDiscountPrice = entry.has_discount && discountPrice > 0 && (!sPrice || discountPrice < sPrice);
+    const value = showDiscountPrice ? discountPrice : sPrice;
     return value ? `EUR ${formatPrice(value)}` : "EUR -";
+  }
+
+  function calculateDiscountPrice(sPriceValue, sDiscountValue) {
+    const sPrice = numberFromValue(sPriceValue);
+    const sDiscount = numberFromValue(sDiscountValue);
+    if (!sPrice || !sDiscount) return "";
+    return formatPrice(sPrice * (1 - (sDiscount / 100)));
+  }
+
+  function refreshHistoryEditDiscountPrice() {
+    const discountPrice = calculateDiscountPrice(
+      state.els.historyEditSPriceInput.value,
+      state.els.historyEditSDiscountInput.value
+    );
+    state.els.historyEditDiscountPriceInput.value = discountPrice;
   }
 
   function getDiscountFields(rawData, productData) {
@@ -902,6 +925,7 @@
       italian_name: String(normalized.italian_name || ""),
       p_price: String(normalized.p_price || ""),
       s_price: String(normalized.s_price || ""),
+      s_discount: String(normalized.s_discount || ""),
       discount_price: hasVisibleDiscount ? String(discountFields.discountPrice || "") : "",
       has_discount: hasVisibleDiscount,
       comparison_qty: 1
@@ -969,7 +993,10 @@
         barcode: normalized.goods_code || item.barcode,
         italian_name: normalized.italian_name || item.italian_name,
         p_price: normalized.p_price || item.p_price,
-        s_price: normalized.s_price || item.s_price
+        s_price: normalized.s_price || item.s_price,
+        s_discount: normalized.s_discount || item.s_discount,
+        discount_price: calculateDiscountPrice(normalized.s_price || item.s_price, normalized.s_discount || item.s_discount),
+        has_discount: Boolean(numberFromValue(normalized.s_discount || item.s_discount))
       });
       updateHistoryItem(item.id, updatedItem);
       fillHistoryEditForm(updatedItem);
@@ -996,7 +1023,8 @@
       barcode: state.els.historyEditBarcodeInput.value.trim(),
       italian_name: state.els.historyEditItalianNameInput.value.trim(),
       p_price: state.els.historyEditPPriceInput.value.trim(),
-      s_price: state.els.historyEditSPriceInput.value.trim()
+      s_price: state.els.historyEditSPriceInput.value.trim(),
+      s_discount: state.els.historyEditSDiscountInput.value.trim()
     };
     const comparisonQty = Math.max(1, Number(state.els.historyEditQtyInput.value || 1) || 1);
     const isBarcodeOnlyRow = !String(currentItem.goods_id || "").trim() &&
@@ -1040,6 +1068,9 @@
         italian_name: String(addedProduct.italian_name || payload.italian_name),
         p_price: String(addedProduct.p_price || payload.p_price),
         s_price: String(addedProduct.s_price || payload.s_price),
+        s_discount: String(addedProduct.s_discount || payload.s_discount),
+        discount_price: calculateDiscountPrice(addedProduct.s_price || payload.s_price, addedProduct.s_discount || payload.s_discount),
+        has_discount: Boolean(numberFromValue(addedProduct.s_discount || payload.s_discount)),
         comparison_qty: comparisonQty
       });
     } else {
@@ -1051,6 +1082,9 @@
         italian_name: payload.italian_name,
         p_price: payload.p_price,
         s_price: payload.s_price,
+        s_discount: payload.s_discount,
+        discount_price: calculateDiscountPrice(payload.s_price, payload.s_discount),
+        has_discount: Boolean(numberFromValue(payload.s_discount)),
         comparison_qty: comparisonQty
       });
     }
@@ -1063,12 +1097,18 @@
         italian_name: updatedItem.italian_name,
         p_price: updatedItem.p_price,
         s_price: updatedItem.s_price,
+        s_discount: updatedItem.s_discount,
+        discount_price: updatedItem.discount_price,
+        has_discount: updatedItem.has_discount,
         comparison_qty: updatedItem.comparison_qty
       };
       setResultField("id", updatedItem.goods_id);
       setResultField("italian_name", updatedItem.italian_name);
       setResultField("p_price", updatedItem.p_price);
       setResultField("s_price", updatedItem.s_price);
+      setResultField("discount_price", updatedItem.discount_price);
+      setResultField("discount_percent", updatedItem.s_discount ? formatPercent(updatedItem.s_discount) : "");
+      setDiscountVisibility(Boolean(numberFromValue(updatedItem.discount_price)) && numberFromValue(updatedItem.discount_price) < numberFromValue(updatedItem.s_price));
     }
 
     setStatus(`Saved ${updatedItem.barcode}`);
@@ -1632,6 +1672,9 @@
     });
 
     state.els.historyEditBackBtn.addEventListener("click", closeHistoryEditDialog);
+
+    state.els.historyEditSPriceInput.addEventListener("input", refreshHistoryEditDiscountPrice);
+    state.els.historyEditSDiscountInput.addEventListener("input", refreshHistoryEditDiscountPrice);
 
     state.els.historyEditDialog.addEventListener("click", function (event) {
       if (event.target === state.els.historyEditDialog) {
