@@ -120,7 +120,6 @@
       previewPlaceholder: document.getElementById("previewPlaceholder"),
       refreshCookieBtn: document.getElementById("refreshCookieBtn"),
       resolutionBadge: document.getElementById("resolutionBadge"),
-      saveSettingsBtn: document.getElementById("saveSettingsBtn"),
       scanBtn: document.getElementById("scanBtn"),
       sendTxtBtn: document.getElementById("sendTxtBtn"),
       settingsBtn: document.getElementById("settingsBtn"),
@@ -1155,8 +1154,19 @@
         discount_price: discountPrice || calculateDiscountPrice(product.s_price || item.s_price, product.s_discount || item.s_discount),
         has_discount: hasDiscount || Boolean(numberFromValue(product.s_discount || item.s_discount))
       });
-      updateHistoryItem(item.id, updatedItem);
-      fillHistoryEditForm(updatedItem);
+      updateHistoryItemsByBarcode(updatedItem.barcode, {
+        goods_id: updatedItem.goods_id,
+        barcode: updatedItem.barcode,
+        italian_name: updatedItem.italian_name,
+        p_price: updatedItem.p_price,
+        s_price: updatedItem.s_price,
+        s_discount: updatedItem.s_discount,
+        discount_price: updatedItem.discount_price,
+        has_discount: updatedItem.has_discount
+      });
+      const refreshedSelectedItem =
+        state.history.find((historyItem) => historyItem.id === item.id) || updatedItem;
+      fillHistoryEditForm(refreshedSelectedItem);
       state.els.historyEditSaveNote.textContent = "";
       setStatus(`Latest info loaded for ${updatedItem.barcode}`);
     } catch (error) {
@@ -1830,14 +1840,6 @@
 
     state.els.settingsBtn.addEventListener("click", openSettingsDialog);
     state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
-
-    state.els.saveSettingsBtn.addEventListener("click", function () {
-      saveSettings({
-        shopKey: state.els.shopKeyInput.value.trim(),
-        login: state.els.loginInput.value.trim(),
-        password: state.els.passwordInput.value
-      });
-    });
 
     state.els.loginSettingsBtn.addEventListener("click", async function () {
       const values = {
