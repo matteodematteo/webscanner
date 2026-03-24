@@ -16,6 +16,7 @@
     cameraStorageKey: "web_barcode_scanner_camera",
     scanIntervalMs: 1200,
     preferredSquareSize: 2160,
+    mobilePreferredSquareSize: 960,
     resultFields: [
       "id",
       "goods_code",
@@ -38,6 +39,17 @@
         frameRate: { ideal: 30, max: 60 },
         resizeMode: "crop-and-scale"
       }
+    },
+    mobileVideoConstraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 1280, max: 1920 },
+        aspectRatio: { ideal: 1 },
+        frameRate: { ideal: 24, max: 30 },
+        resizeMode: "crop-and-scale"
+      }
     }
   };
 
@@ -58,7 +70,12 @@
     selectedHistoryIndex: -1,
     pendingConfirmAction: null,
     currentProductRecord: null,
-    editingHistoryId: ""
+    editingHistoryId: "",
+    fieldEls: {},
+    lastStatusMessage: "",
+    isMobileUi: false,
+    isScanLoopScheduled: false,
+    isScanInFlight: false
   };
 
   function queryElements() {
@@ -121,8 +138,30 @@
     }
   }
 
+  function detectMobileUi() {
+    const width = window.innerWidth || screen.width || 0;
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") || width <= 768;
+  }
+
+  function getActiveVideoConfig() {
+    return state.isMobileUi ? CONFIG.mobileVideoConstraints : CONFIG.videoConstraints;
+  }
+
+  function cacheResultFieldElements() {
+    state.fieldEls = {};
+    for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
+      const key = CONFIG.resultFields[index];
+      state.fieldEls[key] = document.getElementById(`field_${key}`);
+    }
+  }
+
   function setStatus(message) {
-    state.els.statusText.textContent = message;
+    const nextMessage = String(message || "");
+    if (state.lastStatusMessage === nextMessage) {
+      return;
+    }
+    state.lastStatusMessage = nextMessage;
+    state.els.statusText.textContent = nextMessage;
   }
 
   function readSavedSettings() {
@@ -190,17 +229,17 @@
   }
 
   function renderHistory() {
-    state.els.historyList.innerHTML = "";
     state.els.clearAllBtn.disabled = state.history.length === 0;
     state.els.sendTxtBtn.disabled = state.history.length === 0;
     state.els.printBtn.disabled = state.history.length === 0;
     if (state.history.length === 0) {
       state.selectedHistoryIndex = -1;
       state.els.clearSelectedBtn.disabled = true;
-      state.els.historyList.appendChild(state.els.historyEmpty);
+      state.els.historyList.replaceChildren(state.els.historyEmpty);
       return;
     }
 
+    const fragment = document.createDocumentFragment();
     for (let index = 0; index < state.history.length; index += 1) {
       const item = state.history[index];
       const article = document.createElement("article");
@@ -226,10 +265,11 @@
       article.dataset.index = String(index);
       article.setAttribute("tabindex", "0");
       article.setAttribute("role", "button");
-      state.els.historyList.appendChild(article);
+      fragment.appendChild(article);
     }
 
     state.els.clearSelectedBtn.disabled = state.selectedHistoryIndex < 0;
+    state.els.historyList.replaceChildren(fragment);
   }
 
   function saveHistoryState() {
@@ -819,7 +859,7 @@
   function clearResultFields() {
     for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
       const key = CONFIG.resultFields[index];
-      const element = document.getElementById(`field_${key}`);
+      const element = state.fieldEls[key];
       if (element) {
         element.textContent = "";
       }
@@ -829,7 +869,7 @@
   }
 
   function setResultField(key, value) {
-    const element = document.getElementById(`field_${key}`);
+    const element = state.fieldEls[key];
     if (element) {
       element.textContent = value === undefined || value === null ? "" : String(value);
     }
@@ -1272,9 +1312,11 @@
 
   function cleanupScanTimer() {
     if (state.scanTimer) {
-      window.clearInterval(state.scanTimer);
+      window.clearTimeout(state.scanTimer);
       state.scanTimer = 0;
     }
+    state.isScanLoopScheduled = false;
+    state.isScanInFlight = false;
   }
 
   function stopTracks() {
@@ -1407,21 +1449,22 @@
     cleanupScanTimer();
     stopTracks();
 
+    const activeVideoConfig = getActiveVideoConfig();
     const constraints = {
       audio: false,
       video: {
-        width: { ideal: CONFIG.videoConstraints.video.width.ideal, max: CONFIG.videoConstraints.video.width.max },
-        height: { ideal: CONFIG.videoConstraints.video.height.ideal, max: CONFIG.videoConstraints.video.height.max },
-        aspectRatio: { ideal: CONFIG.videoConstraints.video.aspectRatio.ideal },
-        frameRate: { ideal: CONFIG.videoConstraints.video.frameRate.ideal, max: CONFIG.videoConstraints.video.frameRate.max },
-        resizeMode: CONFIG.videoConstraints.video.resizeMode
+        width: { ideal: activeVideoConfig.video.width.ideal, max: activeVideoConfig.video.width.max },
+        height: { ideal: activeVideoConfig.video.height.ideal, max: activeVideoConfig.video.height.max },
+        aspectRatio: { ideal: activeVideoConfig.video.aspectRatio.ideal },
+        frameRate: { ideal: activeVideoConfig.video.frameRate.ideal, max: activeVideoConfig.video.frameRate.max },
+        resizeMode: activeVideoConfig.video.resizeMode
       }
     };
 
     if (deviceId) {
       constraints.video.deviceId = { exact: deviceId };
     } else {
-      constraints.video.facingMode = { ideal: CONFIG.videoConstraints.video.facingMode.ideal };
+      constraints.video.facingMode = { ideal: activeVideoConfig.video.facingMode.ideal };
     }
 
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -1446,8 +1489,9 @@
   }
 
   function getSquareCropSize(video) {
-    const width = video.videoWidth || CONFIG.preferredSquareSize;
-    const height = video.videoHeight || CONFIG.preferredSquareSize;
+    const preferredSquareSize = state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize;
+    const width = video.videoWidth || preferredSquareSize;
+    const height = video.videoHeight || preferredSquareSize;
     return Math.max(1, Math.min(width, height));
   }
 
@@ -1459,8 +1503,9 @@
     const sx = Math.max(0, Math.floor((video.videoWidth - squareSize) / 2));
     const sy = Math.max(0, Math.floor((video.videoHeight - squareSize) / 2));
 
-    canvas.width = 720;
-    canvas.height = 720;
+    const outputSize = state.isMobileUi ? 512 : 720;
+    canvas.width = outputSize;
+    canvas.height = outputSize;
     context.drawImage(video, sx, sy, squareSize, squareSize, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
@@ -1498,6 +1543,44 @@
     }
   }
 
+  async function runScanLoop() {
+    if (!state.isScanning || state.isScanLoopScheduled) {
+      return;
+    }
+
+    state.isScanLoopScheduled = true;
+    state.scanTimer = window.setTimeout(async function () {
+      state.isScanLoopScheduled = false;
+      if (!state.isScanning || state.isScanInFlight) {
+        if (state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+        return;
+      }
+
+      state.isScanInFlight = true;
+      try {
+        const detected = await captureAttempt();
+        if (!detected && state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+      } catch {
+        setStatus("Scanning had a temporary read error");
+        if (state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+      } finally {
+        state.isScanInFlight = false;
+      }
+    }, CONFIG.scanIntervalMs);
+  }
+
   async function startScanning() {
     if (!state.isCameraRunning) {
       await startCamera(state.activeDeviceId);
@@ -1515,14 +1598,7 @@
     }
 
     cleanupScanTimer();
-    state.scanTimer = window.setInterval(async () => {
-      try {
-        const detected = await captureAttempt();
-        if (detected) cleanupScanTimer();
-      } catch {
-        setStatus("Scanning had a temporary read error");
-      }
-    }, CONFIG.scanIntervalMs);
+    await runScanLoop();
   }
 
   function stopScanning(keepStatusMessage) {
@@ -1802,6 +1878,8 @@
   async function init() {
     state.els = queryElements();
     requireElements(state.els);
+    state.isMobileUi = detectMobileUi();
+    cacheResultFieldElements();
 
     loadCookieState();
     loadHistoryState();
