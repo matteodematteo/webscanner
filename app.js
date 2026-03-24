@@ -1071,30 +1071,35 @@
       s_discount: state.els.historyEditSDiscountInput.value.trim()
     };
     const comparisonQty = Math.max(1, Number(state.els.historyEditQtyInput.value || 1) || 1);
-    const isBarcodeOnlyRow = !String(currentItem.goods_id || "").trim() &&
-      !String(currentItem.italian_name || "").trim() &&
-      !String(currentItem.p_price || "").trim() &&
-      !String(currentItem.s_price || "").trim();
-
-    if (isBarcodeOnlyRow) {
-      if (!payload.italian_name || !payload.p_price || !payload.s_price) {
-        throw new Error("Italian name, P price, and S price are required for a new barcode.");
-      }
-    } else if (!payload.id) {
-      throw new Error("ID is missing");
-    }
 
     const cookie = await getCookieForRequests();
-    state.els.historyEditSaveNote.textContent = "Saving changes...";
+    state.els.historyEditSaveNote.textContent = "Checking product...";
     let updatedItem;
+    let existingProduct = null;
 
-    if (isBarcodeOnlyRow) {
-      state.els.historyEditSaveNote.textContent = "Checking barcode before add...";
-      const { normalized } = await loadProductInfoResponse(payload.barcode);
-      if (hasProductInDatabase(normalized, payload.barcode)) {
-        throw new Error("This barcode already exists in the database.");
+    try {
+      const latestInfo = await loadProductInfoResponse(payload.barcode);
+      if (hasProductInDatabase(latestInfo.normalized, payload.barcode)) {
+        existingProduct = latestInfo.normalized;
       }
+    } catch {
+      existingProduct = null;
+    }
 
+    const shouldAddNewProduct = !existingProduct;
+
+    if (shouldAddNewProduct) {
+      if (!payload.italian_name || !payload.p_price || !payload.s_price) {
+        throw new Error("Italian name, cost, and price are required for a new barcode.");
+      }
+    } else {
+      payload.id = String(existingProduct.id || payload.id || currentItem.goods_id || "").trim();
+      if (!payload.id) {
+        throw new Error("ID is missing");
+      }
+    }
+
+    if (shouldAddNewProduct) {
       state.els.historyEditSaveNote.textContent = "Adding new product...";
       const addResponseText = await fetchAddProductThroughProxy(payload, cookie);
       let addResponse = null;
@@ -1118,6 +1123,7 @@
         comparison_qty: comparisonQty
       });
     } else {
+      state.els.historyEditSaveNote.textContent = "Saving changes...";
       await fetchUpdateItemThroughProxy(payload, cookie);
       updatedItem = normalizeHistoryItem({
         ...currentItem,
