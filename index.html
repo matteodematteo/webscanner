@@ -202,7 +202,7 @@
 
     .controls { margin-top: 10px; }
 
-    .button-row { grid-template-columns: 1.2fr 0.8fr 1fr; }
+    .button-row { grid-template-columns: 1.15fr 0.8fr 1.05fr; }
     .lookup-row { grid-template-columns: minmax(0, 1fr) 88px; }
 
     .field-grid {
@@ -344,7 +344,8 @@
     }
 
     .history-actions {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 8px;
     }
@@ -369,6 +370,37 @@
       word-break: break-word;
       cursor: pointer;
       transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+    }
+
+    .history-primary {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.96rem;
+      font-weight: 800;
+    }
+
+    .history-name {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.28;
+      font-weight: 600;
+    }
+
+    .history-meta {
+      display: flex;
+      gap: 14px;
+      margin-top: 8px;
+      color: var(--text);
+      font-size: 0.73rem;
+      font-weight: 700;
+      flex-wrap: wrap;
+    }
+
+    .history-meta span {
+      white-space: nowrap;
     }
 
     .history-item:hover {
@@ -447,10 +479,10 @@
 
     @media (max-width: 680px) {
       .app-shell { width: min(100%, calc(100% - 16px)); }
-      .button-row { grid-template-columns: 1.1fr 0.9fr 1fr; }
+      .button-row { grid-template-columns: 1fr 0.82fr 1.08fr; }
       .lookup-row { grid-template-columns: minmax(0, 1fr) 74px; }
       .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-      .helper-row { grid-template-columns: 1fr; }
+      .helper-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .card { border-radius: 22px; }
       .preview-meta { top: 8px; left: 8px; right: 8px; }
       .preview-placeholder { font-size: 0.74rem; }
@@ -465,10 +497,10 @@
       .field-grid { gap: 8px; }
       .field-card { padding: 8px; }
       .field-value { font-size: 0.74rem; }
-      .history-actions {
-        gap: 8px;
-        flex-wrap: wrap;
-      }
+      .history-actions { gap: 8px; }
+      .history-primary { font-size: 0.88rem; }
+      .history-name { font-size: 0.68rem; }
+      .history-meta { gap: 10px; font-size: 0.68rem; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -614,7 +646,44 @@
     </div>
   </div>
 
+  <div class="dialog-backdrop" id="historyEditDialog" aria-hidden="true">
+    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="historyEditDialogTitle">
+      <h2 id="historyEditDialogTitle">Edit Barcode</h2>
+      <div class="field-list">
+        <label>
+          <span class="visually-hidden">ID</span>
+          <input class="input" id="historyEditIdInput" type="text" placeholder="ID" readonly />
+        </label>
+        <label>
+          <span class="visually-hidden">Barcode</span>
+          <input class="input" id="historyEditBarcodeInput" type="text" placeholder="Barcode" readonly />
+        </label>
+        <label>
+          <span class="visually-hidden">Italian Name</span>
+          <input class="input" id="historyEditItalianNameInput" type="text" placeholder="Italian name" />
+        </label>
+        <label>
+          <span class="visually-hidden">P Price</span>
+          <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" placeholder="P price" />
+        </label>
+        <label>
+          <span class="visually-hidden">S Price</span>
+          <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" placeholder="S price" />
+        </label>
+        <label>
+          <span class="visually-hidden">Comparison Qty</span>
+          <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" placeholder="Comparison qty" />
+        </label>
+      </div>
+      <div class="save-note" id="historyEditSaveNote" aria-live="polite"></div>
+      <div class="dialog-actions">
+        <button class="btn btn-primary" id="historyEditSaveBtn" type="button">Save</button>
+        <button class="btn btn-muted" id="historyEditBackBtn" type="button">Back</button>
+      </div>
+    </div>
+  </div>
+
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=19" defer></script>
+  <script src="app.js?v=20" defer></script>
 </body>
 </html>
