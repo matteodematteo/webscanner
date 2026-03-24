@@ -312,6 +312,28 @@
     renderHistory();
   }
 
+  function updateHistoryItemsByBarcode(barcode, updates) {
+    const normalizedBarcode = String(barcode || "").trim();
+    if (!normalizedBarcode) return;
+
+    let didUpdate = false;
+    state.history = state.history.map(function (item) {
+      if (String(item.barcode || "").trim() !== normalizedBarcode) {
+        return item;
+      }
+      didUpdate = true;
+      return normalizeHistoryItem({
+        ...item,
+        ...updates,
+        barcode: normalizedBarcode
+      });
+    });
+
+    if (!didUpdate) return;
+    saveHistoryState();
+    renderHistory();
+  }
+
   async function fetchProductInfoThroughProxy(code, cookie) {
     const response = await fetch(CONFIG.infoProxyEndpoint, {
       method: "POST",
@@ -1160,7 +1182,17 @@
       // Keep the saved values if the refresh-after-save request fails.
     }
 
-    updateHistoryItem(currentItem.id, updatedItem);
+    updateHistoryItemsByBarcode(updatedItem.barcode, {
+      goods_id: updatedItem.goods_id,
+      barcode: updatedItem.barcode,
+      italian_name: updatedItem.italian_name,
+      p_price: updatedItem.p_price,
+      s_price: updatedItem.s_price,
+      s_discount: updatedItem.s_discount,
+      discount_price: updatedItem.discount_price,
+      has_discount: updatedItem.has_discount,
+      comparison_qty: updatedItem.comparison_qty
+    });
     if (state.currentProductRecord?.barcode === updatedItem.barcode) {
       state.currentProductRecord = {
         ...state.currentProductRecord,
