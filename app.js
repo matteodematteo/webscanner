@@ -218,7 +218,7 @@
 
       const meta = document.createElement("div");
       meta.className = "history-meta";
-      meta.innerHTML = `<span>Price ${escapeHtml(getHistoryDisplayPrice(item))}</span><span>P ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>S ${escapeHtml(formatPrice(item.s_price) || "-")}</span>`;
+      meta.innerHTML = `<span>Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>Price: ${escapeHtml(getHistoryDisplayPrice(item))}</span>`;
 
       article.appendChild(primary);
       article.appendChild(name);
