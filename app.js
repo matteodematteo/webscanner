@@ -75,7 +75,8 @@
     lastStatusMessage: "",
     isMobileUi: false,
     isScanLoopScheduled: false,
-    isScanInFlight: false
+    isScanInFlight: false,
+    audioContext: null
   };
 
   function queryElements() {
@@ -162,6 +163,45 @@
     }
     state.lastStatusMessage = nextMessage;
     state.els.statusText.textContent = nextMessage;
+  }
+
+  function playCaptureSound() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        return;
+      }
+
+      if (!state.audioContext) {
+        state.audioContext = new AudioContextClass();
+      }
+
+      const context = state.audioContext;
+      if (context.state === "suspended") {
+        context.resume().catch(() => {
+          // Ignore resume errors triggered by browser policies.
+        });
+      }
+
+      const now = context.currentTime;
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(880, now);
+      oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+
+      gainNode.gain.setValueAtTime(0.0001, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.16);
+    } catch {
+      // Audio is optional.
+    }
   }
 
   function readSavedSettings() {
@@ -1543,6 +1583,7 @@
     }
 
     state.els.barcodeInput.value = detectedText;
+    playCaptureSound();
     stopScanning(true);
 
     try {
