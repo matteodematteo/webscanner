@@ -6,6 +6,8 @@
     infoEndpoint: "https://lgerp.cc/goods/ongoodsCode",
     infoProxyEndpoint: "https://lgkillergetinfo.mattoteo96.workers.dev/",
     discountProxyEndpoint: "https://lgkillerdiscountinfo.mattoteo96.workers.dev/",
+    updateProxyEndpoint: "https://lgkillerupdate.mattoteo96.workers.dev/",
+    addProductProxyEndpoint: "https://lgkilleraddproduct.mattoteo96.workers.dev/",
     sendTxtEndpoint: "https://withered-base-e090.mattoteo96.workers.dev/",
     settingsStorageKey: "web_barcode_scanner_settings",
     cookieStorageKey: "web_barcode_scanner_cookie",
@@ -55,7 +57,8 @@
     history: [],
     selectedHistoryIndex: -1,
     pendingConfirmAction: null,
-    currentProductRecord: null
+    currentProductRecord: null,
+    editingHistoryId: ""
   };
 
   function queryElements() {
@@ -74,6 +77,16 @@
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
       historyEmpty: document.getElementById("historyEmpty"),
+      historyEditBackBtn: document.getElementById("historyEditBackBtn"),
+      historyEditBarcodeInput: document.getElementById("historyEditBarcodeInput"),
+      historyEditDialog: document.getElementById("historyEditDialog"),
+      historyEditIdInput: document.getElementById("historyEditIdInput"),
+      historyEditItalianNameInput: document.getElementById("historyEditItalianNameInput"),
+      historyEditPPriceInput: document.getElementById("historyEditPPriceInput"),
+      historyEditQtyInput: document.getElementById("historyEditQtyInput"),
+      historyEditSaveBtn: document.getElementById("historyEditSaveBtn"),
+      historyEditSaveNote: document.getElementById("historyEditSaveNote"),
+      historyEditSPriceInput: document.getElementById("historyEditSPriceInput"),
       historyList: document.getElementById("historyList"),
       loginInput: document.getElementById("loginInput"),
       loginSettingsBtn: document.getElementById("loginSettingsBtn"),
@@ -193,7 +206,21 @@
       if (index === state.selectedHistoryIndex) {
         article.classList.add("is-selected");
       }
-      article.textContent = item.barcode || "";
+      const primary = document.createElement("div");
+      primary.className = "history-primary";
+      primary.innerHTML = `<span>${escapeHtml(item.barcode || "")}</span><span>${escapeHtml(getHistoryDisplayPrice(item))}</span>`;
+
+      const name = document.createElement("div");
+      name.className = "history-name";
+      name.textContent = item.italian_name || "No name loaded";
+
+      const meta = document.createElement("div");
+      meta.className = "history-meta";
+      meta.innerHTML = `<span>Qty ${escapeHtml(String(item.comparison_qty || 1))}</span><span>P ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>S ${escapeHtml(formatPrice(item.s_price) || "-")}</span>`;
+
+      article.appendChild(primary);
+      article.appendChild(name);
+      article.appendChild(meta);
       article.dataset.index = String(index);
       article.setAttribute("tabindex", "0");
       article.setAttribute("role", "button");
@@ -225,9 +252,11 @@
     if (typeof item === "string") {
       return {
         id: `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+        goods_id: "",
         barcode: item.trim(),
         italian_name: "",
         comparison_qty: 1,
+        p_price: "",
         s_price: "",
         discount_price: "",
         has_discount: false
@@ -237,9 +266,11 @@
     const barcode = String(item?.barcode || "").trim();
     return {
       id: String(item?.id || `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`),
+      goods_id: String(item?.goods_id || item?.id_value || ""),
       barcode: barcode,
       italian_name: String(item?.italian_name || ""),
-      comparison_qty: 1,
+      comparison_qty: Math.max(1, Number(item?.comparison_qty || 1) || 1),
+      p_price: String(item?.p_price || ""),
       s_price: String(item?.s_price || ""),
       discount_price: String(item?.discount_price || ""),
       has_discount: Boolean(item?.has_discount)
@@ -317,6 +348,100 @@
     return response.text();
   }
 
+  async function fetchUpdateItemThroughProxy(payload, cookie) {
+    const response = await fetch(CONFIG.updateProxyEndpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        id: payload.id,
+        italian_name: payload.italian_name,
+        p_price: payload.p_price,
+        s_price: payload.s_price,
+        cookie: cookie
+      }),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Update proxy request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
+  async function fetchAddProductThroughProxy(payload, cookie) {
+    const response = await fetch(CONFIG.addProductProxyEndpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        barcode: payload.barcode,
+        italian_name: payload.italian_name,
+        p_price: payload.p_price,
+        s_price: payload.s_price,
+        cookie: cookie
+      }),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Add product proxy request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
+  async function getCookieForRequests() {
+    let cookie = state.authCookie;
+    if (!cookie) {
+      cookie = await loginAndRefreshCookie();
+    }
+    return cookie;
+  }
+
+  async function loadProductInfoResponse(barcode) {
+    const code = String(barcode || "").trim();
+    if (!code) {
+      throw new Error("Barcode is empty");
+    }
+
+    const cookie = await getCookieForRequests();
+    const responseText = await fetchProductInfoThroughProxy(code, cookie);
+
+    let parsedProduct;
+    try {
+      parsedProduct = JSON.parse(responseText);
+    } catch {
+      throw new Error("Product info response was not valid JSON.");
+    }
+
+    return {
+      cookie: cookie,
+      raw: parsedProduct,
+      normalized: normalizeProductData(parsedProduct?.product || parsedProduct)
+    };
+  }
+
+  function hasProductInDatabase(normalizedProduct, barcode) {
+    const normalizedBarcode = String(barcode || "").trim();
+    if (!normalizedProduct || typeof normalizedProduct !== "object") {
+      return false;
+    }
+
+    const goodsCode = String(normalizedProduct.goods_code || "").trim();
+    const id = String(normalizedProduct.id || "").trim();
+    const italianName = String(normalizedProduct.italian_name || "").trim();
+
+    if (goodsCode && normalizedBarcode) {
+      return goodsCode === normalizedBarcode;
+    }
+
+    return Boolean(id || italianName);
+  }
+
   function selectHistoryItem(index) {
     if (index < 0 || index >= state.history.length) return;
     state.selectedHistoryIndex = index;
@@ -367,6 +492,30 @@
     state.els.printDialog.setAttribute("aria-hidden", "true");
   }
 
+  function fillHistoryEditForm(item) {
+    const entry = normalizeHistoryItem(item);
+    state.els.historyEditIdInput.value = entry.goods_id || "";
+    state.els.historyEditBarcodeInput.value = entry.barcode || "";
+    state.els.historyEditItalianNameInput.value = entry.italian_name || "";
+    state.els.historyEditPPriceInput.value = entry.p_price || "";
+    state.els.historyEditSPriceInput.value = entry.s_price || "";
+    state.els.historyEditQtyInput.value = String(entry.comparison_qty || 1);
+  }
+
+  function openHistoryEditDialog(item) {
+    fillHistoryEditForm(item);
+    state.els.historyEditSaveNote.textContent = "";
+    state.els.historyEditDialog.classList.add("is-open");
+    state.els.historyEditDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closeHistoryEditDialog() {
+    state.editingHistoryId = "";
+    state.els.historyEditSaveNote.textContent = "";
+    state.els.historyEditDialog.classList.remove("is-open");
+    state.els.historyEditDialog.setAttribute("aria-hidden", "true");
+  }
+
   function formatTimestamp() {
     const now = new Date();
     const yy = String(now.getFullYear()).slice(-2);
@@ -392,7 +541,7 @@
     return {
       barcode: entry.barcode,
       italian_name: entry.italian_name || "",
-      comparison_qty: 1,
+      comparison_qty: entry.comparison_qty || 1,
       s_price: formatPrice(selectedPrice)
     };
   }
@@ -685,6 +834,27 @@
     return numeric.toFixed(2).replace(/\.00$/, "");
   }
 
+  function escapeHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, function (char) {
+      return {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char];
+    });
+  }
+
+  function getHistoryDisplayPrice(item) {
+    const entry = normalizeHistoryItem(item);
+    const pPrice = numberFromValue(entry.p_price);
+    const discountPrice = numberFromValue(entry.discount_price);
+    const showDiscountPrice = entry.has_discount && discountPrice > 0 && (!pPrice || discountPrice < pPrice);
+    const value = showDiscountPrice ? discountPrice : pPrice;
+    return value ? `EUR ${formatPrice(value)}` : "EUR -";
+  }
+
   function getDiscountFields(rawData, productData) {
     const saleData = normalizeSaleData(rawData);
 
@@ -727,11 +897,14 @@
     setResultField("discount_percent", hasVisibleDiscount ? discountFields.discountPercent : "");
 
     state.currentProductRecord = {
+      goods_id: String(normalized.id || ""),
       barcode: String(normalized.goods_code || state.els.barcodeInput.value || "").trim(),
       italian_name: String(normalized.italian_name || ""),
+      p_price: String(normalized.p_price || ""),
       s_price: String(normalized.s_price || ""),
       discount_price: hasVisibleDiscount ? String(discountFields.discountPrice || "") : "",
-      has_discount: hasVisibleDiscount
+      has_discount: hasVisibleDiscount,
+      comparison_qty: 1
     };
   }
 
@@ -745,10 +918,7 @@
     state.els.barcodeInput.value = code;
     clearResultFields();
 
-    let cookie = state.authCookie;
-    if (!cookie) {
-      cookie = await loginAndRefreshCookie();
-    }
+    const cookie = await getCookieForRequests();
 
     const historyEntryId = addHistoryItem(code);
     saveCookieState(cookie, `Requesting info for ${code} through ${CONFIG.infoProxyEndpoint}...`);
@@ -780,6 +950,129 @@
     updateHistoryItem(historyEntryId, state.currentProductRecord);
     saveCookieState(cookie, `Info loaded successfully for barcode ${code}.`);
     setStatus("Product info loaded");
+  }
+
+  async function openHistoryEditor(index) {
+    if (index < 0 || index >= state.history.length) return;
+
+    const item = state.history[index];
+    state.editingHistoryId = item.id;
+    selectHistoryItem(index);
+    openHistoryEditDialog(item);
+    state.els.historyEditSaveNote.textContent = "Loading latest info...";
+
+    try {
+      const { normalized } = await loadProductInfoResponse(item.barcode);
+      const updatedItem = normalizeHistoryItem({
+        ...item,
+        goods_id: normalized.id || item.goods_id,
+        barcode: normalized.goods_code || item.barcode,
+        italian_name: normalized.italian_name || item.italian_name,
+        p_price: normalized.p_price || item.p_price,
+        s_price: normalized.s_price || item.s_price
+      });
+      updateHistoryItem(item.id, updatedItem);
+      fillHistoryEditForm(updatedItem);
+      state.els.historyEditSaveNote.textContent = "";
+      setStatus(`Latest info loaded for ${updatedItem.barcode}`);
+    } catch (error) {
+      state.els.historyEditSaveNote.textContent = error.message || "Could not refresh item info.";
+    }
+  }
+
+  async function saveHistoryEditorChanges() {
+    if (!state.editingHistoryId) {
+      throw new Error("No barcode row selected");
+    }
+
+    const index = state.history.findIndex((item) => item.id === state.editingHistoryId);
+    if (index < 0) {
+      throw new Error("Selected barcode row was not found");
+    }
+
+    const currentItem = state.history[index];
+    const payload = {
+      id: state.els.historyEditIdInput.value.trim(),
+      barcode: state.els.historyEditBarcodeInput.value.trim(),
+      italian_name: state.els.historyEditItalianNameInput.value.trim(),
+      p_price: state.els.historyEditPPriceInput.value.trim(),
+      s_price: state.els.historyEditSPriceInput.value.trim()
+    };
+    const comparisonQty = Math.max(1, Number(state.els.historyEditQtyInput.value || 1) || 1);
+    const isBarcodeOnlyRow = !String(currentItem.goods_id || "").trim() &&
+      !String(currentItem.italian_name || "").trim() &&
+      !String(currentItem.p_price || "").trim() &&
+      !String(currentItem.s_price || "").trim();
+
+    if (isBarcodeOnlyRow) {
+      if (!payload.italian_name || !payload.p_price || !payload.s_price) {
+        throw new Error("Italian name, P price, and S price are required for a new barcode.");
+      }
+    } else if (!payload.id) {
+      throw new Error("ID is missing");
+    }
+
+    const cookie = await getCookieForRequests();
+    state.els.historyEditSaveNote.textContent = "Saving changes...";
+    let updatedItem;
+
+    if (isBarcodeOnlyRow) {
+      state.els.historyEditSaveNote.textContent = "Checking barcode before add...";
+      const { normalized } = await loadProductInfoResponse(payload.barcode);
+      if (hasProductInDatabase(normalized, payload.barcode)) {
+        throw new Error("This barcode already exists in the database.");
+      }
+
+      state.els.historyEditSaveNote.textContent = "Adding new product...";
+      const addResponseText = await fetchAddProductThroughProxy(payload, cookie);
+      let addResponse = null;
+      try {
+        addResponse = addResponseText ? JSON.parse(addResponseText) : null;
+      } catch {
+        addResponse = null;
+      }
+
+      const addedProduct = normalizeProductData(addResponse?.product || addResponse);
+      updatedItem = normalizeHistoryItem({
+        ...currentItem,
+        goods_id: String(addedProduct.id || currentItem.goods_id || ""),
+        barcode: String(addedProduct.goods_code || payload.barcode || currentItem.barcode || ""),
+        italian_name: String(addedProduct.italian_name || payload.italian_name),
+        p_price: String(addedProduct.p_price || payload.p_price),
+        s_price: String(addedProduct.s_price || payload.s_price),
+        comparison_qty: comparisonQty
+      });
+    } else {
+      await fetchUpdateItemThroughProxy(payload, cookie);
+      updatedItem = normalizeHistoryItem({
+        ...currentItem,
+        goods_id: payload.id,
+        barcode: payload.barcode || currentItem.barcode,
+        italian_name: payload.italian_name,
+        p_price: payload.p_price,
+        s_price: payload.s_price,
+        comparison_qty: comparisonQty
+      });
+    }
+
+    updateHistoryItem(currentItem.id, updatedItem);
+    if (state.currentProductRecord?.barcode === updatedItem.barcode) {
+      state.currentProductRecord = {
+        ...state.currentProductRecord,
+        goods_id: updatedItem.goods_id,
+        italian_name: updatedItem.italian_name,
+        p_price: updatedItem.p_price,
+        s_price: updatedItem.s_price,
+        comparison_qty: updatedItem.comparison_qty
+      };
+      setResultField("id", updatedItem.goods_id);
+      setResultField("italian_name", updatedItem.italian_name);
+      setResultField("p_price", updatedItem.p_price);
+      setResultField("s_price", updatedItem.s_price);
+    }
+
+    setStatus(`Saved ${updatedItem.barcode}`);
+    closeHistoryEditDialog();
   }
 
   function supportsBarcodeDetector() {
@@ -1208,7 +1501,9 @@
       if (!record) return;
       const index = Number(record.dataset.index);
       if (!Number.isNaN(index)) {
-        selectHistoryItem(index);
+        openHistoryEditor(index).catch((error) => {
+          setStatus(error.message || "Could not open barcode row");
+        });
       }
     });
 
@@ -1219,7 +1514,9 @@
       event.preventDefault();
       const index = Number(record.dataset.index);
       if (!Number.isNaN(index)) {
-        selectHistoryItem(index);
+        openHistoryEditor(index).catch((error) => {
+          setStatus(error.message || "Could not open barcode row");
+        });
       }
     });
 
@@ -1320,6 +1617,25 @@
     state.els.printDialog.addEventListener("click", function (event) {
       if (event.target === state.els.printDialog) {
         closePrintDialog();
+      }
+    });
+
+    state.els.historyEditSaveBtn.addEventListener("click", async function () {
+      state.els.historyEditSaveBtn.disabled = true;
+      try {
+        await saveHistoryEditorChanges();
+      } catch (error) {
+        state.els.historyEditSaveNote.textContent = error.message || "Save failed.";
+      } finally {
+        state.els.historyEditSaveBtn.disabled = false;
+      }
+    });
+
+    state.els.historyEditBackBtn.addEventListener("click", closeHistoryEditDialog);
+
+    state.els.historyEditDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.historyEditDialog) {
+        closeHistoryEditDialog();
       }
     });
 
