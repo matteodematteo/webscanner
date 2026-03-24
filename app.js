@@ -431,6 +431,50 @@
     };
   }
 
+  async function loadProductAndDiscountResponse(barcode) {
+    const code = String(barcode || "").trim();
+    if (!code) {
+      throw new Error("Barcode is empty");
+    }
+
+    const cookie = await getCookieForRequests();
+    const [productResponseText, discountResponseText] = await Promise.all([
+      fetchProductInfoThroughProxy(code, cookie),
+      fetchDiscountInfoThroughProxy(code, cookie)
+    ]);
+
+    let parsedProduct;
+    let parsedDiscount = null;
+    try {
+      parsedProduct = JSON.parse(productResponseText);
+    } catch {
+      throw new Error("Product info response was not valid JSON.");
+    }
+
+    try {
+      parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
+    } catch {
+      parsedDiscount = null;
+    }
+
+    const normalizedProduct = normalizeProductData(parsedProduct?.product || parsedProduct);
+    const discountFields = getDiscountFields({
+      product: parsedProduct?.product || parsedProduct,
+      sale: parsedDiscount
+    }, normalizedProduct);
+    const sPrice = numberFromValue(normalizedProduct.s_price);
+    const discountPrice = numberFromValue(discountFields.discountPrice);
+    const hasVisibleDiscount = Boolean(discountPrice) && Boolean(sPrice) && discountPrice < sPrice;
+
+    return {
+      cookie: cookie,
+      product: normalizedProduct,
+      sale: parsedDiscount,
+      discountPrice: hasVisibleDiscount ? discountFields.discountPrice : "",
+      hasDiscount: hasVisibleDiscount
+    };
+  }
+
   function hasProductInDatabase(normalizedProduct, barcode) {
     const normalizedBarcode = String(barcode || "").trim();
     if (!normalizedProduct || typeof normalizedProduct !== "object") {
@@ -986,17 +1030,17 @@
     state.els.historyEditSaveNote.textContent = "Loading latest info...";
 
     try {
-      const { normalized } = await loadProductInfoResponse(item.barcode);
+      const { product, discountPrice, hasDiscount } = await loadProductAndDiscountResponse(item.barcode);
       const updatedItem = normalizeHistoryItem({
         ...item,
-        goods_id: normalized.id || item.goods_id,
-        barcode: normalized.goods_code || item.barcode,
-        italian_name: normalized.italian_name || item.italian_name,
-        p_price: normalized.p_price || item.p_price,
-        s_price: normalized.s_price || item.s_price,
-        s_discount: normalized.s_discount || item.s_discount,
-        discount_price: calculateDiscountPrice(normalized.s_price || item.s_price, normalized.s_discount || item.s_discount),
-        has_discount: Boolean(numberFromValue(normalized.s_discount || item.s_discount))
+        goods_id: product.id || item.goods_id,
+        barcode: product.goods_code || item.barcode,
+        italian_name: product.italian_name || item.italian_name,
+        p_price: product.p_price || item.p_price,
+        s_price: product.s_price || item.s_price,
+        s_discount: product.s_discount || item.s_discount,
+        discount_price: discountPrice || calculateDiscountPrice(product.s_price || item.s_price, product.s_discount || item.s_discount),
+        has_discount: hasDiscount || Boolean(numberFromValue(product.s_discount || item.s_discount))
       });
       updateHistoryItem(item.id, updatedItem);
       fillHistoryEditForm(updatedItem);
