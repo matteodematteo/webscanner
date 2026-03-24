@@ -57,15 +57,9 @@
 
     .card { padding: 12px; }
 
-    h1,
     h2 {
       margin: 0;
       letter-spacing: -0.04em;
-    }
-
-    h1 {
-      font-size: clamp(1.2rem, 3.8vw, 1.7rem);
-      line-height: 1.05;
     }
 
     h2 {
@@ -202,7 +196,8 @@
 
     .controls { margin-top: 10px; }
 
-    .button-row { grid-template-columns: 1.15fr 0.8fr 1.05fr; }
+    .top-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .button-row { grid-template-columns: 1fr; }
     .lookup-row { grid-template-columns: minmax(0, 1fr) 88px; }
 
     .field-grid {
@@ -345,7 +340,7 @@
 
     .history-actions {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 8px;
     }
@@ -491,7 +486,8 @@
 
     @media (max-width: 680px) {
       .app-shell { width: min(100%, calc(100% - 16px)); }
-      .button-row { grid-template-columns: 1fr 0.82fr 1.08fr; }
+      .top-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .button-row { grid-template-columns: 1fr; }
       .lookup-row { grid-template-columns: minmax(0, 1fr) 74px; }
       .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
       .helper-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -501,6 +497,7 @@
     }
 
     @media (max-width: 430px) {
+      .top-tools,
       .button-row { gap: 8px; }
       .btn,
       .input,
@@ -530,7 +527,13 @@
 <body>
   <main class="app-shell">
     <section class="card">
-      <h1>Web Barcode Scanner</h1>
+      <div class="controls top-tools">
+        <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
+        <label>
+          <span class="visually-hidden">Choose camera</span>
+          <select class="select" id="cameraSelect" disabled></select>
+        </label>
+      </div>
       <div class="top-status" id="statusText" aria-live="polite">Opening camera preview...</div>
 
       <div class="preview-frame" id="previewFrame">
@@ -550,15 +553,6 @@
       </div>
 
       <div class="controls">
-        <div class="button-row">
-          <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
-          <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
-          <label>
-            <span class="visually-hidden">Choose camera</span>
-            <select class="select" id="cameraSelect" disabled></select>
-          </label>
-        </div>
-
         <div class="lookup-row">
           <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Barcode value" />
           <button class="btn btn-muted" id="clearBarcodeBtn" type="button">Clear</button>
@@ -567,7 +561,7 @@
 
       <div class="helper-row">
         <button class="btn btn-muted" id="refreshCookieBtn" type="button">Refresh Cookie</button>
-        <button class="btn btn-primary" id="printBtn" type="button">Print</button>
+        <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
       </div>
     </section>
 
@@ -595,6 +589,7 @@
         <button class="btn btn-muted" id="clearSelectedBtn" type="button" disabled>Clean Selected</button>
         <button class="btn btn-muted" id="clearAllBtn" type="button">Clean All</button>
         <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
+        <button class="btn btn-primary" id="printBtn" type="button">Print</button>
       </div>
       <div class="history-list" id="historyList" aria-live="polite">
         <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
@@ -705,6 +700,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=22" defer></script>
+  <script src="app.js?v=23" defer></script>
 </body>
 </html>
