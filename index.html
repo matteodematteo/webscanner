@@ -577,8 +577,8 @@
         <div class="field-card span-half"><label for="field_goods_code">Goods Code</label><div class="field-value" id="field_goods_code"></div></div>
         <div class="field-card span-half"><label for="field_supplier_name">Supplier Name</label><div class="field-value" id="field_supplier_name"></div></div>
         <div class="field-card span-full"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
-        <div class="field-card span-third"><label for="field_p_price">P Price</label><div class="field-value" id="field_p_price"></div></div>
-        <div class="field-card span-third"><label for="field_s_price">S Price</label><div class="field-value" id="field_s_price"></div></div>
+        <div class="field-card span-third"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
+        <div class="field-card span-third"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
         <div class="field-card span-third"><label for="field_real_inventory">Real Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
         <div class="field-card span-half" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
         <div class="field-card span-half" id="field_discount_percent_card" hidden><label for="field_discount_percent">Discount%</label><div class="field-value is-discount" id="field_discount_percent"></div></div>
@@ -665,35 +665,35 @@
       <div class="field-list">
         <label>
           <span>ID</span>
-          <input class="input" id="historyEditIdInput" type="text" placeholder="ID" readonly />
+          <input class="input" id="historyEditIdInput" type="text" readonly />
         </label>
         <label>
           <span>Barcode</span>
-          <input class="input" id="historyEditBarcodeInput" type="text" placeholder="Barcode" readonly />
+          <input class="input" id="historyEditBarcodeInput" type="text" readonly />
         </label>
         <label>
           <span>Italian Name</span>
-          <input class="input" id="historyEditItalianNameInput" type="text" placeholder="Italian name" />
+          <input class="input" id="historyEditItalianNameInput" type="text" />
         </label>
         <label>
-          <span>P Price</span>
-          <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" placeholder="P price" />
+          <span>Cost</span>
+          <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" />
         </label>
         <label>
-          <span>S Price</span>
-          <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" placeholder="S price" />
+          <span>Price</span>
+          <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" />
         </label>
         <label>
-          <span>S Discount %</span>
-          <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" placeholder="S discount %" />
+          <span>Discount%</span>
+          <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" />
         </label>
         <label>
           <span>Disc. Price</span>
-          <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" placeholder="Disc. price" readonly />
+          <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly />
         </label>
         <label>
           <span>Comparison Qty</span>
-          <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" placeholder="Comparison qty" />
+          <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
         </label>
       </div>
       <div class="save-note" id="historyEditSaveNote" aria-live="polite"></div>
@@ -705,6 +705,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=21" defer></script>
+  <script src="app.js?v=22" defer></script>
 </body>
 </html>
