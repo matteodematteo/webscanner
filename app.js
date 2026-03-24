@@ -1133,6 +1133,27 @@
       });
     }
 
+    try {
+      const latestItemData = await loadProductAndDiscountResponse(updatedItem.barcode);
+      updatedItem = normalizeHistoryItem({
+        ...updatedItem,
+        goods_id: String(latestItemData.product.id || updatedItem.goods_id || ""),
+        barcode: String(latestItemData.product.goods_code || updatedItem.barcode || ""),
+        italian_name: String(latestItemData.product.italian_name || updatedItem.italian_name || ""),
+        p_price: String(latestItemData.product.p_price || updatedItem.p_price || ""),
+        s_price: String(latestItemData.product.s_price || updatedItem.s_price || ""),
+        s_discount: String(latestItemData.product.s_discount || updatedItem.s_discount || ""),
+        discount_price: latestItemData.discountPrice || calculateDiscountPrice(
+          latestItemData.product.s_price || updatedItem.s_price,
+          latestItemData.product.s_discount || updatedItem.s_discount
+        ),
+        has_discount: latestItemData.hasDiscount || Boolean(numberFromValue(latestItemData.product.s_discount || updatedItem.s_discount)),
+        comparison_qty: comparisonQty
+      });
+    } catch {
+      // Keep the saved values if the refresh-after-save request fails.
+    }
+
     updateHistoryItem(currentItem.id, updatedItem);
     if (state.currentProductRecord?.barcode === updatedItem.barcode) {
       state.currentProductRecord = {
