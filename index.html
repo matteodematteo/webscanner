@@ -215,7 +215,7 @@
     .span-third { grid-column: span 2; }
 
     .helper-row {
-      grid-template-columns: 1fr;
+      grid-template-columns: 3fr 2fr;
       margin-top: 8px;
     }
 
@@ -465,6 +465,10 @@
       .field-grid { gap: 8px; }
       .field-card { padding: 8px; }
       .field-value { font-size: 0.74rem; }
+      .history-actions {
+        gap: 8px;
+        flex-wrap: wrap;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -518,6 +522,7 @@
 
       <div class="helper-row">
         <button class="btn btn-muted" id="refreshCookieBtn" type="button">Refresh Cookie</button>
+        <button class="btn btn-primary" id="printBtn" type="button">Print</button>
       </div>
     </section>
 
@@ -597,7 +602,19 @@
     </div>
   </div>
 
+  <div class="dialog-backdrop" id="printDialog" aria-hidden="true">
+    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="printDialogTitle">
+      <h2 id="printDialogTitle">Print Format</h2>
+      <p>Choose the label size for the current barcode list.</p>
+      <div class="dialog-actions">
+        <button class="btn btn-primary" id="printBigBtn" type="button">[BIG] 60*38</button>
+        <button class="btn btn-primary" id="printStickerBtn" type="button">[STICKER] 40*25</button>
+        <button class="btn btn-muted" id="printBackBtn" type="button">Back</button>
+      </div>
+    </div>
+  </div>
+
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=18" defer></script>
+  <script src="app.js?v=19" defer></script>
 </body>
 </html>
