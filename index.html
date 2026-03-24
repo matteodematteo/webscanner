@@ -203,7 +203,7 @@
 
     .controls { margin-top: 10px; }
 
-    .top-tools { grid-template-columns: 0.9fr 0.9fr 1.2fr; }
+    .top-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .button-row { grid-template-columns: 1fr; }
     .lookup-row { grid-template-columns: minmax(0, 1fr) 88px; }
 
@@ -516,7 +516,7 @@
         box-shadow: 0 12px 24px rgba(18, 24, 31, 0.1);
         backdrop-filter: none;
       }
-      .top-tools { grid-template-columns: 0.9fr 0.9fr 1.2fr; }
+      .top-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .button-row { grid-template-columns: 1fr; }
       .lookup-row { grid-template-columns: minmax(0, 1fr) 74px; }
       .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -560,7 +560,6 @@
   <main class="app-shell">
     <section class="card">
       <div class="controls top-tools">
-        <button class="btn btn-muted" id="catModeBtn" type="button" aria-pressed="false">Cat Mode 🐱 Off</button>
         <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
         <label>
           <span class="visually-hidden">Choose camera</span>
@@ -733,6 +732,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=30" defer></script>
+  <script src="app.js?v=31" defer></script>
 </body>
 </html>
