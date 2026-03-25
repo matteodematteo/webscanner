@@ -15,6 +15,8 @@
     historyStorageKey: "web_barcode_scanner_history",
     cameraStorageKey: "web_barcode_scanner_camera",
     scanIntervalMs: 1200,
+    previewWatchIntervalMs: 3500,
+    previewStallThreshold: 2,
     preferredSquareSize: 2160,
     mobilePreferredSquareSize: 960,
     resultFields: [
@@ -76,7 +78,12 @@
     isMobileUi: false,
     isScanLoopScheduled: false,
     isScanInFlight: false,
-    audioContext: null
+    audioContext: null,
+    toastTimer: 0,
+    previewWatchdogTimer: 0,
+    lastPreviewTime: 0,
+    stalledPreviewChecks: 0,
+    isRecoveringPreview: false
   };
 
   function queryElements() {
@@ -127,6 +134,7 @@
       settingsSaveNote: document.getElementById("settingsSaveNote"),
       shopKeyInput: document.getElementById("shopKeyInput"),
       statusText: document.getElementById("statusText"),
+      toast: document.getElementById("toast"),
       torchBtn: document.getElementById("torchBtn")
     };
   }
@@ -162,6 +170,23 @@
     }
     state.lastStatusMessage = nextMessage;
     state.els.statusText.textContent = nextMessage;
+  }
+
+  function showToast(message) {
+    const text = String(message || "").trim();
+    if (!text || !state.els.toast) {
+      return;
+    }
+
+    state.els.toast.textContent = text;
+    state.els.toast.classList.add("is-visible");
+    if (state.toastTimer) {
+      window.clearTimeout(state.toastTimer);
+    }
+    state.toastTimer = window.setTimeout(function () {
+      state.els.toast.classList.remove("is-visible");
+      state.toastTimer = 0;
+    }, 2200);
   }
 
   function playCaptureSound() {
@@ -422,6 +447,33 @@
     if (!didUpdate) return;
     saveHistoryState();
     renderHistory();
+  }
+
+  function buildSharedHistoryFields(item) {
+    const normalized = normalizeHistoryItem(item);
+    return {
+      goods_id: normalized.goods_id,
+      barcode: normalized.barcode,
+      italian_name: normalized.italian_name,
+      p_price: normalized.p_price,
+      s_price: normalized.s_price,
+      s_discount: normalized.s_discount,
+      discount_price: normalized.discount_price,
+      has_discount: normalized.has_discount
+    };
+  }
+
+  function syncHistoryRowsWithRecord(record, fallbackBarcode) {
+    const sharedFields = buildSharedHistoryFields(record);
+    const barcodes = [
+      String(fallbackBarcode || "").trim(),
+      String(sharedFields.barcode || "").trim()
+    ].filter(Boolean);
+    const uniqueBarcodes = [...new Set(barcodes)];
+
+    for (let index = 0; index < uniqueBarcodes.length; index += 1) {
+      updateHistoryItemsByBarcode(uniqueBarcodes[index], sharedFields);
+    }
   }
 
   async function fetchProductInfoThroughProxy(code, cookie) {
@@ -1010,6 +1062,14 @@
     });
   }
 
+  function sanitizeItalianName(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .replace(/[^\p{L}\p{N}\s.,()&-]+/gu, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
   function getHistoryDisplayPrice(item) {
     const entry = normalizeHistoryItem(item);
     const sPrice = numberFromValue(entry.s_price);
@@ -1127,7 +1187,9 @@
       product: parsedProduct?.product || parsedProduct,
       sale: parsedDiscount
     });
-    updateHistoryItem(historyEntryId, state.currentProductRecord);
+    if (historyEntryId && state.currentProductRecord) {
+      syncHistoryRowsWithRecord(state.currentProductRecord, code);
+    }
     saveCookieState(cookie, `Info loaded successfully for barcode ${code}.`);
     setStatus("Product info loaded");
   }
@@ -1154,16 +1216,7 @@
         discount_price: discountPrice || calculateDiscountPrice(product.s_price || item.s_price, product.s_discount || item.s_discount),
         has_discount: hasDiscount || Boolean(numberFromValue(product.s_discount || item.s_discount))
       });
-      updateHistoryItemsByBarcode(updatedItem.barcode, {
-        goods_id: updatedItem.goods_id,
-        barcode: updatedItem.barcode,
-        italian_name: updatedItem.italian_name,
-        p_price: updatedItem.p_price,
-        s_price: updatedItem.s_price,
-        s_discount: updatedItem.s_discount,
-        discount_price: updatedItem.discount_price,
-        has_discount: updatedItem.has_discount
-      });
+      syncHistoryRowsWithRecord(updatedItem, item.barcode);
       const refreshedSelectedItem =
         state.history.find((historyItem) => historyItem.id === item.id) || updatedItem;
       fillHistoryEditForm(refreshedSelectedItem);
@@ -1188,15 +1241,22 @@
     const payload = {
       id: state.els.historyEditIdInput.value.trim(),
       barcode: state.els.historyEditBarcodeInput.value.trim(),
-      italian_name: state.els.historyEditItalianNameInput.value.trim(),
+      italian_name: sanitizeItalianName(state.els.historyEditItalianNameInput.value),
       p_price: state.els.historyEditPPriceInput.value.trim(),
       s_price: state.els.historyEditSPriceInput.value.trim(),
       s_discount: state.els.historyEditSDiscountInput.value.trim()
     };
     const comparisonQty = Math.max(1, Number(state.els.historyEditQtyInput.value || 1) || 1);
+    const originalItalianName = state.els.historyEditItalianNameInput.value.trim();
+    state.els.historyEditItalianNameInput.value = payload.italian_name;
+    if (originalItalianName !== payload.italian_name) {
+      showToast("Unsupported symbols removed from name");
+    }
 
     const cookie = await getCookieForRequests();
-    state.els.historyEditSaveNote.textContent = "Checking product...";
+    state.els.historyEditSaveNote.textContent = originalItalianName !== payload.italian_name
+      ? "Italian name cleaned before save."
+      : "Checking product...";
     let updatedItem;
     let existingProduct = null;
 
@@ -1224,27 +1284,34 @@
 
     if (shouldAddNewProduct) {
       state.els.historyEditSaveNote.textContent = "Adding new product...";
-      const addResponseText = await fetchAddProductThroughProxy(payload, cookie);
-      let addResponse = null;
       try {
-        addResponse = addResponseText ? JSON.parse(addResponseText) : null;
-      } catch {
-        addResponse = null;
-      }
+        const addResponseText = await fetchAddProductThroughProxy(payload, cookie);
+        let addResponse = null;
+        try {
+          addResponse = addResponseText ? JSON.parse(addResponseText) : null;
+        } catch {
+          addResponse = null;
+        }
 
-      const addedProduct = normalizeProductData(addResponse?.product || addResponse);
-      updatedItem = normalizeHistoryItem({
-        ...currentItem,
-        goods_id: String(addedProduct.id || currentItem.goods_id || ""),
-        barcode: String(addedProduct.goods_code || payload.barcode || currentItem.barcode || ""),
-        italian_name: String(addedProduct.italian_name || payload.italian_name),
-        p_price: String(addedProduct.p_price || payload.p_price),
-        s_price: String(addedProduct.s_price || payload.s_price),
-        s_discount: String(addedProduct.s_discount || payload.s_discount),
-        discount_price: calculateDiscountPrice(addedProduct.s_price || payload.s_price, addedProduct.s_discount || payload.s_discount),
-        has_discount: Boolean(numberFromValue(addedProduct.s_discount || payload.s_discount)),
-        comparison_qty: comparisonQty
-      });
+        const addedProduct = normalizeProductData(addResponse?.product || addResponse);
+        updatedItem = normalizeHistoryItem({
+          ...currentItem,
+          goods_id: String(addedProduct.id || currentItem.goods_id || ""),
+          barcode: String(addedProduct.goods_code || payload.barcode || currentItem.barcode || ""),
+          italian_name: String(addedProduct.italian_name || payload.italian_name),
+          p_price: String(addedProduct.p_price || payload.p_price),
+          s_price: String(addedProduct.s_price || payload.s_price),
+          s_discount: String(addedProduct.s_discount || payload.s_discount),
+          discount_price: calculateDiscountPrice(addedProduct.s_price || payload.s_price, addedProduct.s_discount || payload.s_discount),
+          has_discount: Boolean(numberFromValue(addedProduct.s_discount || payload.s_discount)),
+          comparison_qty: comparisonQty
+        });
+        showToast("Product added successfully");
+      } catch (error) {
+        showToast("Add product failed");
+        error.toastShown = true;
+        throw error;
+      }
     } else {
       state.els.historyEditSaveNote.textContent = "Saving changes...";
       await fetchUpdateItemThroughProxy(payload, cookie);
@@ -1380,7 +1447,76 @@
     state.isScanInFlight = false;
   }
 
+  function stopPreviewWatchdog() {
+    if (state.previewWatchdogTimer) {
+      window.clearInterval(state.previewWatchdogTimer);
+      state.previewWatchdogTimer = 0;
+    }
+    state.stalledPreviewChecks = 0;
+    state.lastPreviewTime = 0;
+  }
+
+  async function recoverPreviewFromFreeze() {
+    if (state.isRecoveringPreview || !state.isCameraRunning) {
+      return;
+    }
+
+    state.isRecoveringPreview = true;
+    const shouldResumeScanning = state.isScanning;
+    const selectedDeviceId = state.activeDeviceId || state.els.cameraSelect.value;
+    stopScanning(true);
+    setStatus("Camera preview paused, reconnecting...");
+
+    try {
+      await startCamera(selectedDeviceId);
+      if (shouldResumeScanning) {
+        await startScanning();
+      } else {
+        setStatus("Camera preview restored");
+      }
+    } catch (error) {
+      setStatus(error.message || "Camera preview recovery failed");
+    } finally {
+      state.isRecoveringPreview = false;
+    }
+  }
+
+  function startPreviewWatchdog() {
+    stopPreviewWatchdog();
+    if (!state.isCameraRunning) {
+      return;
+    }
+
+    state.lastPreviewTime = Number(state.els.cameraPreview.currentTime || 0);
+    state.previewWatchdogTimer = window.setInterval(function () {
+      if (!state.isCameraRunning || state.isRecoveringPreview || document.hidden) {
+        return;
+      }
+
+      const video = state.els.cameraPreview;
+      if (!video?.srcObject || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        return;
+      }
+
+      const currentTime = Number(video.currentTime || 0);
+      if (Math.abs(currentTime - state.lastPreviewTime) < 0.01) {
+        state.stalledPreviewChecks += 1;
+      } else {
+        state.lastPreviewTime = currentTime;
+        state.stalledPreviewChecks = 0;
+      }
+
+      if (state.stalledPreviewChecks >= CONFIG.previewStallThreshold) {
+        state.stalledPreviewChecks = 0;
+        recoverPreviewFromFreeze().catch(() => {
+          // Ignore watchdog recovery noise.
+        });
+      }
+    }, CONFIG.previewWatchIntervalMs);
+  }
+
   function stopTracks() {
+    stopPreviewWatchdog();
     if (!state.stream) return;
     const tracks = state.stream.getTracks();
     for (let index = 0; index < tracks.length; index += 1) {
@@ -1388,6 +1524,7 @@
     }
     state.stream = null;
     state.track = null;
+    state.els.cameraPreview.srcObject = null;
   }
 
   function updateResolutionBadge() {
@@ -1546,6 +1683,7 @@
     updateResolutionBadge();
     updateScanButton();
     updateModePill();
+    startPreviewWatchdog();
     setStatus("Camera ready");
   }
 
@@ -1906,6 +2044,9 @@
         await saveHistoryEditorChanges();
       } catch (error) {
         state.els.historyEditSaveNote.textContent = error.message || "Save failed.";
+        if (!error?.toastShown) {
+          showToast("Save failed");
+        }
       } finally {
         state.els.historyEditSaveBtn.disabled = false;
       }
@@ -1925,6 +2066,13 @@
     window.addEventListener("beforeunload", function () {
       stopScanning(true);
       stopTracks();
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) {
+        state.lastPreviewTime = Number(state.els.cameraPreview.currentTime || 0);
+        state.stalledPreviewChecks = 0;
+      }
     });
 
     if (navigator.mediaDevices?.addEventListener) {
