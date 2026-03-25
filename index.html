@@ -427,8 +427,8 @@
 
     .history-detail-btn {
       min-height: 32px;
-      width: auto;
-      padding: 0 10px;
+      min-width: 88px;
+      padding: 0 16px;
       margin-left: auto;
       font-size: 0.72rem;
       border-radius: 999px;
@@ -464,6 +464,28 @@
     .fab svg {
       width: 24px;
       height: 24px;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: max(78px, calc(env(safe-area-inset-bottom) + 78px));
+      transform: translateX(-50%) translateY(16px);
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(24, 33, 42, 0.94);
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+      z-index: 30;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
 
     .dialog-backdrop {
@@ -543,6 +565,7 @@
       .history-name { font-size: 0.68rem; }
       .history-meta { gap: 10px; font-size: 0.68rem; }
       .history-detail-btn { min-height: 30px; font-size: 0.68rem; }
+      .toast { width: calc(100% - 28px); text-align: center; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -605,7 +628,7 @@
         <div class="field-card span-full"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
         <div class="field-card span-third"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
         <div class="field-card span-third"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
-        <div class="field-card span-third"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
+        <div class="field-card span-third"><label for="field_real_inventory">Real Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
         <div class="field-card span-half" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
         <div class="field-card span-half" id="field_discount_percent_card" hidden><label for="field_discount_percent">Discount%</label><div class="field-value is-discount" id="field_discount_percent"></div></div>
         <div class="field-card span-half"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
@@ -628,6 +651,8 @@
       </div>
     </section>
   </main>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
 
   <button class="fab" id="settingsBtn" type="button" aria-label="Open settings">
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -687,6 +712,7 @@
 
   <div class="dialog-backdrop" id="historyEditDialog" aria-hidden="true">
     <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="historyEditDialogTitle">
+      <h2 id="historyEditDialogTitle">Edit Barcode</h2>
       <div class="field-list">
         <label>
           <span>ID</span>
@@ -730,6 +756,6 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="app.js?v=32" defer></script>
+  <script src="app.js?v=33" defer></script>
 </body>
 </html>
