@@ -427,9 +427,10 @@
 
     .history-detail-btn {
       min-height: 32px;
-      min-width: 40px;
-      padding: 0 3px;
+      width: auto;
+      padding: 0 10px;
       margin-left: auto;
+      margin-right: 12px;
       font-size: 0.72rem;
       border-radius: 999px;
       flex: 0 0 auto;
@@ -564,7 +565,7 @@
       .history-qty { font-size: 0.68rem; }
       .history-name { font-size: 0.68rem; }
       .history-meta { gap: 10px; font-size: 0.68rem; }
-      .history-detail-btn { min-height: 30px; font-size: 0.68rem; }
+      .history-detail-btn { min-height: 30px; width: auto; padding: 0 8px; margin-right: 16px; font-size: 0.68rem; }
       .toast { width: calc(100% - 28px); text-align: center; }
     }
 
@@ -628,7 +629,7 @@
         <div class="field-card span-full"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
         <div class="field-card span-third"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
         <div class="field-card span-third"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
-        <div class="field-card span-third"><label for="field_real_inventory">Real Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
+        <div class="field-card span-third"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
         <div class="field-card span-half" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
         <div class="field-card span-half" id="field_discount_percent_card" hidden><label for="field_discount_percent">Discount%</label><div class="field-value is-discount" id="field_discount_percent"></div></div>
         <div class="field-card span-half"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
@@ -711,8 +712,7 @@
   </div>
 
   <div class="dialog-backdrop" id="historyEditDialog" aria-hidden="true">
-    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="historyEditDialogTitle">
-      <h2 id="historyEditDialogTitle">Edit Barcode</h2>
+    <div class="dialog-card" role="dialog" aria-modal="true" aria-label="Edit Barcode">
       <div class="field-list">
         <label>
           <span>ID</span>
