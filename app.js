@@ -1034,14 +1034,25 @@
         element.textContent = "";
       }
     }
+    const compactSupplierField = document.getElementById("field_supplier_name_compact");
+    if (compactSupplierField) {
+      compactSupplierField.textContent = "";
+    }
     state.currentProductRecord = null;
     setDiscountVisibility(false);
   }
 
   function setResultField(key, value) {
+    const normalizedValue = value === undefined || value === null ? "" : String(value);
     const element = state.fieldEls[key];
     if (element) {
-      element.textContent = value === undefined || value === null ? "" : String(value);
+      element.textContent = normalizedValue;
+    }
+    if (key === "supplier_name") {
+      const compactSupplierField = document.getElementById("field_supplier_name_compact");
+      if (compactSupplierField) {
+        compactSupplierField.textContent = normalizedValue;
+      }
     }
   }
 
