@@ -84,7 +84,8 @@
     lastPreviewTime: 0,
     stalledPreviewChecks: 0,
     isRecoveringPreview: false,
-    lookupSequence: 0
+    lookupSequence: 0,
+    isCompactMode: false
   };
 
   function queryElements() {
@@ -102,6 +103,7 @@
       confirmDialogText: document.getElementById("confirmDialogText"),
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+      compactToggleBtn: document.getElementById("compactToggleBtn"),
       historyEmpty: document.getElementById("historyEmpty"),
       historyEditBackBtn: document.getElementById("historyEditBackBtn"),
       historyEditBarcodeInput: document.getElementById("historyEditBarcodeInput"),
@@ -236,15 +238,25 @@
       return {
         shopKey: parsed?.shopKey || "",
         login: parsed?.login || "",
-        password: parsed?.password || ""
+        password: parsed?.password || "",
+        compactMode: Boolean(parsed?.compactMode)
       };
     } catch {
-      return { shopKey: "", login: "", password: "" };
+      return { shopKey: "", login: "", password: "", compactMode: false };
     }
   }
 
-  function saveSettings(values) {
-    localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(values));
+  function saveSettings(values, options) {
+    const normalizedValues = {
+      shopKey: values?.shopKey || "",
+      login: values?.login || "",
+      password: values?.password || "",
+      compactMode: Boolean(values?.compactMode)
+    };
+    localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(normalizedValues));
+    if (options?.silent) {
+      return;
+    }
     state.els.settingsSaveNote.textContent = "Saved successfully on this device.";
     setStatus("Settings saved");
   }
@@ -253,6 +265,24 @@
     state.els.shopKeyInput.value = values.shopKey || "";
     state.els.loginInput.value = values.login || "";
     state.els.passwordInput.value = values.password || "";
+  }
+
+  function updateCompactToggleButton() {
+    if (!state.els.compactToggleBtn) {
+      return;
+    }
+    state.els.compactToggleBtn.textContent = state.isCompactMode ? "+" : "-";
+    state.els.compactToggleBtn.setAttribute(
+      "aria-label",
+      state.isCompactMode ? "Expand app sections" : "Compact app sections"
+    );
+    state.els.compactToggleBtn.title = state.isCompactMode ? "Show hidden sections" : "Hide optional sections";
+  }
+
+  function applyCompactMode(isCompact) {
+    state.isCompactMode = Boolean(isCompact);
+    document.body.classList.toggle("is-compact", state.isCompactMode);
+    updateCompactToggleButton();
   }
 
   function openSettingsDialog() {
@@ -2034,12 +2064,21 @@
 
     state.els.settingsBtn.addEventListener("click", openSettingsDialog);
     state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
+    state.els.compactToggleBtn.addEventListener("click", function () {
+      const nextCompactMode = !state.isCompactMode;
+      applyCompactMode(nextCompactMode);
+      saveSettings({
+        ...readSavedSettings(),
+        compactMode: nextCompactMode
+      }, { silent: true });
+    });
 
     state.els.loginSettingsBtn.addEventListener("click", async function () {
       const values = {
         shopKey: state.els.shopKeyInput.value.trim(),
         login: state.els.loginInput.value.trim(),
-        password: state.els.passwordInput.value
+        password: state.els.passwordInput.value,
+        compactMode: state.isCompactMode
       };
 
       saveSettings(values);
@@ -2146,9 +2185,11 @@
     state.isMobileUi = detectMobileUi();
     cacheResultFieldElements();
 
+    const savedSettings = readSavedSettings();
     loadCookieState();
     loadHistoryState();
-    fillSettingsForm(readSavedSettings());
+    fillSettingsForm(savedSettings);
+    applyCompactMode(savedSettings.compactMode);
     clearResultFields();
     renderHistory();
     bindEvents();
