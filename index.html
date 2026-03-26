@@ -499,6 +499,7 @@
     body.is-compact #statusText,
     body.is-compact #productInfoTitle,
     body.is-compact #field_goods_code_card,
+    body.is-compact #field_supplier_name_card,
     body.is-compact #field_spec_card,
     body.is-compact #field_id_card,
     body.is-compact #historyTitle {
@@ -513,8 +514,9 @@
       grid-column: 1 / span 7;
     }
 
-    body.is-compact #field_supplier_name_card {
+    body.is-compact #field_supplier_name_compact_card {
       grid-column: 8 / span 3;
+      display: block !important;
     }
 
     body.is-compact #field_p_price_card {
@@ -669,6 +671,7 @@
         <div class="field-card span-half" id="field_goods_code_card"><label for="field_goods_code">Goods Code</label><div class="field-value" id="field_goods_code"></div></div>
         <div class="field-card span-half" id="field_supplier_name_card"><label for="field_supplier_name">Supplier</label><div class="field-value" id="field_supplier_name"></div></div>
         <div class="field-card span-full" id="field_italian_name_card"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
+        <div class="field-card span-half" id="field_supplier_name_compact_card" hidden><label for="field_supplier_name_compact">Supplier</label><div class="field-value" id="field_supplier_name_compact"></div></div>
         <div class="field-card span-third" id="field_p_price_card"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
         <div class="field-card span-third" id="field_s_price_card"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
         <div class="field-card span-third" id="field_real_inventory_card"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
