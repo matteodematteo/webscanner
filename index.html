@@ -217,7 +217,7 @@
     .span-third { grid-column: span 2; }
 
     .helper-row {
-      grid-template-columns: 44px minmax(0, 2.2fr) minmax(0, 1.4fr);
+      grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.75fr) minmax(0, 2.5fr);
       margin-top: 8px;
     }
 
@@ -495,28 +495,38 @@
       transform: translateX(-50%) translateY(0);
     }
 
-    body.is-compact #torchBtn,
+    body.is-compact .top-tools,
     body.is-compact #statusText,
+    body.is-compact #productInfoTitle,
+    body.is-compact #field_goods_code_card,
     body.is-compact #field_spec_card,
     body.is-compact #field_id_card,
     body.is-compact #historyTitle {
       display: none !important;
     }
 
-    body.is-compact .top-tools {
-      grid-template-columns: 1fr;
-    }
-
-    body.is-compact #field_goods_code_card {
-      grid-column: 1 / -1;
+    body.is-compact .field-grid {
+      grid-template-columns: repeat(10, minmax(0, 1fr));
     }
 
     body.is-compact #field_italian_name_card {
-      grid-column: 1 / span 4;
+      grid-column: 1 / span 7;
     }
 
     body.is-compact #field_supplier_name_card {
-      grid-column: 5 / span 2;
+      grid-column: 8 / span 3;
+    }
+
+    body.is-compact #field_p_price_card {
+      grid-column: 1 / span 3;
+    }
+
+    body.is-compact #field_s_price_card {
+      grid-column: 4 / span 3;
+    }
+
+    body.is-compact #field_real_inventory_card {
+      grid-column: 7 / span 4;
     }
 
     .dialog-backdrop {
@@ -573,7 +583,7 @@
       .button-row { grid-template-columns: 1fr; }
       .lookup-row { grid-template-columns: minmax(0, 1fr) 74px; }
       .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-      .helper-row { grid-template-columns: 42px minmax(0, 1.7fr) minmax(0, 1fr); }
+      .helper-row { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.75fr) minmax(0, 2.5fr); }
       .card { border-radius: 22px; }
       .preview-frame { width: min(100%, 34vh); }
       .preview-meta { top: 8px; left: 8px; right: 8px; }
@@ -616,7 +626,7 @@
     <section class="card">
       <div class="controls top-tools">
         <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
-        <label>
+        <label id="cameraSelectWrap">
           <span class="visually-hidden">Choose camera</span>
           <select class="select" id="cameraSelect" disabled></select>
         </label>
@@ -654,14 +664,14 @@
     </section>
 
     <section class="card section-card">
-      <h2>Product Info</h2>
+      <h2 id="productInfoTitle">Product Info</h2>
       <div class="field-grid">
         <div class="field-card span-half" id="field_goods_code_card"><label for="field_goods_code">Goods Code</label><div class="field-value" id="field_goods_code"></div></div>
         <div class="field-card span-half" id="field_supplier_name_card"><label for="field_supplier_name">Supplier Name</label><div class="field-value" id="field_supplier_name"></div></div>
         <div class="field-card span-full" id="field_italian_name_card"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
-        <div class="field-card span-third"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
-        <div class="field-card span-third"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
-        <div class="field-card span-third"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
+        <div class="field-card span-third" id="field_p_price_card"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
+        <div class="field-card span-third" id="field_s_price_card"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
+        <div class="field-card span-third" id="field_real_inventory_card"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
         <div class="field-card span-half" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
         <div class="field-card span-half" id="field_discount_percent_card" hidden><label for="field_discount_percent">Discount%</label><div class="field-value is-discount" id="field_discount_percent"></div></div>
         <div class="field-card span-half" id="field_spec_card"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
