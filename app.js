@@ -83,7 +83,8 @@
     previewWatchdogTimer: 0,
     lastPreviewTime: 0,
     stalledPreviewChecks: 0,
-    isRecoveringPreview: false
+    isRecoveringPreview: false,
+    lookupSequence: 0
   };
 
   function queryElements() {
@@ -431,20 +432,34 @@
     const normalizedBarcode = String(barcode || "").trim();
     if (!normalizedBarcode) return;
 
-    let didUpdate = false;
+    let didChange = false;
     state.history = state.history.map(function (item) {
       if (String(item.barcode || "").trim() !== normalizedBarcode) {
         return item;
       }
-      didUpdate = true;
-      return normalizeHistoryItem({
+      const nextItem = normalizeHistoryItem({
         ...item,
         ...updates,
         barcode: normalizedBarcode
       });
+      const changed =
+        nextItem.goods_id !== item.goods_id ||
+        nextItem.barcode !== item.barcode ||
+        nextItem.italian_name !== item.italian_name ||
+        nextItem.comparison_qty !== item.comparison_qty ||
+        nextItem.p_price !== item.p_price ||
+        nextItem.s_price !== item.s_price ||
+        nextItem.s_discount !== item.s_discount ||
+        nextItem.discount_price !== item.discount_price ||
+        nextItem.has_discount !== item.has_discount;
+      if (changed) {
+        didChange = true;
+        return nextItem;
+      }
+      return item;
     });
 
-    if (!didUpdate) return;
+    if (!didChange) return;
     saveHistoryState();
     renderHistory();
   }
@@ -474,6 +489,29 @@
     for (let index = 0; index < uniqueBarcodes.length; index += 1) {
       updateHistoryItemsByBarcode(uniqueBarcodes[index], sharedFields);
     }
+  }
+
+  function buildHistoryItemFromLookupData(productPayload, discountPayload, fallbackBarcode, comparisonQty) {
+    const normalizedProduct = normalizeProductData(productPayload?.product || productPayload);
+    const discountFields = getDiscountFields({
+      product: productPayload?.product || productPayload,
+      sale: discountPayload
+    }, normalizedProduct);
+    const sPrice = numberFromValue(normalizedProduct.s_price);
+    const discountPrice = numberFromValue(discountFields.discountPrice);
+    const hasVisibleDiscount = Boolean(discountPrice) && Boolean(sPrice) && discountPrice < sPrice;
+
+    return normalizeHistoryItem({
+      goods_id: String(normalizedProduct.id || ""),
+      barcode: String(normalizedProduct.goods_code || fallbackBarcode || "").trim(),
+      italian_name: String(normalizedProduct.italian_name || ""),
+      p_price: String(normalizedProduct.p_price || ""),
+      s_price: String(normalizedProduct.s_price || ""),
+      s_discount: String(normalizedProduct.s_discount || ""),
+      discount_price: hasVisibleDiscount ? String(discountFields.discountPrice || "") : "",
+      has_discount: hasVisibleDiscount,
+      comparison_qty: comparisonQty || 1
+    });
   }
 
   async function fetchProductInfoThroughProxy(code, cookie) {
@@ -1157,41 +1195,59 @@
 
     state.els.barcodeInput.value = code;
     clearResultFields();
+    const lookupSequence = state.lookupSequence + 1;
+    state.lookupSequence = lookupSequence;
 
     const cookie = await getCookieForRequests();
 
-    const historyEntryId = addHistoryItem(code);
-    saveCookieState(cookie, `Requesting info for ${code} through ${CONFIG.infoProxyEndpoint}...`);
+    addHistoryItem(code);
     setStatus("Requesting product info...");
 
-    const [productResponseText, discountResponseText] = await Promise.all([
-      fetchProductInfoThroughProxy(code, cookie),
-      fetchDiscountInfoThroughProxy(code, cookie)
-    ]);
+    const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
 
     let parsedProduct;
-    let parsedDiscount;
     try {
       parsedProduct = JSON.parse(productResponseText);
     } catch {
       throw new Error("Product info response was not valid JSON.");
     }
 
-    try {
-      parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
-    } catch {
-      parsedDiscount = null;
-    }
-
     renderProductData({
       product: parsedProduct?.product || parsedProduct,
-      sale: parsedDiscount
+      sale: null
     });
-    if (historyEntryId && state.currentProductRecord) {
+    if (state.currentProductRecord) {
       syncHistoryRowsWithRecord(state.currentProductRecord, code);
     }
-    saveCookieState(cookie, `Info loaded successfully for barcode ${code}.`);
     setStatus("Product info loaded");
+
+    fetchDiscountInfoThroughProxy(code, cookie)
+      .then(function (discountResponseText) {
+        let parsedDiscount = null;
+        try {
+          parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
+        } catch {
+          parsedDiscount = null;
+        }
+
+        const updatedRecord = buildHistoryItemFromLookupData(
+          parsedProduct?.product || parsedProduct,
+          parsedDiscount,
+          code,
+          state.currentProductRecord?.comparison_qty || 1
+        );
+        syncHistoryRowsWithRecord(updatedRecord, code);
+
+        if (lookupSequence === state.lookupSequence && String(state.els.barcodeInput.value || "").trim() === code) {
+          renderProductData({
+            product: parsedProduct?.product || parsedProduct,
+            sale: parsedDiscount
+          });
+        }
+      })
+      .catch(function () {
+        // Temporary discount lookups are background-only for scan speed.
+      });
   }
 
   async function openHistoryEditor(index) {
