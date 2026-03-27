@@ -62,6 +62,7 @@
     devices: [],
     activeDeviceId: "",
     detector: null,
+    zxingReader: null,
     isCameraRunning: false,
     isScanning: false,
     torchOn: false,
@@ -1493,6 +1494,10 @@
     return "BarcodeDetector" in window;
   }
 
+  function supportsZxingFallback() {
+    return Boolean(window.ZXingBrowser?.BrowserMultiFormatReader);
+  }
+
   async function createDetector() {
     if (!supportsBarcodeDetector()) return null;
     if (state.detector) return state.detector;
@@ -1505,6 +1510,30 @@
     } catch {
       return null;
     }
+  }
+
+  function createZxingReader() {
+    if (!supportsZxingFallback()) {
+      return null;
+    }
+    if (state.zxingReader) {
+      return state.zxingReader;
+    }
+
+    try {
+      state.zxingReader = new window.ZXingBrowser.BrowserMultiFormatReader();
+      return state.zxingReader;
+    } catch {
+      return null;
+    }
+  }
+
+  function getDecodedText(result) {
+    if (!result) return "";
+    if (typeof result.getText === "function") {
+      return String(result.getText() || "").trim();
+    }
+    return String(result.text || result.rawValue || "").trim();
   }
 
   function getCameraSupportIssue() {
@@ -1923,9 +1952,26 @@
 
   async function readBarcodeFromCanvas(canvas) {
     const detector = await createDetector();
-    if (!detector) return [];
+    if (detector) {
+      try {
+        const detections = await detector.detect(canvas);
+        if (Array.isArray(detections) && detections.length > 0) {
+          return detections;
+        }
+      } catch {
+        // Fall back to ZXing below when available.
+      }
+    }
+
+    const zxingReader = createZxingReader();
+    if (!zxingReader) {
+      return [];
+    }
+
     try {
-      return await detector.detect(canvas);
+      const result = zxingReader.decodeFromCanvas(canvas);
+      const text = getDecodedText(result);
+      return text ? [{ rawValue: text }] : [];
     } catch {
       return [];
     }
