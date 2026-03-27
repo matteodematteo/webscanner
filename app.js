@@ -158,6 +158,12 @@
     return state.isMobileUi ? CONFIG.mobileVideoConstraints : CONFIG.videoConstraints;
   }
 
+  function isAppleMobileBrowser() {
+    const userAgent = navigator.userAgent || "";
+    const touchPoints = Number(navigator.maxTouchPoints || 0);
+    return /iPhone|iPad|iPod/i.test(userAgent) || (/Mac/i.test(userAgent) && touchPoints > 1);
+  }
+
   function cacheResultFieldElements() {
     state.fieldEls = {};
     for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
@@ -1624,6 +1630,124 @@
     state.els.cameraPreview.srcObject = null;
   }
 
+  function normalizeCameraConstraintValue(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return value;
+    }
+
+    const normalized = {};
+    if ("ideal" in value) {
+      normalized.ideal = value.ideal;
+    } else if ("exact" in value) {
+      normalized.exact = value.exact;
+    }
+    if ("max" in value) {
+      normalized.max = value.max;
+    }
+    if ("min" in value) {
+      normalized.min = value.min;
+    }
+    return Object.keys(normalized).length > 0 ? normalized : value;
+  }
+
+  function buildCameraConstraintCandidates(deviceId) {
+    const activeVideoConfig = getActiveVideoConfig();
+    const baseVideo = {
+      width: normalizeCameraConstraintValue(activeVideoConfig.video.width),
+      height: normalizeCameraConstraintValue(activeVideoConfig.video.height),
+      frameRate: normalizeCameraConstraintValue(activeVideoConfig.video.frameRate)
+    };
+    const cameraPreference = deviceId
+      ? { deviceId: { exact: deviceId } }
+      : { facingMode: { ideal: activeVideoConfig.video.facingMode.ideal } };
+    const candidates = [
+      {
+        audio: false,
+        video: {
+          ...baseVideo,
+          ...cameraPreference,
+          aspectRatio: normalizeCameraConstraintValue(activeVideoConfig.video.aspectRatio),
+          resizeMode: activeVideoConfig.video.resizeMode
+        }
+      },
+      {
+        audio: false,
+        video: {
+          ...baseVideo,
+          ...cameraPreference
+        }
+      }
+    ];
+
+    if (deviceId) {
+      candidates.push({
+        audio: false,
+        video: {
+          ...baseVideo,
+          deviceId: { ideal: deviceId }
+        }
+      });
+    }
+
+    candidates.push({
+      audio: false,
+      video: {
+        facingMode: { ideal: activeVideoConfig.video.facingMode.ideal }
+      }
+    });
+
+    if (isAppleMobileBrowser()) {
+      candidates.unshift({
+        audio: false,
+        video: {
+          ...cameraPreference,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+    }
+
+    return candidates;
+  }
+
+  async function getUserMediaWithFallback(deviceId) {
+    const constraintCandidates = buildCameraConstraintCandidates(deviceId);
+    let lastError = null;
+
+    for (let index = 0; index < constraintCandidates.length; index += 1) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraintCandidates[index]);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error("Could not access the camera");
+  }
+
+  async function waitForVideoReadiness(video) {
+    if (!video) return;
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      return;
+    }
+
+    await new Promise(function (resolve) {
+      let settled = false;
+
+      function finish() {
+        if (settled) return;
+        settled = true;
+        video.removeEventListener("loadedmetadata", finish);
+        video.removeEventListener("loadeddata", finish);
+        resolve();
+      }
+
+      video.addEventListener("loadedmetadata", finish, { once: true });
+      video.addEventListener("loadeddata", finish, { once: true });
+      window.setTimeout(finish, 1200);
+    });
+  }
+
   function updateResolutionBadge() {
     if (!state.track) {
       state.els.resolutionBadge.textContent = "0 x 0";
@@ -1743,34 +1867,25 @@
 
     cleanupScanTimer();
     stopTracks();
+    const preview = state.els.cameraPreview;
+    preview.setAttribute("autoplay", "");
+    preview.setAttribute("muted", "");
+    preview.setAttribute("playsinline", "");
+    preview.setAttribute("webkit-playsinline", "true");
+    preview.muted = true;
+    preview.autoplay = true;
+    preview.playsInline = true;
 
-    const activeVideoConfig = getActiveVideoConfig();
-    const constraints = {
-      audio: false,
-      video: {
-        width: { ideal: activeVideoConfig.video.width.ideal, max: activeVideoConfig.video.width.max },
-        height: { ideal: activeVideoConfig.video.height.ideal, max: activeVideoConfig.video.height.max },
-        aspectRatio: { ideal: activeVideoConfig.video.aspectRatio.ideal },
-        frameRate: { ideal: activeVideoConfig.video.frameRate.ideal, max: activeVideoConfig.video.frameRate.max },
-        resizeMode: activeVideoConfig.video.resizeMode
-      }
-    };
-
-    if (deviceId) {
-      constraints.video.deviceId = { exact: deviceId };
-    } else {
-      constraints.video.facingMode = { ideal: activeVideoConfig.video.facingMode.ideal };
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const stream = await getUserMediaWithFallback(deviceId);
     const track = stream.getVideoTracks()[0];
     state.stream = stream;
     state.track = track;
     state.activeDeviceId = track?.getSettings?.().deviceId || deviceId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
-    state.els.cameraPreview.srcObject = stream;
+    preview.srcObject = stream;
 
-    await state.els.cameraPreview.play();
+    await waitForVideoReadiness(preview);
+    await preview.play();
     await applyTrackEnhancements(track);
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
