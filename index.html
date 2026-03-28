@@ -97,6 +97,7 @@
     }
 
     #cameraPreview,
+    #cameraPreviewQuagga,
     .preview-placeholder,
     .preview-grid,
     .scan-line {
@@ -104,15 +105,21 @@
       inset: 0;
     }
 
-    #cameraPreview {
+    #cameraPreview,
+    #cameraPreviewQuagga {
       width: 100%;
       height: 100%;
       display: block;
       background: #05080b;
     }
 
-    #cameraPreview video,
-    #cameraPreview canvas {
+    #cameraPreviewQuagga[hidden] {
+      display: none !important;
+    }
+
+    #cameraPreview,
+    #cameraPreviewQuagga video,
+    #cameraPreviewQuagga canvas {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover;
@@ -643,7 +650,8 @@
       <div class="top-status" id="statusText" aria-live="polite">Opening camera preview...</div>
 
       <div class="preview-frame" id="previewFrame">
-        <div id="cameraPreview"></div>
+        <video id="cameraPreview" autoplay playsinline muted></video>
+        <div id="cameraPreviewQuagga" hidden></div>
         <div class="preview-grid" aria-hidden="true"></div>
         <div class="scan-window" aria-hidden="true"></div>
         <div class="scan-line" aria-hidden="true"></div>
@@ -810,6 +818,6 @@
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
   <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
-  <script src="app.js?v=39" defer></script>
+  <script src="app.js?v=40" defer></script>
 </body>
 </html>
