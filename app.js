@@ -72,6 +72,7 @@
     track: null,
     devices: [],
     activeDeviceId: "",
+    detector: null,
     scanner: null,
     scannerEngine: "",
     isCameraRunning: false,
@@ -171,6 +172,10 @@
     return /Android/i.test(navigator.userAgent || "");
   }
 
+  function usesNativeAndroidScanner() {
+    return !isIOSDevice();
+  }
+
   function getActiveVideoConfig() {
     if (isAndroidDevice()) {
       return CONFIG.androidVideoConstraints;
@@ -246,6 +251,24 @@
       "codabar_reader",
       "i2of5_reader"
     ];
+  }
+
+  function supportsBarcodeDetector() {
+    return "BarcodeDetector" in window;
+  }
+
+  async function createDetector() {
+    if (!supportsBarcodeDetector()) return null;
+    if (state.detector) return state.detector;
+
+    try {
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      if (!formats || formats.length === 0) return null;
+      state.detector = new window.BarcodeDetector({ formats: formats.filter(Boolean) });
+      return state.detector;
+    } catch {
+      return null;
+    }
   }
 
   function getZxingHints() {
@@ -1599,7 +1622,7 @@
     if (isIOSDevice()) {
       return Boolean(window.Quagga);
     }
-    return Boolean(window.ZXingBrowser?.BrowserMultiFormatReader);
+    return supportsBarcodeDetector();
   }
 
   function getCameraSupportIssue() {
@@ -1725,6 +1748,7 @@
     updateTorchUi(false, false);
 
     const scanner = state.scanner;
+    const currentStream = state.stream;
     state.scanner = null;
     const engine = state.scannerEngine;
     state.scannerEngine = "";
@@ -1761,7 +1785,30 @@
 
     state.stream = null;
     state.track = null;
+    state.detector = null;
     setActivePreviewEngine("");
+
+    if (scanner?.stream?.getTracks) {
+      const scannerTracks = scanner.stream.getTracks();
+      for (let index = 0; index < scannerTracks.length; index += 1) {
+        try {
+          scannerTracks[index].stop();
+        } catch {
+          // Ignore cleanup issues from stale tracks.
+        }
+      }
+    }
+
+    if (currentStream?.getTracks) {
+      const tracks = currentStream.getTracks();
+      for (let index = 0; index < tracks.length; index += 1) {
+        try {
+          tracks[index].stop();
+        } catch {
+          // Ignore stream teardown issues.
+        }
+      }
+    }
 
     if (state.els.cameraPreview instanceof HTMLVideoElement) {
       try {
@@ -1818,24 +1865,8 @@
   }
 
   async function refreshDevices(preferredDeviceId) {
-    let devices = [];
-    if (!isIOSDevice() && window.ZXingBrowser?.BrowserCodeReader?.listVideoInputDevices) {
-      try {
-        const cameraDevices = await window.ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-        devices = cameraDevices.map((device) => ({
-          kind: "videoinput",
-          deviceId: device.deviceId || device.id,
-          label: device.label || ""
-        }));
-      } catch {
-        devices = [];
-      }
-    }
-
-    if (devices.length === 0) {
-      const mediaDevices = await navigator.mediaDevices.enumerateDevices();
-      devices = mediaDevices.filter((device) => device.kind === "videoinput");
-    }
+    const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+    const devices = mediaDevices.filter((device) => device.kind === "videoinput");
 
     state.devices = devices;
     const savedCameraId = readSavedCameraId();
@@ -1875,6 +1906,143 @@
     } catch (error) {
       setStatus(error.message || "Barcode was captured, but info request failed");
     }
+  }
+
+  function getSquareCropSize(video) {
+    const preferredSquareSize = state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize;
+    const width = video.videoWidth || preferredSquareSize;
+    const height = video.videoHeight || preferredSquareSize;
+    return Math.max(1, Math.min(width, height));
+  }
+
+  function drawSquareFrame() {
+    const video = state.els.cameraPreview;
+    const canvas = state.els.captureCanvas;
+    const context = canvas.getContext("2d", { alpha: false });
+    const squareSize = getSquareCropSize(video);
+    const sx = Math.max(0, Math.floor((video.videoWidth - squareSize) / 2));
+    const sy = Math.max(0, Math.floor((video.videoHeight - squareSize) / 2));
+    const outputSize = state.isMobileUi ? 512 : 720;
+
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    context.drawImage(video, sx, sy, squareSize, squareSize, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+
+  async function readBarcodeFromCanvas(canvas) {
+    const detector = await createDetector();
+    if (!detector) {
+      return [];
+    }
+
+    try {
+      return await detector.detect(canvas);
+    } catch {
+      return [];
+    }
+  }
+
+  async function captureAttempt() {
+    if (!state.isCameraRunning || !state.track) {
+      return false;
+    }
+
+    const canvas = drawSquareFrame();
+    const detections = await readBarcodeFromCanvas(canvas);
+    const detectedText = detections[0]?.rawValue || "";
+
+    if (!detectedText) {
+      setStatus("Scanning... point the barcode inside the square");
+      return false;
+    }
+
+    state.els.barcodeInput.value = detectedText;
+    playCaptureSound();
+    stopScanning(true);
+
+    try {
+      await fetchProductInfo(detectedText);
+      return true;
+    } catch (error) {
+      setStatus(error.message || "Barcode was captured, but info request failed");
+      return true;
+    }
+  }
+
+  async function runScanLoop() {
+    if (!state.isScanning || state.isScanLoopScheduled) {
+      return;
+    }
+
+    state.isScanLoopScheduled = true;
+    state.scanTimer = window.setTimeout(async function () {
+      state.isScanLoopScheduled = false;
+      if (!state.isScanning || state.isScanInFlight) {
+        if (state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+        return;
+      }
+
+      state.isScanInFlight = true;
+      try {
+        const detected = await captureAttempt();
+        if (!detected && state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+      } catch {
+        setStatus("Scanning had a temporary read error");
+        if (state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+      } finally {
+        state.isScanInFlight = false;
+      }
+    }, CONFIG.scanIntervalMs);
+  }
+
+  async function startCameraWithNativeDetector(preferredCameraId, activeVideoConfig) {
+    setActivePreviewEngine("native");
+
+    const constraints = {
+      audio: false,
+      video: {
+        width: { ideal: activeVideoConfig.video.width.ideal, max: activeVideoConfig.video.width.max },
+        height: { ideal: activeVideoConfig.video.height.ideal, max: activeVideoConfig.video.height.max },
+        aspectRatio: { ideal: activeVideoConfig.video.aspectRatio.ideal },
+        frameRate: { ideal: activeVideoConfig.video.frameRate.ideal, max: activeVideoConfig.video.frameRate.max },
+        resizeMode: activeVideoConfig.video.resizeMode
+      }
+    };
+
+    if (preferredCameraId) {
+      constraints.video.deviceId = { exact: preferredCameraId };
+    } else {
+      constraints.video.facingMode = { ideal: activeVideoConfig.video.facingMode.ideal };
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const track = stream.getVideoTracks()[0] || null;
+
+    state.stream = stream;
+    state.track = track;
+    state.scanner = { stream: stream };
+    state.scannerEngine = "native";
+    state.activeDeviceId = track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
+    saveCameraId(state.activeDeviceId);
+
+    state.els.cameraPreview.srcObject = stream;
+    await state.els.cameraPreview.play();
+    await applyTrackEnhancements(track, activeVideoConfig);
+    await refreshDevices(state.activeDeviceId);
+    await syncTorchSupport();
   }
 
   async function startCameraWithZxing(preferredCameraId, activeVideoConfig) {
@@ -2074,7 +2242,7 @@
     if (isIOSDevice()) {
       await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
     } else {
-      await startCameraWithZxing(preferredCameraId, activeVideoConfig);
+      await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
     }
 
     state.isCameraRunning = true;
@@ -2097,6 +2265,16 @@
     state.isScanning = true;
     updateScanButton();
     updateModePill();
+    if (usesNativeAndroidScanner()) {
+      setStatus("Scanning started");
+      if (await captureAttempt()) {
+        return;
+      }
+      cleanupScanTimer();
+      await runScanLoop();
+      return;
+    }
+
     setStatus("Scanning... point the barcode inside the square");
   }
 
