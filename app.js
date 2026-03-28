@@ -1879,10 +1879,10 @@
 
   async function startCameraWithZxing(preferredCameraId, activeVideoConfig) {
     setActivePreviewEngine("zxing");
-    const reader = new window.ZXingBrowser.BrowserMultiFormatReader(getZxingHints(), {
-      delayBetweenScanAttempts: isAndroidDevice() ? 20 : (state.isMobileUi ? 60 : 50),
-      delayBetweenScanSuccess: 500
-    });
+    const reader = new window.ZXingBrowser.BrowserMultiFormatReader(
+      getZxingHints(),
+      isAndroidDevice() ? 20 : (state.isMobileUi ? 60 : 50)
+    );
 
     const controls = await reader.decodeFromVideoDevice(
       preferredCameraId || undefined,
