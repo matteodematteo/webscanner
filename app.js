@@ -1622,7 +1622,7 @@
     if (isIOSDevice()) {
       return Boolean(window.Quagga);
     }
-    return supportsBarcodeDetector();
+    return true;
   }
 
   function getCameraSupportIssue() {
