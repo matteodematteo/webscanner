@@ -46,10 +46,21 @@
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1280, max: 1920 },
-        height: { ideal: 1280, max: 1920 },
+        width: { ideal: 1440, max: 2160 },
+        height: { ideal: 1440, max: 2160 },
         aspectRatio: { ideal: 1 },
         frameRate: { ideal: 24, max: 30 },
+        resizeMode: "crop-and-scale"
+      }
+    },
+    androidVideoConstraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 2160, max: 3840 },
+        height: { ideal: 2160, max: 3840 },
+        aspectRatio: { ideal: 1 },
+        frameRate: { ideal: 30, max: 60 },
         resizeMode: "crop-and-scale"
       }
     }
@@ -156,7 +167,14 @@
     return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") || width <= 768;
   }
 
+  function isAndroidDevice() {
+    return /Android/i.test(navigator.userAgent || "");
+  }
+
   function getActiveVideoConfig() {
+    if (isAndroidDevice()) {
+      return CONFIG.androidVideoConstraints;
+    }
     return state.isMobileUi ? CONFIG.mobileVideoConstraints : CONFIG.videoConstraints;
   }
 
@@ -1862,8 +1880,8 @@
   async function startCameraWithZxing(preferredCameraId, activeVideoConfig) {
     setActivePreviewEngine("zxing");
     const reader = new window.ZXingBrowser.BrowserMultiFormatReader(getZxingHints(), {
-      delayBetweenScanAttempts: state.isMobileUi ? 90 : 70,
-      delayBetweenScanSuccess: 800
+      delayBetweenScanAttempts: isAndroidDevice() ? 20 : (state.isMobileUi ? 60 : 50),
+      delayBetweenScanSuccess: 500
     });
 
     const controls = await reader.decodeFromVideoDevice(
@@ -1883,7 +1901,7 @@
     state.track = await waitForActiveTrack();
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
-    await applyTrackEnhancements(state.track);
+    await applyTrackEnhancements(state.track, activeVideoConfig);
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
   }
@@ -1945,13 +1963,40 @@
     state.track = await waitForActiveTrack(2200);
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
-    await applyTrackEnhancements(state.track);
+    await applyTrackEnhancements(state.track, activeVideoConfig);
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
   }
 
-  async function applyTrackEnhancements(track) {
+  async function applyTrackEnhancements(track, activeVideoConfig) {
     if (!track?.getCapabilities || !track.applyConstraints) return;
+
+    const baseVideoConfig = activeVideoConfig?.video || getActiveVideoConfig().video;
+    const baseConstraints = {};
+
+    if (baseVideoConfig?.width) {
+      baseConstraints.width = baseVideoConfig.width;
+    }
+    if (baseVideoConfig?.height) {
+      baseConstraints.height = baseVideoConfig.height;
+    }
+    if (baseVideoConfig?.aspectRatio) {
+      baseConstraints.aspectRatio = baseVideoConfig.aspectRatio;
+    }
+    if (baseVideoConfig?.frameRate) {
+      baseConstraints.frameRate = baseVideoConfig.frameRate;
+    }
+    if (baseVideoConfig?.resizeMode) {
+      baseConstraints.resizeMode = baseVideoConfig.resizeMode;
+    }
+
+    if (Object.keys(baseConstraints).length > 0) {
+      try {
+        await track.applyConstraints(baseConstraints);
+      } catch {
+        // Ignore base resolution requests that are not supported by this device.
+      }
+    }
 
     const capabilities = track.getCapabilities();
     const advanced = [];
