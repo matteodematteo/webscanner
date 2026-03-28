@@ -1675,7 +1675,13 @@
   function chooseBestDefaultDevice(devices) {
     if (!devices || devices.length === 0) return "";
     const rear = devices.find((device) => /back|rear|environment/i.test(device.label));
-    return (rear || devices[0]).deviceId;
+    if (rear) {
+      return rear.deviceId;
+    }
+    if (devices.length > 1) {
+      return devices[devices.length - 1].deviceId;
+    }
+    return devices[0].deviceId;
   }
 
   async function refreshDevices(preferredDeviceId) {
@@ -1777,9 +1783,13 @@
     await stopTracks();
 
     const activeVideoConfig = getActiveVideoConfig();
-    const cameraConfig = deviceId
-      ? { deviceId: { exact: deviceId } }
-      : { facingMode: activeVideoConfig.video.facingMode.ideal };
+    const preferredCameraConfigs = deviceId
+      ? [{ deviceId: { exact: deviceId } }]
+      : [
+          { facingMode: { exact: "environment" } },
+          { facingMode: { ideal: activeVideoConfig.video.facingMode.ideal } },
+          { facingMode: "environment" }
+        ];
     const scannerConfig = {
       fps: state.isMobileUi ? 8 : 10,
       aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
@@ -1800,29 +1810,42 @@
     );
 
     state.scanner = scanner;
-    await scanner.start(
-      cameraConfig,
-      scannerConfig,
-      async function (decodedText) {
-        const detectedText = String(decodedText || "").trim();
-        if (!state.isScanning || !detectedText) {
-          return;
-        }
+    let lastStartError = null;
+    for (let index = 0; index < preferredCameraConfigs.length; index += 1) {
+      try {
+        await scanner.start(
+          preferredCameraConfigs[index],
+          scannerConfig,
+          async function (decodedText) {
+            const detectedText = String(decodedText || "").trim();
+            if (!state.isScanning || !detectedText) {
+              return;
+            }
 
-        state.els.barcodeInput.value = detectedText;
-        playCaptureSound();
-        stopScanning(true);
+            state.els.barcodeInput.value = detectedText;
+            playCaptureSound();
+            stopScanning(true);
 
-        try {
-          await fetchProductInfo(detectedText);
-        } catch (error) {
-          setStatus(error.message || "Barcode was captured, but info request failed");
-        }
-      },
-      function () {
-        // Ignore per-frame decode misses.
+            try {
+              await fetchProductInfo(detectedText);
+            } catch (error) {
+              setStatus(error.message || "Barcode was captured, but info request failed");
+            }
+          },
+          function () {
+            // Ignore per-frame decode misses.
+          }
+        );
+        lastStartError = null;
+        break;
+      } catch (error) {
+        lastStartError = error;
       }
-    );
+    }
+
+    if (lastStartError) {
+      throw lastStartError;
+    }
 
     state.track = scanner.getRunningTrack ? scanner.getRunningTrack() : null;
     state.activeDeviceId = state.track?.getSettings?.().deviceId || deviceId || state.activeDeviceId;
