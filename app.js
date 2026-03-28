@@ -1873,14 +1873,6 @@
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
 
-    if (scanner.pause) {
-      try {
-        scanner.pause(false);
-      } catch {
-        // Some browsers may not allow immediate pause after start.
-      }
-    }
-
     state.isCameraRunning = true;
     state.isScanning = false;
     setPreviewActive(true);
@@ -1898,14 +1890,6 @@
 
     if (state.isScanning) return;
 
-    if (state.scanner?.resume) {
-      try {
-        state.scanner.resume();
-      } catch {
-        // Ignore resume issues and rely on current preview state.
-      }
-    }
-
     state.isScanning = true;
     updateScanButton();
     updateModePill();
@@ -1914,13 +1898,6 @@
 
   function stopScanning(keepStatusMessage) {
     cleanupScanTimer();
-    if (state.scanner?.pause) {
-      try {
-        state.scanner.pause(false);
-      } catch {
-        // Ignore pause issues and keep preview active.
-      }
-    }
     state.isScanning = false;
     updateScanButton();
     updateModePill();
