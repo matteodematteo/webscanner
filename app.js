@@ -1674,7 +1674,7 @@
 
   function chooseBestDefaultDevice(devices) {
     if (!devices || devices.length === 0) return "";
-    const rear = devices.find((device) => /back|rear|environment/i.test(device.label));
+    const rear = devices.find((device) => /back|rear|environment|wide|ultra/i.test(device.label || ""));
     if (rear) {
       return rear.deviceId;
     }
@@ -1685,8 +1685,26 @@
   }
 
   async function refreshDevices(preferredDeviceId) {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    state.devices = devices.filter((device) => device.kind === "videoinput");
+    let devices = [];
+    if (window.Html5Qrcode?.getCameras) {
+      try {
+        const cameraDevices = await window.Html5Qrcode.getCameras();
+        devices = cameraDevices.map((device) => ({
+          kind: "videoinput",
+          deviceId: device.id,
+          label: device.label || ""
+        }));
+      } catch {
+        devices = [];
+      }
+    }
+
+    if (devices.length === 0) {
+      const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+      devices = mediaDevices.filter((device) => device.kind === "videoinput");
+    }
+
+    state.devices = devices;
     const savedCameraId = readSavedCameraId();
     const fallbackId = preferredDeviceId || state.activeDeviceId || savedCameraId || chooseBestDefaultDevice(state.devices);
     const hasMatch = state.devices.some((device) => device.deviceId === fallbackId);
@@ -1783,13 +1801,19 @@
     await stopTracks();
 
     const activeVideoConfig = getActiveVideoConfig();
-    const preferredCameraConfigs = deviceId
-      ? [{ deviceId: { exact: deviceId } }]
-      : [
-          { facingMode: { exact: "environment" } },
-          { facingMode: { ideal: activeVideoConfig.video.facingMode.ideal } },
-          { facingMode: "environment" }
-        ];
+    await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
+    const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
+    const fallbackCameraIds = state.devices
+      .map((device) => device.deviceId)
+      .filter(Boolean)
+      .filter((id, index, list) => list.indexOf(id) === index && id !== preferredCameraId);
+    const preferredCameraConfigs = [
+      ...(preferredCameraId ? [{ deviceId: { exact: preferredCameraId } }] : []),
+      ...fallbackCameraIds.map((id) => ({ deviceId: { exact: id } })),
+      { facingMode: { exact: "environment" } },
+      { facingMode: { ideal: activeVideoConfig.video.facingMode.ideal } },
+      { facingMode: "environment" }
+    ];
     const scannerConfig = {
       fps: state.isMobileUi ? 8 : 10,
       aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
@@ -1848,7 +1872,7 @@
     }
 
     state.track = scanner.getRunningTrack ? scanner.getRunningTrack() : null;
-    state.activeDeviceId = state.track?.getSettings?.().deviceId || deviceId || state.activeDeviceId;
+    state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
     await applyTrackEnhancements(state.track);
     await refreshDevices(state.activeDeviceId);
