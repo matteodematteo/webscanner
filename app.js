@@ -94,6 +94,7 @@
       barcodeInput: document.getElementById("barcodeInput"),
       cameraBadge: document.getElementById("cameraBadge"),
       cameraPreview: document.getElementById("cameraPreview"),
+      cameraPreviewQuagga: document.getElementById("cameraPreviewQuagga"),
       cameraSelect: document.getElementById("cameraSelect"),
       clearAllBtn: document.getElementById("clearAllBtn"),
       clearBarcodeBtn: document.getElementById("clearBarcodeBtn"),
@@ -164,8 +165,32 @@
     return /iPad|iPhone|iPod/i.test(userAgent) || (/Mac/i.test(userAgent) && "ontouchend" in document);
   }
 
+  function setActivePreviewEngine(engine) {
+    const useQuaggaPreview = engine === "quagga";
+    if (state.els?.cameraPreview) {
+      state.els.cameraPreview.hidden = useQuaggaPreview;
+      state.els.cameraPreview.style.display = useQuaggaPreview ? "none" : "block";
+    }
+    if (state.els?.cameraPreviewQuagga) {
+      state.els.cameraPreviewQuagga.hidden = !useQuaggaPreview;
+      state.els.cameraPreviewQuagga.style.display = useQuaggaPreview ? "block" : "none";
+    }
+  }
+
   function getPreviewVideoElement() {
-    return state.els?.cameraPreview?.querySelector("video") || null;
+    if (!state.els) {
+      return null;
+    }
+
+    if (state.scannerEngine === "quagga") {
+      return state.els.cameraPreviewQuagga?.querySelector("video") || null;
+    }
+
+    if (state.els.cameraPreview instanceof HTMLVideoElement) {
+      return state.els.cameraPreview;
+    }
+
+    return state.els.cameraPreview?.querySelector("video") || null;
   }
 
   function getActiveStreamTrackFromPreview() {
@@ -175,6 +200,21 @@
       return null;
     }
     return stream.getVideoTracks()[0] || null;
+  }
+
+  async function waitForActiveTrack(timeoutMs) {
+    const timeout = typeof timeoutMs === "number" ? timeoutMs : 1800;
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+      const track = getActiveStreamTrackFromPreview();
+      if (track) {
+        return track;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 60));
+    }
+
+    return getActiveStreamTrackFromPreview();
   }
 
   function getPreferredReaders() {
@@ -1703,7 +1743,30 @@
 
     state.stream = null;
     state.track = null;
-    state.els.cameraPreview.innerHTML = "";
+    setActivePreviewEngine("");
+
+    if (state.els.cameraPreview instanceof HTMLVideoElement) {
+      try {
+        state.els.cameraPreview.pause();
+      } catch {
+        // Ignore pause issues on detached previews.
+      }
+      try {
+        state.els.cameraPreview.srcObject = null;
+      } catch {
+        // Ignore srcObject cleanup issues.
+      }
+      state.els.cameraPreview.removeAttribute("src");
+      try {
+        state.els.cameraPreview.load();
+      } catch {
+        // Ignore load reset issues.
+      }
+    }
+
+    if (state.els.cameraPreviewQuagga) {
+      state.els.cameraPreviewQuagga.innerHTML = "";
+    }
   }
 
   function updateResolutionBadge() {
@@ -1797,6 +1860,7 @@
   }
 
   async function startCameraWithZxing(preferredCameraId, activeVideoConfig) {
+    setActivePreviewEngine("zxing");
     const reader = new window.ZXingBrowser.BrowserMultiFormatReader(getZxingHints(), {
       delayBetweenScanAttempts: state.isMobileUi ? 90 : 70,
       delayBetweenScanSuccess: 800
@@ -1816,7 +1880,7 @@
 
     state.scanner = { reader: reader, controls: controls };
     state.scannerEngine = "zxing";
-    state.track = getActiveStreamTrackFromPreview();
+    state.track = await waitForActiveTrack();
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
     await applyTrackEnhancements(state.track);
@@ -1825,12 +1889,15 @@
   }
 
   async function startCameraWithQuagga(preferredCameraId, activeVideoConfig) {
+    setActivePreviewEngine("quagga");
+    state.els.cameraPreviewQuagga.innerHTML = "";
+
     await new Promise(function (resolve, reject) {
       window.Quagga.init({
         inputStream: {
           name: "Live",
           type: "LiveStream",
-          target: state.els.cameraPreview,
+          target: state.els.cameraPreviewQuagga,
           constraints: preferredCameraId
             ? {
                 deviceId: preferredCameraId,
@@ -1875,8 +1942,7 @@
     window.Quagga.start();
     state.scanner = { onDetected: onDetected };
     state.scannerEngine = "quagga";
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
-    state.track = getActiveStreamTrackFromPreview();
+    state.track = await waitForActiveTrack(2200);
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
     await applyTrackEnhancements(state.track);
