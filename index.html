@@ -808,7 +808,18 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+  <script>
+    window.__loadHtml5QrcodeFallback = function () {
+      if (window.Html5Qrcode) {
+        return;
+      }
+      const fallbackScript = document.createElement("script");
+      fallbackScript.src = "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js";
+      fallbackScript.async = false;
+      document.head.appendChild(fallbackScript);
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="window.__loadHtml5QrcodeFallback()"></script>
   <script src="app.js?v=36" defer></script>
 </body>
 </html>
