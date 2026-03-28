@@ -1817,12 +1817,7 @@
     const scannerConfig = {
       fps: state.isMobileUi ? 8 : 10,
       aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
-      disableFlip: false,
-      videoConstraints: {
-        width: { ideal: activeVideoConfig.video.width.ideal, max: activeVideoConfig.video.width.max },
-        height: { ideal: activeVideoConfig.video.height.ideal, max: activeVideoConfig.video.height.max },
-        frameRate: { ideal: activeVideoConfig.video.frameRate.ideal, max: activeVideoConfig.video.frameRate.max }
-      }
+      disableFlip: false
     };
     const scanner = new window.Html5Qrcode(
       "cameraPreview",
