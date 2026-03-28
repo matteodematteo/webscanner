@@ -62,7 +62,7 @@
     devices: [],
     activeDeviceId: "",
     detector: null,
-    zxingReader: null,
+    scanner: null,
     isCameraRunning: false,
     isScanning: false,
     torchOn: false,
@@ -159,10 +159,27 @@
     return state.isMobileUi ? CONFIG.mobileVideoConstraints : CONFIG.videoConstraints;
   }
 
-  function isAppleMobileBrowser() {
-    const userAgent = navigator.userAgent || "";
-    const touchPoints = Number(navigator.maxTouchPoints || 0);
-    return /iPhone|iPad|iPod/i.test(userAgent) || (/Mac/i.test(userAgent) && touchPoints > 1);
+  function getHtml5QrcodeFormats() {
+    const formats = window.Html5QrcodeSupportedFormats;
+    if (!formats) {
+      return undefined;
+    }
+
+    return [
+      formats.QR_CODE,
+      formats.EAN_13,
+      formats.EAN_8,
+      formats.UPC_A,
+      formats.UPC_E,
+      formats.CODE_128,
+      formats.CODE_39,
+      formats.ITF,
+      formats.CODABAR
+    ].filter(Boolean);
+  }
+
+  function getPreviewVideoElement() {
+    return state.els?.cameraPreview?.querySelector("video") || null;
   }
 
   function cacheResultFieldElements() {
@@ -1490,50 +1507,8 @@
     closeHistoryEditDialog();
   }
 
-  function supportsBarcodeDetector() {
-    return "BarcodeDetector" in window;
-  }
-
-  function supportsZxingFallback() {
-    return Boolean(window.ZXingBrowser?.BrowserMultiFormatReader);
-  }
-
-  async function createDetector() {
-    if (!supportsBarcodeDetector()) return null;
-    if (state.detector) return state.detector;
-
-    try {
-      const formats = await window.BarcodeDetector.getSupportedFormats();
-      if (!formats || formats.length === 0) return null;
-      state.detector = new window.BarcodeDetector({ formats: formats.filter(Boolean) });
-      return state.detector;
-    } catch {
-      return null;
-    }
-  }
-
-  function createZxingReader() {
-    if (!supportsZxingFallback()) {
-      return null;
-    }
-    if (state.zxingReader) {
-      return state.zxingReader;
-    }
-
-    try {
-      state.zxingReader = new window.ZXingBrowser.BrowserMultiFormatReader();
-      return state.zxingReader;
-    } catch {
-      return null;
-    }
-  }
-
-  function getDecodedText(result) {
-    if (!result) return "";
-    if (typeof result.getText === "function") {
-      return String(result.getText() || "").trim();
-    }
-    return String(result.text || result.rawValue || "").trim();
+  function supportsHtml5Qrcode() {
+    return Boolean(window.Html5Qrcode);
   }
 
   function getCameraSupportIssue() {
@@ -1542,6 +1517,9 @@
     }
     if (!navigator.mediaDevices?.getUserMedia) {
       return "This browser does not support camera access.";
+    }
+    if (!supportsHtml5Qrcode()) {
+      return "The HTML5 barcode scanner library did not load.";
     }
     return "";
   }
@@ -1619,14 +1597,14 @@
       return;
     }
 
-    state.lastPreviewTime = Number(state.els.cameraPreview.currentTime || 0);
+    state.lastPreviewTime = Number(getPreviewVideoElement()?.currentTime || 0);
     state.previewWatchdogTimer = window.setInterval(function () {
       if (!state.isCameraRunning || state.isRecoveringPreview || document.hidden) {
         return;
       }
 
-      const video = state.els.cameraPreview;
-      if (!video?.srcObject || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      const video = getPreviewVideoElement();
+      if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         return;
       }
 
@@ -1647,145 +1625,46 @@
     }, CONFIG.previewWatchIntervalMs);
   }
 
-  function stopTracks() {
+  async function stopTracks() {
     stopPreviewWatchdog();
-    if (!state.stream) return;
-    const tracks = state.stream.getTracks();
-    for (let index = 0; index < tracks.length; index += 1) {
-      tracks[index].stop();
+    state.isCameraRunning = false;
+    state.torchOn = false;
+    updateTorchUi(false, false);
+
+    const scanner = state.scanner;
+    state.scanner = null;
+
+    if (scanner?.stop) {
+      try {
+        await scanner.stop();
+      } catch {
+        // Ignore teardown issues from partially started sessions.
+      }
     }
+
+    if (scanner?.clear) {
+      try {
+        await scanner.clear();
+      } catch {
+        // Ignore cleanup issues from browsers with partial support.
+      }
+    }
+
     state.stream = null;
     state.track = null;
-    state.els.cameraPreview.srcObject = null;
-  }
-
-  function normalizeCameraConstraintValue(value) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return value;
-    }
-
-    const normalized = {};
-    if ("ideal" in value) {
-      normalized.ideal = value.ideal;
-    } else if ("exact" in value) {
-      normalized.exact = value.exact;
-    }
-    if ("max" in value) {
-      normalized.max = value.max;
-    }
-    if ("min" in value) {
-      normalized.min = value.min;
-    }
-    return Object.keys(normalized).length > 0 ? normalized : value;
-  }
-
-  function buildCameraConstraintCandidates(deviceId) {
-    const activeVideoConfig = getActiveVideoConfig();
-    const baseVideo = {
-      width: normalizeCameraConstraintValue(activeVideoConfig.video.width),
-      height: normalizeCameraConstraintValue(activeVideoConfig.video.height),
-      frameRate: normalizeCameraConstraintValue(activeVideoConfig.video.frameRate)
-    };
-    const cameraPreference = deviceId
-      ? { deviceId: { exact: deviceId } }
-      : { facingMode: { ideal: activeVideoConfig.video.facingMode.ideal } };
-    const candidates = [
-      {
-        audio: false,
-        video: {
-          ...baseVideo,
-          ...cameraPreference,
-          aspectRatio: normalizeCameraConstraintValue(activeVideoConfig.video.aspectRatio),
-          resizeMode: activeVideoConfig.video.resizeMode
-        }
-      },
-      {
-        audio: false,
-        video: {
-          ...baseVideo,
-          ...cameraPreference
-        }
-      }
-    ];
-
-    if (deviceId) {
-      candidates.push({
-        audio: false,
-        video: {
-          ...baseVideo,
-          deviceId: { ideal: deviceId }
-        }
-      });
-    }
-
-    candidates.push({
-      audio: false,
-      video: {
-        facingMode: { ideal: activeVideoConfig.video.facingMode.ideal }
-      }
-    });
-
-    if (isAppleMobileBrowser()) {
-      candidates.unshift({
-        audio: false,
-        video: {
-          ...cameraPreference,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
-    }
-
-    return candidates;
-  }
-
-  async function getUserMediaWithFallback(deviceId) {
-    const constraintCandidates = buildCameraConstraintCandidates(deviceId);
-    let lastError = null;
-
-    for (let index = 0; index < constraintCandidates.length; index += 1) {
-      try {
-        return await navigator.mediaDevices.getUserMedia(constraintCandidates[index]);
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    throw lastError || new Error("Could not access the camera");
-  }
-
-  async function waitForVideoReadiness(video) {
-    if (!video) return;
-    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      return;
-    }
-
-    await new Promise(function (resolve) {
-      let settled = false;
-
-      function finish() {
-        if (settled) return;
-        settled = true;
-        video.removeEventListener("loadedmetadata", finish);
-        video.removeEventListener("loadeddata", finish);
-        resolve();
-      }
-
-      video.addEventListener("loadedmetadata", finish, { once: true });
-      video.addEventListener("loadeddata", finish, { once: true });
-      window.setTimeout(finish, 1200);
-    });
+    state.els.cameraPreview.innerHTML = "";
   }
 
   function updateResolutionBadge() {
-    if (!state.track) {
+    if (!state.track?.getSettings) {
       state.els.resolutionBadge.textContent = "0 x 0";
       return;
     }
 
-    const settings = state.track.getSettings ? state.track.getSettings() : {};
-    const width = settings.width || state.els.cameraPreview.videoWidth || 0;
-    const height = settings.height || state.els.cameraPreview.videoHeight || 0;
+    const settings = state.track.getSettings();
+    const video = getPreviewVideoElement();
+    const width = settings.width || video?.videoWidth || 0;
+    const height = settings.height || video?.videoHeight || 0;
     state.els.resolutionBadge.textContent = `${width} x ${height}`;
   }
 
@@ -1895,148 +1774,79 @@
     if (supportIssue) throw new Error(supportIssue);
 
     cleanupScanTimer();
-    stopTracks();
-    const preview = state.els.cameraPreview;
-    preview.setAttribute("autoplay", "");
-    preview.setAttribute("muted", "");
-    preview.setAttribute("playsinline", "");
-    preview.setAttribute("webkit-playsinline", "true");
-    preview.muted = true;
-    preview.autoplay = true;
-    preview.playsInline = true;
+    await stopTracks();
 
-    const stream = await getUserMediaWithFallback(deviceId);
-    const track = stream.getVideoTracks()[0];
-    state.stream = stream;
-    state.track = track;
-    state.activeDeviceId = track?.getSettings?.().deviceId || deviceId || state.activeDeviceId;
+    const activeVideoConfig = getActiveVideoConfig();
+    const cameraConfig = deviceId
+      ? { deviceId: { exact: deviceId } }
+      : { facingMode: activeVideoConfig.video.facingMode.ideal };
+    const scannerConfig = {
+      fps: state.isMobileUi ? 8 : 10,
+      aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
+      disableFlip: false,
+      videoConstraints: {
+        width: { ideal: activeVideoConfig.video.width.ideal, max: activeVideoConfig.video.width.max },
+        height: { ideal: activeVideoConfig.video.height.ideal, max: activeVideoConfig.video.height.max },
+        frameRate: { ideal: activeVideoConfig.video.frameRate.ideal, max: activeVideoConfig.video.frameRate.max }
+      }
+    };
+    const scanner = new window.Html5Qrcode(
+      "cameraPreview",
+      {
+        formatsToSupport: getHtml5QrcodeFormats(),
+        useBarCodeDetectorIfSupported: false,
+        verbose: false
+      }
+    );
+
+    state.scanner = scanner;
+    await scanner.start(
+      cameraConfig,
+      scannerConfig,
+      async function (decodedText) {
+        const detectedText = String(decodedText || "").trim();
+        if (!state.isScanning || !detectedText) {
+          return;
+        }
+
+        state.els.barcodeInput.value = detectedText;
+        playCaptureSound();
+        stopScanning(true);
+
+        try {
+          await fetchProductInfo(detectedText);
+        } catch (error) {
+          setStatus(error.message || "Barcode was captured, but info request failed");
+        }
+      },
+      function () {
+        // Ignore per-frame decode misses.
+      }
+    );
+
+    state.track = scanner.getRunningTrack ? scanner.getRunningTrack() : null;
+    state.activeDeviceId = state.track?.getSettings?.().deviceId || deviceId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
-    preview.srcObject = stream;
-
-    await waitForVideoReadiness(preview);
-    await preview.play();
-    await applyTrackEnhancements(track);
+    await applyTrackEnhancements(state.track);
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
 
+    if (scanner.pause) {
+      try {
+        scanner.pause(false);
+      } catch {
+        // Some browsers may not allow immediate pause after start.
+      }
+    }
+
     state.isCameraRunning = true;
+    state.isScanning = false;
     setPreviewActive(true);
     updateResolutionBadge();
     updateScanButton();
     updateModePill();
     startPreviewWatchdog();
     setStatus("Camera ready");
-  }
-
-  function getSquareCropSize(video) {
-    const preferredSquareSize = state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize;
-    const width = video.videoWidth || preferredSquareSize;
-    const height = video.videoHeight || preferredSquareSize;
-    return Math.max(1, Math.min(width, height));
-  }
-
-  function drawSquareFrame() {
-    const video = state.els.cameraPreview;
-    const canvas = state.els.captureCanvas;
-    const context = canvas.getContext("2d", { alpha: false });
-    const squareSize = getSquareCropSize(video);
-    const sx = Math.max(0, Math.floor((video.videoWidth - squareSize) / 2));
-    const sy = Math.max(0, Math.floor((video.videoHeight - squareSize) / 2));
-
-    const outputSize = state.isMobileUi ? 512 : 720;
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-    context.drawImage(video, sx, sy, squareSize, squareSize, 0, 0, canvas.width, canvas.height);
-    return canvas;
-  }
-
-  async function readBarcodeFromCanvas(canvas) {
-    const detector = await createDetector();
-    if (detector) {
-      try {
-        const detections = await detector.detect(canvas);
-        if (Array.isArray(detections) && detections.length > 0) {
-          return detections;
-        }
-      } catch {
-        // Fall back to ZXing below when available.
-      }
-    }
-
-    const zxingReader = createZxingReader();
-    if (!zxingReader) {
-      return [];
-    }
-
-    try {
-      const result = zxingReader.decodeFromCanvas(canvas);
-      const text = getDecodedText(result);
-      return text ? [{ rawValue: text }] : [];
-    } catch {
-      return [];
-    }
-  }
-
-  async function captureAttempt() {
-    if (!state.isCameraRunning || !state.track) return false;
-
-    const canvas = drawSquareFrame();
-    const detections = await readBarcodeFromCanvas(canvas);
-    const detectedText = detections[0]?.rawValue || "";
-    if (!detectedText) {
-      setStatus("Scanning... point the barcode inside the square");
-      return false;
-    }
-
-    state.els.barcodeInput.value = detectedText;
-    playCaptureSound();
-    stopScanning(true);
-
-    try {
-      await fetchProductInfo(detectedText);
-      return true;
-    } catch (error) {
-      setStatus(error.message || "Barcode was captured, but info request failed");
-      return true;
-    }
-  }
-
-  async function runScanLoop() {
-    if (!state.isScanning || state.isScanLoopScheduled) {
-      return;
-    }
-
-    state.isScanLoopScheduled = true;
-    state.scanTimer = window.setTimeout(async function () {
-      state.isScanLoopScheduled = false;
-      if (!state.isScanning || state.isScanInFlight) {
-        if (state.isScanning) {
-          runScanLoop().catch(() => {
-            // Ignore transient reschedule issues.
-          });
-        }
-        return;
-      }
-
-      state.isScanInFlight = true;
-      try {
-        const detected = await captureAttempt();
-        if (!detected && state.isScanning) {
-          runScanLoop().catch(() => {
-            // Ignore transient reschedule issues.
-          });
-        }
-      } catch {
-        setStatus("Scanning had a temporary read error");
-        if (state.isScanning) {
-          runScanLoop().catch(() => {
-            // Ignore transient reschedule issues.
-          });
-        }
-      } finally {
-        state.isScanInFlight = false;
-      }
-    }, CONFIG.scanIntervalMs);
   }
 
   async function startScanning() {
@@ -2046,21 +1856,29 @@
 
     if (state.isScanning) return;
 
+    if (state.scanner?.resume) {
+      try {
+        state.scanner.resume();
+      } catch {
+        // Ignore resume issues and rely on current preview state.
+      }
+    }
+
     state.isScanning = true;
     updateScanButton();
     updateModePill();
-    setStatus("Scanning started");
-
-    if (await captureAttempt()) {
-      return;
-    }
-
-    cleanupScanTimer();
-    await runScanLoop();
+    setStatus("Scanning... point the barcode inside the square");
   }
 
   function stopScanning(keepStatusMessage) {
     cleanupScanTimer();
+    if (state.scanner?.pause) {
+      try {
+        state.scanner.pause(false);
+      } catch {
+        // Ignore pause issues and keep preview active.
+      }
+    }
     state.isScanning = false;
     updateScanButton();
     updateModePill();
@@ -2337,7 +2155,7 @@
 
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) {
-        state.lastPreviewTime = Number(state.els.cameraPreview.currentTime || 0);
+        state.lastPreviewTime = Number(getPreviewVideoElement()?.currentTime || 0);
         state.stalledPreviewChecks = 0;
       }
     });
