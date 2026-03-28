@@ -61,8 +61,8 @@
     track: null,
     devices: [],
     activeDeviceId: "",
-    detector: null,
     scanner: null,
+    scannerEngine: "",
     isCameraRunning: false,
     isScanning: false,
     torchOn: false,
@@ -159,27 +159,57 @@
     return state.isMobileUi ? CONFIG.mobileVideoConstraints : CONFIG.videoConstraints;
   }
 
-  function getHtml5QrcodeFormats() {
-    const formats = window.Html5QrcodeSupportedFormats;
-    if (!formats) {
-      return undefined;
-    }
-
-    return [
-      formats.QR_CODE,
-      formats.EAN_13,
-      formats.EAN_8,
-      formats.UPC_A,
-      formats.UPC_E,
-      formats.CODE_128,
-      formats.CODE_39,
-      formats.ITF,
-      formats.CODABAR
-    ].filter(Boolean);
+  function isIOSDevice() {
+    const userAgent = navigator.userAgent || "";
+    return /iPad|iPhone|iPod/i.test(userAgent) || (/Mac/i.test(userAgent) && "ontouchend" in document);
   }
 
   function getPreviewVideoElement() {
     return state.els?.cameraPreview?.querySelector("video") || null;
+  }
+
+  function getActiveStreamTrackFromPreview() {
+    const video = getPreviewVideoElement();
+    const stream = video?.srcObject;
+    if (!stream?.getVideoTracks) {
+      return null;
+    }
+    return stream.getVideoTracks()[0] || null;
+  }
+
+  function getPreferredReaders() {
+    return [
+      "ean_reader",
+      "ean_8_reader",
+      "upc_reader",
+      "upc_e_reader",
+      "code_128_reader",
+      "code_39_reader",
+      "codabar_reader",
+      "i2of5_reader"
+    ];
+  }
+
+  function getZxingHints() {
+    const ZXing = window.ZXing || window.ZXingBrowser?.ZXing;
+    if (!ZXing?.Map || !ZXing?.DecodeHintType || !ZXing?.BarcodeFormat) {
+      return undefined;
+    }
+
+    const hints = new ZXing.Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.QR_CODE,
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.ITF,
+      ZXing.BarcodeFormat.CODABAR
+    ]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    return hints;
   }
 
   function cacheResultFieldElements() {
@@ -1507,8 +1537,11 @@
     closeHistoryEditDialog();
   }
 
-  function supportsHtml5Qrcode() {
-    return Boolean(window.Html5Qrcode);
+  function supportsConfiguredScannerEngine() {
+    if (isIOSDevice()) {
+      return Boolean(window.Quagga);
+    }
+    return Boolean(window.ZXingBrowser?.BrowserMultiFormatReader);
   }
 
   function getCameraSupportIssue() {
@@ -1518,8 +1551,10 @@
     if (!navigator.mediaDevices?.getUserMedia) {
       return "This browser does not support camera access.";
     }
-    if (!supportsHtml5Qrcode()) {
-      return "The HTML5 barcode scanner library did not load.";
+    if (!supportsConfiguredScannerEngine()) {
+      return isIOSDevice()
+        ? "The iPhone barcode scanner library did not load."
+        : "The Android barcode scanner library did not load.";
     }
     return "";
   }
@@ -1633,18 +1668,34 @@
 
     const scanner = state.scanner;
     state.scanner = null;
+    const engine = state.scannerEngine;
+    state.scannerEngine = "";
 
-    if (scanner?.stop) {
-      try {
-        await scanner.stop();
-      } catch {
-        // Ignore teardown issues from partially started sessions.
+    if (engine === "zxing") {
+      if (scanner?.controls?.stop) {
+        try {
+          scanner.controls.stop();
+        } catch {
+          // Ignore teardown issues from partially started sessions.
+        }
       }
-    }
-
-    if (scanner?.clear) {
+      if (scanner?.reader?.reset) {
+        try {
+          scanner.reader.reset();
+        } catch {
+          // Ignore cleanup issues from browsers with partial support.
+        }
+      }
+    } else if (engine === "quagga" && window.Quagga) {
+      if (scanner?.onDetected && window.Quagga.offDetected) {
+        try {
+          window.Quagga.offDetected(scanner.onDetected);
+        } catch {
+          // Ignore listener cleanup issues.
+        }
+      }
       try {
-        await scanner.clear();
+        window.Quagga.stop();
       } catch {
         // Ignore cleanup issues from browsers with partial support.
       }
@@ -1656,12 +1707,13 @@
   }
 
   function updateResolutionBadge() {
-    if (!state.track?.getSettings) {
+    const liveTrack = state.track || getActiveStreamTrackFromPreview();
+    if (!liveTrack?.getSettings) {
       state.els.resolutionBadge.textContent = "0 x 0";
       return;
     }
 
-    const settings = state.track.getSettings();
+    const settings = liveTrack.getSettings();
     const video = getPreviewVideoElement();
     const width = settings.width || video?.videoWidth || 0;
     const height = settings.height || video?.videoHeight || 0;
@@ -1686,12 +1738,12 @@
 
   async function refreshDevices(preferredDeviceId) {
     let devices = [];
-    if (window.Html5Qrcode?.getCameras) {
+    if (!isIOSDevice() && window.ZXingBrowser?.BrowserCodeReader?.listVideoInputDevices) {
       try {
-        const cameraDevices = await window.Html5Qrcode.getCameras();
+        const cameraDevices = await window.ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
         devices = cameraDevices.map((device) => ({
           kind: "videoinput",
-          deviceId: device.id,
+          deviceId: device.deviceId || device.id,
           label: device.label || ""
         }));
       } catch {
@@ -1725,6 +1777,111 @@
     if (currentId) {
       saveCameraId(currentId);
     }
+  }
+
+  async function handleDetectedCode(detectedText) {
+    const code = String(detectedText || "").trim();
+    if (!state.isScanning || !code) {
+      return;
+    }
+
+    state.els.barcodeInput.value = code;
+    playCaptureSound();
+    stopScanning(true);
+
+    try {
+      await fetchProductInfo(code);
+    } catch (error) {
+      setStatus(error.message || "Barcode was captured, but info request failed");
+    }
+  }
+
+  async function startCameraWithZxing(preferredCameraId, activeVideoConfig) {
+    const reader = new window.ZXingBrowser.BrowserMultiFormatReader(getZxingHints(), {
+      delayBetweenScanAttempts: state.isMobileUi ? 90 : 70,
+      delayBetweenScanSuccess: 800
+    });
+
+    const controls = await reader.decodeFromVideoDevice(
+      preferredCameraId || undefined,
+      "cameraPreview",
+      function (result) {
+        if (result?.getText) {
+          handleDetectedCode(result.getText()).catch(() => {
+            // Ignore async decode handler noise.
+          });
+        }
+      }
+    );
+
+    state.scanner = { reader: reader, controls: controls };
+    state.scannerEngine = "zxing";
+    state.track = getActiveStreamTrackFromPreview();
+    state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
+    saveCameraId(state.activeDeviceId);
+    await applyTrackEnhancements(state.track);
+    await refreshDevices(state.activeDeviceId);
+    await syncTorchSupport();
+  }
+
+  async function startCameraWithQuagga(preferredCameraId, activeVideoConfig) {
+    await new Promise(function (resolve, reject) {
+      window.Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: state.els.cameraPreview,
+          constraints: preferredCameraId
+            ? {
+                deviceId: preferredCameraId,
+                width: activeVideoConfig.video.width.ideal,
+                height: activeVideoConfig.video.height.ideal,
+                facingMode: "environment"
+              }
+            : {
+                facingMode: "environment",
+                width: activeVideoConfig.video.width.ideal,
+                height: activeVideoConfig.video.height.ideal
+              }
+        },
+        locator: {
+          patchSize: state.isMobileUi ? "medium" : "large",
+          halfSample: true
+        },
+        numOfWorkers: 0,
+        frequency: state.isMobileUi ? 10 : 12,
+        decoder: {
+          readers: getPreferredReaders(),
+          multiple: false
+        },
+        locate: true
+      }, function (error) {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    const onDetected = function (result) {
+      const code = result?.codeResult?.code || "";
+      handleDetectedCode(code).catch(() => {
+        // Ignore async decode handler noise.
+      });
+    };
+
+    window.Quagga.onDetected(onDetected);
+    window.Quagga.start();
+    state.scanner = { onDetected: onDetected };
+    state.scannerEngine = "quagga";
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+    state.track = getActiveStreamTrackFromPreview();
+    state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
+    saveCameraId(state.activeDeviceId);
+    await applyTrackEnhancements(state.track);
+    await refreshDevices(state.activeDeviceId);
+    await syncTorchSupport();
   }
 
   async function applyTrackEnhancements(track) {
@@ -1803,75 +1960,11 @@
     const activeVideoConfig = getActiveVideoConfig();
     await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
     const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
-    const fallbackCameraIds = state.devices
-      .map((device) => device.deviceId)
-      .filter(Boolean)
-      .filter((id, index, list) => list.indexOf(id) === index && id !== preferredCameraId);
-    const preferredCameraConfigs = [
-      ...(preferredCameraId ? [{ deviceId: { exact: preferredCameraId } }] : []),
-      ...fallbackCameraIds.map((id) => ({ deviceId: { exact: id } })),
-      { facingMode: { exact: "environment" } },
-      { facingMode: { ideal: activeVideoConfig.video.facingMode.ideal } },
-      { facingMode: "environment" }
-    ];
-    const scannerConfig = {
-      fps: state.isMobileUi ? 8 : 10,
-      aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
-      disableFlip: false
-    };
-    const scanner = new window.Html5Qrcode(
-      "cameraPreview",
-      {
-        formatsToSupport: getHtml5QrcodeFormats(),
-        useBarCodeDetectorIfSupported: false,
-        verbose: false
-      }
-    );
-
-    state.scanner = scanner;
-    let lastStartError = null;
-    for (let index = 0; index < preferredCameraConfigs.length; index += 1) {
-      try {
-        await scanner.start(
-          preferredCameraConfigs[index],
-          scannerConfig,
-          async function (decodedText) {
-            const detectedText = String(decodedText || "").trim();
-            if (!state.isScanning || !detectedText) {
-              return;
-            }
-
-            state.els.barcodeInput.value = detectedText;
-            playCaptureSound();
-            stopScanning(true);
-
-            try {
-              await fetchProductInfo(detectedText);
-            } catch (error) {
-              setStatus(error.message || "Barcode was captured, but info request failed");
-            }
-          },
-          function () {
-            // Ignore per-frame decode misses.
-          }
-        );
-        lastStartError = null;
-        break;
-      } catch (error) {
-        lastStartError = error;
-      }
+    if (isIOSDevice()) {
+      await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
+    } else {
+      await startCameraWithZxing(preferredCameraId, activeVideoConfig);
     }
-
-    if (lastStartError) {
-      throw lastStartError;
-    }
-
-    state.track = scanner.getRunningTrack ? scanner.getRunningTrack() : null;
-    state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
-    saveCameraId(state.activeDeviceId);
-    await applyTrackEnhancements(state.track);
-    await refreshDevices(state.activeDeviceId);
-    await syncTorchSupport();
 
     state.isCameraRunning = true;
     state.isScanning = false;
