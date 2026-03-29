@@ -1558,6 +1558,35 @@
       showToast("Unsupported symbols removed from name");
     }
 
+    const normalizedCurrentItem = normalizeHistoryItem(currentItem);
+    const hasProductFieldChanges =
+      payload.id !== String(normalizedCurrentItem.goods_id || "") ||
+      payload.barcode !== String(normalizedCurrentItem.barcode || "") ||
+      payload.italian_name !== String(normalizedCurrentItem.italian_name || "") ||
+      payload.p_price !== String(normalizedCurrentItem.p_price || "") ||
+      payload.s_price !== String(normalizedCurrentItem.s_price || "") ||
+      payload.s_discount !== String(normalizedCurrentItem.s_discount || "");
+    const hasQtyChange = comparisonQty !== Math.max(1, Number(normalizedCurrentItem.comparison_qty || 1) || 1);
+
+    if (!hasProductFieldChanges && hasQtyChange) {
+      updateHistoryItem(currentItem.id, { comparison_qty: comparisonQty });
+      if (state.currentProductRecord?.barcode === normalizedCurrentItem.barcode) {
+        state.currentProductRecord = {
+          ...state.currentProductRecord,
+          comparison_qty: comparisonQty
+        };
+      }
+      setStatus(`Saved ${normalizedCurrentItem.barcode}`);
+      closeHistoryEditDialog();
+      return;
+    }
+
+    if (!hasProductFieldChanges && !hasQtyChange) {
+      setStatus(`Saved ${normalizedCurrentItem.barcode}`);
+      closeHistoryEditDialog();
+      return;
+    }
+
     const cookie = await getCookieForRequests();
     state.els.historyEditSaveNote.textContent = originalItalianName !== payload.italian_name
       ? "Italian name cleaned before save."
@@ -1577,8 +1606,12 @@
     const shouldAddNewProduct = !existingProduct;
 
     if (shouldAddNewProduct) {
-      if (!payload.italian_name || !payload.p_price || !payload.s_price) {
-        throw new Error("Italian name, cost, and price are required for a new barcode.");
+      if (!payload.p_price) {
+        payload.p_price = "0";
+        state.els.historyEditPPriceInput.value = "0";
+      }
+      if (!payload.italian_name || !payload.s_price) {
+        throw new Error("Italian name and price are required for a new barcode.");
       }
     } else {
       payload.id = String(existingProduct.id || payload.id || currentItem.goods_id || "").trim();
@@ -1656,6 +1689,16 @@
     }
 
     updateHistoryItemsByBarcode(updatedItem.barcode, {
+      goods_id: updatedItem.goods_id,
+      barcode: updatedItem.barcode,
+      italian_name: updatedItem.italian_name,
+      p_price: updatedItem.p_price,
+      s_price: updatedItem.s_price,
+      s_discount: updatedItem.s_discount,
+      discount_price: updatedItem.discount_price,
+      has_discount: updatedItem.has_discount
+    });
+    updateHistoryItem(currentItem.id, {
       goods_id: updatedItem.goods_id,
       barcode: updatedItem.barcode,
       italian_name: updatedItem.italian_name,
