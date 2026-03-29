@@ -55,6 +55,17 @@
         resizeMode: "crop-and-scale"
       }
     },
+    iosVideoConstraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 960, max: 1280 },
+        height: { ideal: 960, max: 1280 },
+        aspectRatio: { ideal: 1 },
+        frameRate: { ideal: 18, max: 24 },
+        resizeMode: "crop-and-scale"
+      }
+    },
     androidVideoConstraints: {
       audio: false,
       video: {
@@ -182,6 +193,9 @@
   }
 
   function getActiveVideoConfig() {
+    if (isIOSDevice()) {
+      return CONFIG.iosVideoConstraints;
+    }
     if (isAndroidDevice()) {
       return CONFIG.androidVideoConstraints;
     }
@@ -277,6 +291,29 @@
     video.muted = true;
     video.autoplay = true;
     video.playsInline = true;
+  }
+
+  function isTextEntryElement(target) {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+
+    if (target.isContentEditable) {
+      return true;
+    }
+
+    return Boolean(target.closest("input, textarea, select"));
+  }
+
+  function pauseScanningForInteraction(options) {
+    if (!state.isScanning) {
+      return;
+    }
+
+    stopScanning(true);
+    if (!options?.silentStatus) {
+      setStatus("Scanner paused while editing");
+    }
   }
 
   function sanitizeDetectedCode(detectedText) {
@@ -489,6 +526,9 @@
   }
 
   function openSettingsDialog() {
+    if (isIOSDevice()) {
+      pauseScanningForInteraction({ silentStatus: true });
+    }
     fillSettingsForm(readSavedSettings());
     state.els.settingsSaveNote.textContent = "";
     state.els.settingsDialog.classList.add("is-open");
@@ -955,6 +995,9 @@
   }
 
   function openConfirmDialog(message, onConfirm) {
+    if (isIOSDevice()) {
+      pauseScanningForInteraction({ silentStatus: true });
+    }
     state.pendingConfirmAction = typeof onConfirm === "function" ? onConfirm : null;
     state.els.confirmDialogText.textContent = message;
     state.els.confirmDialog.classList.add("is-open");
@@ -968,6 +1011,9 @@
   }
 
   function openPrintDialog() {
+    if (isIOSDevice()) {
+      pauseScanningForInteraction({ silentStatus: true });
+    }
     state.els.printDialog.classList.add("is-open");
     state.els.printDialog.setAttribute("aria-hidden", "false");
   }
@@ -990,6 +1036,9 @@
   }
 
   function openHistoryEditDialog(item) {
+    if (isIOSDevice()) {
+      pauseScanningForInteraction({ silentStatus: true });
+    }
     fillHistoryEditForm(item);
     state.els.historyEditSaveNote.textContent = "";
     state.els.historyEditDialog.classList.add("is-open");
@@ -2178,11 +2227,11 @@
         },
         area: getQuaggaScanArea(),
         locator: {
-          patchSize: state.isMobileUi ? "small" : "medium",
+          patchSize: isIOSDevice() ? "medium" : (state.isMobileUi ? "small" : "medium"),
           halfSample: false
         },
         numOfWorkers: 0,
-        frequency: state.isMobileUi ? 14 : 12,
+        frequency: isIOSDevice() ? 8 : (state.isMobileUi ? 14 : 12),
         decoder: {
           readers: getPreferredReaders(),
           multiple: false
@@ -2516,6 +2565,13 @@
       }
     });
 
+    document.addEventListener("focusin", function (event) {
+      if (!isIOSDevice() || !isTextEntryElement(event.target)) {
+        return;
+      }
+      pauseScanningForInteraction({ silentStatus: true });
+    });
+
     state.els.cameraSelect.addEventListener("change", async function () {
       state.els.cameraSelect.disabled = true;
       try {
@@ -2657,6 +2713,7 @@
     state.els = queryElements();
     requireElements(state.els);
     state.isMobileUi = detectMobileUi();
+    document.body.classList.toggle("is-ios", isIOSDevice());
     cacheResultFieldElements();
 
     const savedSettings = readSavedSettings();
