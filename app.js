@@ -59,10 +59,10 @@
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 960, max: 1280 },
-        height: { ideal: 960, max: 1280 },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 1280, max: 1920 },
         aspectRatio: { ideal: 1 },
-        frameRate: { ideal: 18, max: 24 },
+        frameRate: { ideal: 24, max: 30 },
         resizeMode: "crop-and-scale"
       }
     },
@@ -362,6 +362,10 @@
     return "BarcodeDetector" in window;
   }
 
+  function supportsZxingReader() {
+    return Boolean(window.ZXingBrowser?.BrowserMultiFormatReader);
+  }
+
   async function createDetector() {
     if (!supportsBarcodeDetector()) return null;
     if (state.detector) return state.detector;
@@ -384,7 +388,6 @@
 
     const hints = new ZXing.Map();
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-      ZXing.BarcodeFormat.QR_CODE,
       ZXing.BarcodeFormat.EAN_13,
       ZXing.BarcodeFormat.EAN_8,
       ZXing.BarcodeFormat.UPC_A,
@@ -1761,7 +1764,7 @@
 
   function supportsConfiguredScannerEngine() {
     if (isIOSDevice()) {
-      return Boolean(window.Quagga);
+      return supportsZxingReader() || Boolean(window.Quagga);
     }
     return true;
   }
@@ -1775,7 +1778,7 @@
     }
     if (!supportsConfiguredScannerEngine()) {
       return isIOSDevice()
-        ? "The iPhone barcode scanner library did not load."
+        ? "The iPhone barcode scanner libraries did not load."
         : "The Android barcode scanner library did not load.";
     }
     return "";
@@ -2196,7 +2199,7 @@
     setActivePreviewEngine("zxing");
     const reader = new window.ZXingBrowser.BrowserMultiFormatReader(
       getZxingHints(),
-      isAndroidDevice() ? 20 : (state.isMobileUi ? 60 : 50)
+      isIOSDevice() ? 35 : (isAndroidDevice() ? 20 : (state.isMobileUi ? 60 : 50))
     );
 
     const controls = await reader.decodeFromVideoDevice(
@@ -2394,7 +2397,18 @@
     await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
     const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
     if (isIOSDevice()) {
-      await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
+      let started = false;
+      if (supportsZxingReader()) {
+        try {
+          await startCameraWithZxing(preferredCameraId, activeVideoConfig);
+          started = true;
+        } catch {
+          await stopTracks();
+        }
+      }
+      if (!started) {
+        await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
+      }
     } else {
       await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
     }
