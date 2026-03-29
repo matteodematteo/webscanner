@@ -2781,4 +2781,111 @@
     });
 
     state.els.printDialog.addEventListener("click", function (event) {
-      if (event.target === state.els.printDia
+      if (event.target === state.els.printDialog) {
+        closePrintDialog();
+      }
+    });
+
+    state.els.historyEditSaveBtn.addEventListener("click", async function () {
+      state.els.historyEditSaveBtn.disabled = true;
+      try {
+        await saveHistoryEditorChanges();
+      } catch (error) {
+        state.els.historyEditSaveNote.textContent = error.message || "Save failed.";
+        if (!error?.toastShown) {
+          showToast("Save failed");
+        }
+      } finally {
+        state.els.historyEditSaveBtn.disabled = false;
+      }
+    });
+
+    state.els.historyEditBackBtn.addEventListener("click", closeHistoryEditDialog);
+
+    state.els.historyEditSPriceInput.addEventListener("input", refreshHistoryEditDiscountPrice);
+    state.els.historyEditSDiscountInput.addEventListener("input", refreshHistoryEditDiscountPrice);
+
+    state.els.historyEditDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.historyEditDialog) {
+        closeHistoryEditDialog();
+      }
+    });
+
+    window.addEventListener("beforeunload", function () {
+      stopScanning(true);
+      stopTracks();
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) {
+        state.lastPreviewTime = Number(getPreviewVideoElement()?.currentTime || 0);
+        state.stalledPreviewChecks = 0;
+      }
+    });
+
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener("devicechange", function () {
+        refreshDevices(state.activeDeviceId).catch(() => {
+          // Ignore transient device change errors.
+        });
+      });
+    }
+  }
+
+  async function init() {
+    state.els = queryElements();
+    requireElements(state.els);
+    state.isMobileUi = detectMobileUi();
+    document.body.classList.toggle("is-ios", isIOSDevice());
+    cacheResultFieldElements();
+
+    const savedSettings = readSavedSettings();
+    loadCookieState();
+    loadHistoryState();
+    fillSettingsForm(savedSettings);
+    applyCompactMode(savedSettings.compactMode);
+    clearResultFields();
+    renderHistory();
+    bindEvents();
+
+    const supportIssue = getCameraSupportIssue();
+    if (supportIssue) {
+      setStatus(supportIssue);
+      state.els.scanBtn.disabled = true;
+      state.els.cameraSelect.disabled = true;
+      state.els.torchBtn.disabled = true;
+      return;
+    }
+
+    try {
+      await refreshDevices(readSavedCameraId());
+      if (isIOSDevice()) {
+        setPreviewActive(false);
+        updateResolutionBadge();
+        updateScanButton();
+        updateModePill();
+        setStatus("Tap Start Scanning to allow camera access.");
+      } else {
+        await startCamera(state.activeDeviceId);
+      }
+    } catch (error) {
+      setStatus(error.message || "Camera preview could not start automatically");
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () {
+      init().catch((error) => {
+        if (state.els?.statusText) {
+          setStatus(error.message || "The app could not start");
+        }
+      });
+    });
+  } else {
+    init().catch((error) => {
+      if (state.els?.statusText) {
+        setStatus(error.message || "The app could not start");
+      }
+    });
+  }
+}());
