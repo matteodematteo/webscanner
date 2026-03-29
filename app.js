@@ -1378,6 +1378,109 @@
     return cookieParts.join("; ");
   }
 
+  function tryParseResponsePayload(responseText) {
+    const text = String(responseText || "");
+    if (!text) {
+      return "";
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+
+  function extractResponseMessage(payload, fallbackText) {
+    const fallback = String(fallbackText || "").trim();
+
+    if (typeof payload === "string") {
+      const text = payload.trim();
+      return text || fallback;
+    }
+
+    if (!payload || typeof payload !== "object") {
+      return fallback;
+    }
+
+    const queue = [payload];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || typeof current !== "object") {
+        continue;
+      }
+
+      const directMessage =
+        current.message ||
+        current.msg ||
+        current.error ||
+        current.reason ||
+        current.details ||
+        current.statusText ||
+        current.data?.message ||
+        current.data?.error ||
+        "";
+
+      if (typeof directMessage === "string" && directMessage.trim()) {
+        return directMessage.trim();
+      }
+
+      const values = Object.values(current);
+      for (let index = 0; index < values.length; index += 1) {
+        const value = values[index];
+        if (typeof value === "string" && /(fail|error|invalid|denied|blocked|timeout|loading)/i.test(value)) {
+          return value.trim();
+        }
+        if (value && typeof value === "object") {
+          queue.push(value);
+        }
+      }
+    }
+
+    return fallback;
+  }
+
+  function buildLoginRequestVariants(shopKey, login, password, targetSite) {
+    const payload = {
+      shopkey: shopKey,
+      shopKey: shopKey,
+      login_name: login,
+      loginName: login,
+      login: login,
+      username: login,
+      password: password,
+      site: targetSite,
+      targetSite: targetSite,
+      host: targetSite
+    };
+
+    const form = new URLSearchParams();
+    const entries = Object.entries(payload);
+    for (let index = 0; index < entries.length; index += 1) {
+      const [key, value] = entries[index];
+      form.set(key, value);
+    }
+
+    return [
+      {
+        label: "form",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: form.toString()
+      },
+      {
+        label: "json",
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      }
+    ];
+  }
+
   async function loginAndRefreshCookie(settingsOverride) {
     const settings = settingsOverride || readSavedSettings();
     const shopKey = (settings.shopKey || "").trim();
@@ -1393,45 +1496,50 @@
       return "";
     }
 
-    const params = new URLSearchParams();
-    params.set("shopkey", shopKey);
-    params.set("login_name", login);
-    params.set("password", password);
-
     state.els.settingsSaveNote.textContent = `Sending login request for ${login} on ${targetSite}...`;
     saveCookieState(state.authCookie, `Refreshing cookie for ${login} on ${targetSite}...`);
     setStatus("Requesting new cookie...");
 
-    const response = await fetch(CONFIG.cookieProxyEndpoint, {
-      method: "POST",
-      body: params.toString(),
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Content-Type": "application/x-www-form-urlencoded"
+    const requestVariants = buildLoginRequestVariants(shopKey, login, password, targetSite);
+    let lastError = new Error("Login request failed.");
+
+    for (let index = 0; index < requestVariants.length; index += 1) {
+      const requestVariant = requestVariants[index];
+      state.els.settingsSaveNote.textContent = `Trying ${requestVariant.label} login request...`;
+
+      try {
+        const response = await fetch(CONFIG.cookieProxyEndpoint, {
+          method: "POST",
+          body: requestVariant.body,
+          cache: "no-store",
+          headers: requestVariant.headers
+        });
+
+        const responseText = await response.text();
+        const parsed = tryParseResponsePayload(responseText);
+        const responseMessage = extractResponseMessage(parsed, responseText);
+
+        if (!response.ok) {
+          lastError = new Error(responseMessage || `Proxy request failed with status ${response.status}`);
+          continue;
+        }
+
+        const cookie = extractCookieFromResponse(parsed);
+        if (!cookie) {
+          lastError = new Error(responseMessage || "Proxy answered, but no usable cookie was returned.");
+          continue;
+        }
+
+        saveCookieState(cookie, `Cookie refreshed successfully for ${login} on ${targetSite}.`);
+        state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
+        setStatus("Cookie refreshed");
+        return cookie;
+      } catch (error) {
+        lastError = new Error(error?.message || "Login request failed.");
       }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Proxy request failed with status ${response.status}`);
     }
 
-    const responseText = await response.text();
-    let parsed = responseText;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      // Keep plain text fallback.
-    }
-
-    const cookie = extractCookieFromResponse(parsed);
-    if (!cookie) {
-      throw new Error("Proxy answered, but no usable cookie was returned.");
-    }
-
-    saveCookieState(cookie, `Cookie refreshed successfully for ${login} on ${targetSite}.`);
-    state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
-    setStatus("Cookie refreshed");
-    return cookie;
+    throw lastError;
   }
 
   function clearResultFields() {
@@ -2413,7 +2521,7 @@
           readers: getPreferredReaders(),
           multiple: false
         },
-        locate: true
+        locate: !isIOSDevice()
       }, function (error) {
         if (error) {
           reject(error);
