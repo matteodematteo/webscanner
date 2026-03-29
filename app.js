@@ -15,9 +15,9 @@
     historyStorageKey: "web_barcode_scanner_history",
     cameraStorageKey: "web_barcode_scanner_camera",
     scanIntervalMs: 1200,
-    iosDetectionConfirmations: 2,
+    iosDetectionConfirmations: 1,
     iosDetectionResetMs: 900,
-    quaggaMaxAverageError: 0.16,
+    quaggaMaxAverageError: 0.22,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
     preferredSquareSize: 2160,
@@ -271,10 +271,10 @@
 
   function getQuaggaScanArea() {
     return {
-      top: "16%",
-      right: "16%",
-      bottom: "16%",
-      left: "16%"
+      top: "12%",
+      right: "12%",
+      bottom: "12%",
+      left: "12%"
     };
   }
 
@@ -2493,6 +2493,7 @@
           name: "Live",
           type: "LiveStream",
           target: state.els.cameraPreviewQuagga,
+          willReadFrequently: true,
           constraints: preferredCameraId
             ? {
                 deviceId: preferredCameraId,
@@ -2516,7 +2517,7 @@
           halfSample: false
         },
         numOfWorkers: 0,
-        frequency: isIOSDevice() ? 10 : (state.isMobileUi ? 14 : 12),
+        frequency: isIOSDevice() ? 8 : (state.isMobileUi ? 14 : 12),
         decoder: {
           readers: getPreferredReaders(),
           multiple: false
@@ -3071,8 +3072,4 @@
   } else {
     init().catch((error) => {
       if (state.els?.statusText) {
-        setStatus(error.message || "The app could not start");
-      }
-    });
-  }
-}());
+        setStatus(error.message || "The app could not 
