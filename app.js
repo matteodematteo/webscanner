@@ -15,8 +15,9 @@
     historyStorageKey: "web_barcode_scanner_history",
     cameraStorageKey: "web_barcode_scanner_camera",
     scanIntervalMs: 1200,
-    iosDetectionConfirmations: 1,
-    iosDetectionResetMs: 1400,
+    iosDetectionConfirmations: 2,
+    iosDetectionResetMs: 900,
+    quaggaMaxAverageError: 0.16,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
     preferredSquareSize: 2160,
@@ -59,10 +60,10 @@
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1280, max: 1920 },
-        height: { ideal: 1280, max: 1920 },
+        width: { ideal: 960, max: 1280 },
+        height: { ideal: 960, max: 1280 },
         aspectRatio: { ideal: 1 },
-        frameRate: { ideal: 24, max: 30 },
+        frameRate: { ideal: 18, max: 24 },
         resizeMode: "crop-and-scale"
       }
     },
@@ -264,17 +265,16 @@
       "ean_reader",
       "ean_8_reader",
       "upc_reader",
-      "upc_e_reader",
-      "code_128_reader"
+      "upc_e_reader"
     ];
   }
 
   function getQuaggaScanArea() {
     return {
-      top: "14%",
-      right: "14%",
-      bottom: "14%",
-      left: "14%"
+      top: "16%",
+      right: "16%",
+      bottom: "16%",
+      left: "16%"
     };
   }
 
@@ -315,6 +315,78 @@
 
   function sanitizeDetectedCode(detectedText) {
     return String(detectedText || "").replace(/\s+/g, "").trim();
+  }
+
+  function isNumericBarcode(code) {
+    return /^\d+$/.test(String(code || ""));
+  }
+
+  function hasValidGtinChecksum(code) {
+    const normalizedCode = String(code || "").trim();
+    if (!isNumericBarcode(normalizedCode) || ![8, 12, 13, 14].includes(normalizedCode.length)) {
+      return false;
+    }
+
+    const digits = normalizedCode.split("").map(function (digit) {
+      return Number(digit);
+    });
+    const checkDigit = digits.pop();
+    let factor = 3;
+    let sum = 0;
+
+    for (let index = digits.length - 1; index >= 0; index -= 1) {
+      sum += digits[index] * factor;
+      factor = factor === 3 ? 1 : 3;
+    }
+
+    return ((10 - (sum % 10)) % 10) === checkDigit;
+  }
+
+  function isLikelyRetailBarcode(code) {
+    return hasValidGtinChecksum(code);
+  }
+
+  function getQuaggaAverageError(result) {
+    const decodedCodes = result?.codeResult?.decodedCodes;
+    if (!Array.isArray(decodedCodes) || decodedCodes.length === 0) {
+      return null;
+    }
+
+    const errorValues = decodedCodes
+      .map(function (entry) {
+        return Number(entry?.error);
+      })
+      .filter(function (value) {
+        return Number.isFinite(value);
+      });
+
+    if (errorValues.length === 0) {
+      return null;
+    }
+
+    const totalError = errorValues.reduce(function (sum, value) {
+      return sum + value;
+    }, 0);
+
+    return totalError / errorValues.length;
+  }
+
+  function getReliableQuaggaDetection(result) {
+    const code = sanitizeDetectedCode(result?.codeResult?.code || "");
+    if (!isLikelyRetailBarcode(code)) {
+      return null;
+    }
+
+    const averageError = getQuaggaAverageError(result);
+    if (typeof averageError === "number" && averageError > CONFIG.quaggaMaxAverageError) {
+      return null;
+    }
+
+    return {
+      code: code,
+      format: String(result?.codeResult?.format || ""),
+      averageError: averageError
+    };
   }
 
   function resetPendingDetection() {
@@ -2336,7 +2408,7 @@
           halfSample: false
         },
         numOfWorkers: 0,
-        frequency: isIOSDevice() ? 12 : (state.isMobileUi ? 14 : 12),
+        frequency: isIOSDevice() ? 10 : (state.isMobileUi ? 14 : 12),
         decoder: {
           readers: getPreferredReaders(),
           multiple: false
@@ -2352,8 +2424,15 @@
     });
 
     const onDetected = function (result) {
-      const code = result?.codeResult?.code || "";
-      handleDetectedCode(code, { source: "quagga" }).catch(() => {
+      const detection = getReliableQuaggaDetection(result);
+      if (!detection) {
+        return;
+      }
+
+      handleDetectedCode(detection.code, {
+        source: "quagga",
+        format: detection.format
+      }).catch(() => {
         // Ignore async decode handler noise.
       });
     };
