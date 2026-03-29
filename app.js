@@ -1447,6 +1447,24 @@
       showToast("Unsupported symbols removed from name");
     }
 
+    const onlyComparisonQtyChanged =
+      payload.id === String(currentItem.goods_id || "").trim() &&
+      payload.barcode === String(currentItem.barcode || "").trim() &&
+      payload.italian_name === String(currentItem.italian_name || "").trim() &&
+      payload.p_price === String(currentItem.p_price || "").trim() &&
+      payload.s_price === String(currentItem.s_price || "").trim() &&
+      payload.s_discount === String(currentItem.s_discount || "").trim() &&
+      comparisonQty !== Number(currentItem.comparison_qty || 1);
+
+    if (onlyComparisonQtyChanged) {
+      updateHistoryItem(currentItem.id, {
+        comparison_qty: comparisonQty
+      });
+      setStatus(`Saved quantity for ${currentItem.barcode}`);
+      closeHistoryEditDialog();
+      return;
+    }
+
     const cookie = await getCookieForRequests();
     state.els.historyEditSaveNote.textContent = originalItalianName !== payload.italian_name
       ? "Italian name cleaned before save."
@@ -1545,6 +1563,16 @@
     }
 
     updateHistoryItemsByBarcode(updatedItem.barcode, {
+      goods_id: updatedItem.goods_id,
+      barcode: updatedItem.barcode,
+      italian_name: updatedItem.italian_name,
+      p_price: updatedItem.p_price,
+      s_price: updatedItem.s_price,
+      s_discount: updatedItem.s_discount,
+      discount_price: updatedItem.discount_price,
+      has_discount: updatedItem.has_discount
+    });
+    updateHistoryItem(currentItem.id, {
       goods_id: updatedItem.goods_id,
       barcode: updatedItem.barcode,
       italian_name: updatedItem.italian_name,
