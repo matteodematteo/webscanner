@@ -109,7 +109,8 @@
     stalledPreviewChecks: 0,
     isRecoveringPreview: false,
     lookupSequence: 0,
-    isCompactMode: false
+    isCompactMode: false,
+    lockedScrollY: 0
   };
 
   function queryElements() {
@@ -392,6 +393,28 @@
   function closeSettingsDialog() {
     state.els.settingsDialog.classList.remove("is-open");
     state.els.settingsDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function lockPageScroll() {
+    if (document.body.classList.contains("is-dialog-open")) {
+      return;
+    }
+
+    state.lockedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.classList.add("is-dialog-open");
+    document.body.style.top = `-${state.lockedScrollY}px`;
+  }
+
+  function unlockPageScroll() {
+    if (!document.body.classList.contains("is-dialog-open")) {
+      return;
+    }
+
+    document.body.classList.remove("is-dialog-open");
+    document.body.style.top = "";
+    const restoreY = state.lockedScrollY || 0;
+    state.lockedScrollY = 0;
+    window.scrollTo(0, restoreY);
   }
 
   function renderCookieState() {
@@ -886,15 +909,63 @@
   function openHistoryEditDialog(item) {
     fillHistoryEditForm(item);
     state.els.historyEditSaveNote.textContent = "";
+    lockPageScroll();
     state.els.historyEditDialog.classList.add("is-open");
     state.els.historyEditDialog.setAttribute("aria-hidden", "false");
   }
 
   function closeHistoryEditDialog() {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && state.els.historyEditDialog.contains(activeElement)) {
+      activeElement.blur();
+    }
     state.editingHistoryId = "";
     state.els.historyEditSaveNote.textContent = "";
     state.els.historyEditDialog.classList.remove("is-open");
     state.els.historyEditDialog.setAttribute("aria-hidden", "true");
+    window.setTimeout(function () {
+      unlockPageScroll();
+      state.els.historyEditDialog.querySelector(".dialog-card")?.scrollTo({ top: 0, behavior: "auto" });
+    }, 60);
+  }
+
+  function keepHistoryFieldVisible(target) {
+    if (!(target instanceof HTMLElement) || !state.els.historyEditDialog.classList.contains("is-open")) {
+      return;
+    }
+
+    const dialogCard = state.els.historyEditDialog.querySelector(".dialog-card");
+    if (!(dialogCard instanceof HTMLElement)) {
+      return;
+    }
+
+    window.setTimeout(function () {
+      try {
+        target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+      } catch {
+        target.scrollIntoView();
+      }
+    }, 140);
+  }
+
+  function selectEntireInputValue(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) {
+      return;
+    }
+
+    window.setTimeout(function () {
+      try {
+        target.focus({ preventScroll: true });
+      } catch {
+        target.focus();
+      }
+      try {
+        target.setSelectionRange(0, target.value.length);
+      } catch {
+        target.select();
+      }
+    }, 0);
   }
 
   function formatTimestamp() {
@@ -1432,11 +1503,12 @@
     }
 
     const currentItem = state.history[index];
+    const rawPPrice = state.els.historyEditPPriceInput.value.trim();
     const payload = {
       id: state.els.historyEditIdInput.value.trim(),
       barcode: state.els.historyEditBarcodeInput.value.trim(),
       italian_name: sanitizeItalianName(state.els.historyEditItalianNameInput.value),
-      p_price: state.els.historyEditPPriceInput.value.trim(),
+      p_price: rawPPrice || "0",
       s_price: state.els.historyEditSPriceInput.value.trim(),
       s_discount: state.els.historyEditSDiscountInput.value.trim()
     };
@@ -1447,11 +1519,16 @@
       showToast("Unsupported symbols removed from name");
     }
 
+    const currentPPrice = String(currentItem.p_price || "").trim();
+    const hasSameCostValue = rawPPrice === ""
+      ? currentPPrice === "" || currentPPrice === "0"
+      : payload.p_price === currentPPrice;
+
     const onlyComparisonQtyChanged =
       payload.id === String(currentItem.goods_id || "").trim() &&
       payload.barcode === String(currentItem.barcode || "").trim() &&
       payload.italian_name === String(currentItem.italian_name || "").trim() &&
-      payload.p_price === String(currentItem.p_price || "").trim() &&
+      hasSameCostValue &&
       payload.s_price === String(currentItem.s_price || "").trim() &&
       payload.s_discount === String(currentItem.s_discount || "").trim() &&
       comparisonQty !== Number(currentItem.comparison_qty || 1);
@@ -1484,8 +1561,8 @@
     const shouldAddNewProduct = !existingProduct;
 
     if (shouldAddNewProduct) {
-      if (!payload.italian_name || !payload.p_price || !payload.s_price) {
-        throw new Error("Italian name, cost, and price are required for a new barcode.");
+      if (!payload.italian_name || !payload.s_price) {
+        throw new Error("Italian name and price are required for a new barcode.");
       }
     } else {
       payload.id = String(existingProduct.id || payload.id || currentItem.goods_id || "").trim();
@@ -2439,6 +2516,24 @@
 
     state.els.historyEditSPriceInput.addEventListener("input", refreshHistoryEditDiscountPrice);
     state.els.historyEditSDiscountInput.addEventListener("input", refreshHistoryEditDiscountPrice);
+    state.els.historyEditQtyInput.addEventListener("focus", selectEntireInputValue);
+    state.els.historyEditQtyInput.addEventListener("click", selectEntireInputValue);
+    state.els.historyEditQtyInput.addEventListener("pointerup", function (event) {
+      event.preventDefault();
+      selectEntireInputValue(event);
+    });
+
+    [
+      state.els.historyEditItalianNameInput,
+      state.els.historyEditPPriceInput,
+      state.els.historyEditSPriceInput,
+      state.els.historyEditSDiscountInput,
+      state.els.historyEditQtyInput
+    ].forEach(function (input) {
+      input.addEventListener("focus", function (event) {
+        keepHistoryFieldVisible(event.target);
+      });
+    });
 
     state.els.historyEditDialog.addEventListener("click", function (event) {
       if (event.target === state.els.historyEditDialog) {
