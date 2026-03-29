@@ -15,7 +15,7 @@
     historyStorageKey: "web_barcode_scanner_history",
     cameraStorageKey: "web_barcode_scanner_camera",
     scanIntervalMs: 1200,
-    iosDetectionConfirmations: 2,
+    iosDetectionConfirmations: 1,
     iosDetectionResetMs: 1400,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
@@ -445,9 +445,12 @@
 
       const context = state.audioContext;
       if (context.state === "suspended") {
-        context.resume().catch(() => {
+        context.resume().then(function () {
+          playCaptureSound();
+        }).catch(() => {
           // Ignore resume errors triggered by browser policies.
         });
+        return;
       }
 
       const now = context.currentTime;
@@ -466,6 +469,27 @@
       gainNode.connect(context.destination);
       oscillator.start(now);
       oscillator.stop(now + 0.16);
+    } catch {
+      // Audio is optional.
+    }
+  }
+
+  function primeCaptureSound() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        return;
+      }
+
+      if (!state.audioContext || state.audioContext.state === "closed") {
+        state.audioContext = new AudioContextClass();
+      }
+
+      if (state.audioContext.state === "suspended") {
+        state.audioContext.resume().catch(() => {
+          // Ignore resume errors triggered by browser policies.
+        });
+      }
     } catch {
       // Audio is optional.
     }
@@ -2231,7 +2255,7 @@
           halfSample: false
         },
         numOfWorkers: 0,
-        frequency: isIOSDevice() ? 8 : (state.isMobileUi ? 14 : 12),
+        frequency: isIOSDevice() ? 10 : (state.isMobileUi ? 14 : 12),
         decoder: {
           readers: getPreferredReaders(),
           multiple: false
@@ -2449,6 +2473,7 @@
   function bindEvents() {
     state.els.scanBtn.addEventListener("click", async function () {
       state.els.scanBtn.disabled = true;
+      primeCaptureSound();
       try {
         await handleMainButton();
       } catch (error) {
