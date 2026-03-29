@@ -594,12 +594,54 @@
       touch-action: manipulation;
     }
 
+    #historyEditDialog {
+      align-items: flex-start;
+      padding-top: max(10px, env(safe-area-inset-top));
+      padding-bottom: 0;
+    }
+
     #historyEditDialog .dialog-card {
-      padding-bottom: 54px;
+      width: min(100%, 420px);
+      max-height: min(50dvh, 430px);
+      padding-bottom: 14px;
     }
 
     #historyEditDialog .input {
       touch-action: manipulation;
+    }
+
+    .history-edit-grid {
+      gap: 8px;
+    }
+
+    .history-edit-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .history-edit-row-primary {
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    }
+
+    .history-edit-field {
+      display: grid;
+      gap: 4px;
+    }
+
+    .history-edit-field > span {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .history-edit-field-hidden {
+      display: none;
+    }
+
+    .history-edit-actions {
+      margin-top: 8px;
     }
 
     .dialog-card p {
@@ -646,6 +688,10 @@
 
       #historyEditDialog .input {
         font-size: 16px;
+      }
+
+      #historyEditDialog .dialog-card {
+        max-height: min(50dvh, 420px);
       }
     }
 
@@ -913,42 +959,48 @@
 
   <div class="dialog-backdrop" id="historyEditDialog" aria-hidden="true">
     <div class="dialog-card" role="dialog" aria-modal="true" aria-label="Edit Barcode">
-      <div class="field-list">
-        <label>
+      <div class="field-list history-edit-grid">
+        <label class="history-edit-field history-edit-field-hidden">
           <span>ID</span>
           <input class="input" id="historyEditIdInput" type="text" readonly />
         </label>
-        <label>
-          <span>Barcode</span>
-          <input class="input" id="historyEditBarcodeInput" type="text" readonly />
-        </label>
-        <label>
+        <div class="history-edit-row history-edit-row-primary">
+          <label class="history-edit-field">
+            <span>Barcode</span>
+            <input class="input" id="historyEditBarcodeInput" type="text" readonly />
+          </label>
+          <label class="history-edit-field">
+            <span>Qty</span>
+            <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
+          </label>
+        </div>
+        <label class="history-edit-field">
           <span>Italian Name</span>
           <input class="input" id="historyEditItalianNameInput" type="text" />
         </label>
-        <label>
-          <span>Cost</span>
-          <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" />
-        </label>
-        <label>
-          <span>Price</span>
-          <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" />
-        </label>
-        <label>
-          <span>Discount%</span>
-          <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" />
-        </label>
-        <label>
-          <span>Disc. Price</span>
-          <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly />
-        </label>
-        <label>
-          <span>Comparison Qty</span>
-          <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
-        </label>
+        <div class="history-edit-row">
+          <label class="history-edit-field">
+            <span>Cost</span>
+            <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" />
+          </label>
+          <label class="history-edit-field">
+            <span>Price</span>
+            <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" />
+          </label>
+        </div>
+        <div class="history-edit-row">
+          <label class="history-edit-field">
+            <span>Discount%</span>
+            <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" />
+          </label>
+          <label class="history-edit-field">
+            <span>Disc. Price</span>
+            <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly />
+          </label>
+        </div>
       </div>
       <div class="save-note" id="historyEditSaveNote" aria-live="polite"></div>
-      <div class="dialog-actions">
+      <div class="dialog-actions history-edit-actions">
         <button class="btn btn-primary" id="historyEditSaveBtn" type="button">Save</button>
         <button class="btn btn-muted" id="historyEditBackBtn" type="button">Back</button>
       </div>
@@ -976,6 +1028,6 @@
       window.__resolvePonyfillReady();
     }
   </script>
-  <script src="app.js?v=47" defer></script>
+  <script src="app.js?v=48" defer></script>
 </body>
 </html>
