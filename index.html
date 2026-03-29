@@ -516,6 +516,27 @@
       transform: translateX(-50%) translateY(0);
     }
 
+    body.is-ios .card,
+    body.is-ios .dialog-card,
+    body.is-ios .badge {
+      backdrop-filter: none;
+    }
+
+    body.is-ios .card,
+    body.is-ios .dialog-card,
+    body.is-ios .fab {
+      box-shadow: 0 10px 22px rgba(18, 24, 31, 0.1);
+    }
+
+    body.is-ios .preview-grid,
+    body.is-ios .scan-line {
+      display: none;
+    }
+
+    body.is-ios .scan-window {
+      box-shadow: 0 0 0 999px rgba(6, 10, 14, 0.18);
+    }
+
     body.is-compact .top-tools,
     body.is-compact #statusText,
     body.is-compact #productInfoTitle,
@@ -825,6 +846,6 @@
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
   <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
-  <script src="app.js?v=44" defer></script>
+  <script src="app.js?v=45" defer></script>
 </body>
 </html>
