@@ -329,6 +329,18 @@
     };
   }
 
+  function getIosCameraSelectionConfig(preferredCameraId) {
+    if (preferredCameraId) {
+      return {
+        deviceId: { exact: preferredCameraId }
+      };
+    }
+
+    return {
+      facingMode: { exact: "environment" }
+    };
+  }
+
   function cacheResultFieldElements() {
     state.fieldEls = {};
     for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
@@ -2131,7 +2143,7 @@
     state.els.cameraPreviewQuagga.innerHTML = "";
 
     const scanner = new window.Html5Qrcode("cameraPreviewQuagga");
-    const cameraConfig = preferredCameraId || { facingMode: "environment" };
+    const cameraConfig = getIosCameraSelectionConfig(preferredCameraId);
     const scanConfig = getHtml5QrcodeScanConfig();
 
     scanConfig.videoConstraints = {
@@ -2143,6 +2155,11 @@
         max: activeVideoConfig.video.frameRate.max
       }
     };
+    if (preferredCameraId) {
+      scanConfig.videoConstraints.deviceId = { exact: preferredCameraId };
+    } else {
+      scanConfig.videoConstraints.facingMode = { exact: "environment" };
+    }
 
     await scanner.start(
       cameraConfig,
