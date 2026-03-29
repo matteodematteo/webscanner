@@ -15,6 +15,8 @@
     historyStorageKey: "web_barcode_scanner_history",
     cameraStorageKey: "web_barcode_scanner_camera",
     scanIntervalMs: 1200,
+    iosDetectionConfirmations: 2,
+    iosDetectionResetMs: 1400,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
     preferredSquareSize: 2160,
@@ -98,7 +100,10 @@
     stalledPreviewChecks: 0,
     isRecoveringPreview: false,
     lookupSequence: 0,
-    isCompactMode: false
+    isCompactMode: false,
+    pendingDetectedCode: "",
+    pendingDetectedCount: 0,
+    pendingDetectedAt: 0
   };
 
   function queryElements() {
@@ -251,6 +256,69 @@
       "codabar_reader",
       "i2of5_reader"
     ];
+  }
+
+  function getQuaggaScanArea() {
+    return {
+      top: "12%",
+      right: "12%",
+      bottom: "12%",
+      left: "12%"
+    };
+  }
+
+  function configurePreviewVideoElement(video) {
+    if (!(video instanceof HTMLVideoElement)) {
+      return;
+    }
+
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "true");
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+  }
+
+  function sanitizeDetectedCode(detectedText) {
+    return String(detectedText || "").replace(/\s+/g, "").trim();
+  }
+
+  function resetPendingDetection() {
+    state.pendingDetectedCode = "";
+    state.pendingDetectedCount = 0;
+    state.pendingDetectedAt = 0;
+  }
+
+  function needsIOSDetectionConfirmation(source) {
+    return source === "quagga" && isIOSDevice();
+  }
+
+  function shouldAcceptDetectedCode(code, source) {
+    if (!needsIOSDetectionConfirmation(source)) {
+      return true;
+    }
+
+    const now = Date.now();
+    const isFreshRepeat =
+      state.pendingDetectedCode === code &&
+      now - state.pendingDetectedAt <= CONFIG.iosDetectionResetMs;
+
+    if (isFreshRepeat) {
+      state.pendingDetectedCount += 1;
+    } else {
+      state.pendingDetectedCode = code;
+      state.pendingDetectedCount = 1;
+    }
+
+    state.pendingDetectedAt = now;
+
+    if (state.pendingDetectedCount >= CONFIG.iosDetectionConfirmations) {
+      resetPendingDetection();
+      return true;
+    }
+
+    setStatus("Barcode detected. Hold steady for a cleaner read...");
+    return false;
   }
 
   function supportsBarcodeDetector() {
@@ -1891,9 +1959,14 @@
     }
   }
 
-  async function handleDetectedCode(detectedText) {
-    const code = String(detectedText || "").trim();
+  async function handleDetectedCode(detectedText, options) {
+    const source = options?.source || state.scannerEngine || "unknown";
+    const code = sanitizeDetectedCode(detectedText);
     if (!state.isScanning || !code) {
+      return;
+    }
+
+    if (!shouldAcceptDetectedCode(code, source)) {
       return;
     }
 
@@ -1950,7 +2023,7 @@
 
     const canvas = drawSquareFrame();
     const detections = await readBarcodeFromCanvas(canvas);
-    const detectedText = detections[0]?.rawValue || "";
+    const detectedText = sanitizeDetectedCode(detections[0]?.rawValue || "");
 
     if (!detectedText) {
       setStatus("Scanning... point the barcode inside the square");
@@ -2039,6 +2112,7 @@
     saveCameraId(state.activeDeviceId);
 
     state.els.cameraPreview.srcObject = stream;
+    configurePreviewVideoElement(state.els.cameraPreview);
     await state.els.cameraPreview.play();
     await applyTrackEnhancements(track, activeVideoConfig);
     await refreshDevices(state.activeDeviceId);
@@ -2057,7 +2131,7 @@
       "cameraPreview",
       function (result) {
         if (result?.getText) {
-          handleDetectedCode(result.getText()).catch(() => {
+          handleDetectedCode(result.getText(), { source: "zxing" }).catch(() => {
             // Ignore async decode handler noise.
           });
         }
@@ -2067,6 +2141,7 @@
     state.scanner = { reader: reader, controls: controls };
     state.scannerEngine = "zxing";
     state.track = await waitForActiveTrack();
+    configurePreviewVideoElement(getPreviewVideoElement());
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
     await applyTrackEnhancements(state.track, activeVideoConfig);
@@ -2089,20 +2164,25 @@
                 deviceId: preferredCameraId,
                 width: activeVideoConfig.video.width.ideal,
                 height: activeVideoConfig.video.height.ideal,
+                aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
+                frameRate: activeVideoConfig.video.frameRate.ideal,
                 facingMode: "environment"
               }
             : {
                 facingMode: "environment",
                 width: activeVideoConfig.video.width.ideal,
-                height: activeVideoConfig.video.height.ideal
+                height: activeVideoConfig.video.height.ideal,
+                aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
+                frameRate: activeVideoConfig.video.frameRate.ideal
               }
         },
+        area: getQuaggaScanArea(),
         locator: {
-          patchSize: state.isMobileUi ? "medium" : "large",
-          halfSample: true
+          patchSize: state.isMobileUi ? "small" : "medium",
+          halfSample: false
         },
         numOfWorkers: 0,
-        frequency: state.isMobileUi ? 10 : 12,
+        frequency: state.isMobileUi ? 14 : 12,
         decoder: {
           readers: getPreferredReaders(),
           multiple: false
@@ -2119,7 +2199,7 @@
 
     const onDetected = function (result) {
       const code = result?.codeResult?.code || "";
-      handleDetectedCode(code).catch(() => {
+      handleDetectedCode(code, { source: "quagga" }).catch(() => {
         // Ignore async decode handler noise.
       });
     };
@@ -2129,6 +2209,7 @@
     state.scanner = { onDetected: onDetected };
     state.scannerEngine = "quagga";
     state.track = await waitForActiveTrack(2200);
+    configurePreviewVideoElement(getPreviewVideoElement());
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
     await applyTrackEnhancements(state.track, activeVideoConfig);
@@ -2173,7 +2254,7 @@
       advanced.push({ focusMode: "continuous" });
     }
 
-    if (capabilities.zoom && typeof capabilities.zoom.max === "number") {
+    if (!isIOSDevice() && capabilities.zoom && typeof capabilities.zoom.max === "number") {
       const minZoom = typeof capabilities.zoom.min === "number" ? capabilities.zoom.min : 1;
       const desiredZoom = Math.min(capabilities.zoom.max, Math.max(minZoom, 1.2));
       advanced.push({ zoom: desiredZoom });
@@ -2262,6 +2343,7 @@
 
     if (state.isScanning) return;
 
+    resetPendingDetection();
     state.isScanning = true;
     updateScanButton();
     updateModePill();
@@ -2280,6 +2362,7 @@
 
   function stopScanning(keepStatusMessage) {
     cleanupScanTimer();
+    resetPendingDetection();
     state.isScanning = false;
     updateScanButton();
     updateModePill();
