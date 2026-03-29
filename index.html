@@ -816,8 +816,14 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
-  <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
-  <script src="app.js?v=43" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.9.15/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/index.js"></script>
+  <script>
+    window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
+    if (window.barcodeDetectorPolyfill?.BarcodeDetectorPolyfill) {
+      window.BarcodeDetectionAPI.BarcodeDetector = window.barcodeDetectorPolyfill.BarcodeDetectorPolyfill;
+    }
+  </script>
+  <script src="app.js?v=45" defer></script>
 </body>
 </html>
