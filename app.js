@@ -19,6 +19,17 @@
     previewStallThreshold: 2,
     preferredSquareSize: 2160,
     mobilePreferredSquareSize: 960,
+    detectorFormats: [
+      "ean_13",
+      "ean_8",
+      "upc_a",
+      "upc_e",
+      "code_128",
+      "code_39",
+      "codabar",
+      "itf"
+    ],
+    detectionCropModes: ["wide", "square", "full"],
     resultFields: [
       "id",
       "goods_code",
@@ -172,10 +183,6 @@
     return /Android/i.test(navigator.userAgent || "");
   }
 
-  function usesNativeAndroidScanner() {
-    return !isIOSDevice();
-  }
-
   function getActiveVideoConfig() {
     if (isAndroidDevice()) {
       return CONFIG.androidVideoConstraints;
@@ -189,14 +196,13 @@
   }
 
   function setActivePreviewEngine(engine) {
-    const useQuaggaPreview = engine === "quagga";
     if (state.els?.cameraPreview) {
-      state.els.cameraPreview.hidden = useQuaggaPreview;
-      state.els.cameraPreview.style.display = useQuaggaPreview ? "none" : "block";
+      state.els.cameraPreview.hidden = false;
+      state.els.cameraPreview.style.display = "block";
     }
     if (state.els?.cameraPreviewQuagga) {
-      state.els.cameraPreviewQuagga.hidden = !useQuaggaPreview;
-      state.els.cameraPreviewQuagga.style.display = useQuaggaPreview ? "block" : "none";
+      state.els.cameraPreviewQuagga.hidden = true;
+      state.els.cameraPreviewQuagga.style.display = "none";
     }
   }
 
@@ -204,16 +210,9 @@
     if (!state.els) {
       return null;
     }
-
-    if (state.scannerEngine === "quagga") {
-      return state.els.cameraPreviewQuagga?.querySelector("video") || null;
-    }
-
-    if (state.els.cameraPreview instanceof HTMLVideoElement) {
-      return state.els.cameraPreview;
-    }
-
-    return state.els.cameraPreview?.querySelector("video") || null;
+    return state.els.cameraPreview instanceof HTMLVideoElement
+      ? state.els.cameraPreview
+      : state.els.cameraPreview?.querySelector("video") || null;
   }
 
   function getActiveStreamTrackFromPreview() {
@@ -225,72 +224,35 @@
     return stream.getVideoTracks()[0] || null;
   }
 
-  async function waitForActiveTrack(timeoutMs) {
-    const timeout = typeof timeoutMs === "number" ? timeoutMs : 1800;
-    const deadline = Date.now() + timeout;
-
-    while (Date.now() < deadline) {
-      const track = getActiveStreamTrackFromPreview();
-      if (track) {
-        return track;
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 60));
-    }
-
-    return getActiveStreamTrackFromPreview();
-  }
-
-  function getPreferredReaders() {
-    return [
-      "ean_reader",
-      "ean_8_reader",
-      "upc_reader",
-      "upc_e_reader",
-      "code_128_reader",
-      "code_39_reader",
-      "codabar_reader",
-      "i2of5_reader"
-    ];
-  }
-
-  function supportsBarcodeDetector() {
-    return "BarcodeDetector" in window;
+  function getPonyfillDetectorClass() {
+    return window.BarcodeDetectionAPI?.BarcodeDetector || null;
   }
 
   async function createDetector() {
-    if (!supportsBarcodeDetector()) return null;
     if (state.detector) return state.detector;
 
     try {
-      const formats = await window.BarcodeDetector.getSupportedFormats();
-      if (!formats || formats.length === 0) return null;
-      state.detector = new window.BarcodeDetector({ formats: formats.filter(Boolean) });
+      const DetectorClass = getPonyfillDetectorClass();
+      if (!DetectorClass) {
+        return null;
+      }
+
+      let formats = CONFIG.detectorFormats.slice();
+      if (typeof DetectorClass.getSupportedFormats === "function") {
+        const supportedFormats = await DetectorClass.getSupportedFormats();
+        if (Array.isArray(supportedFormats) && supportedFormats.length > 0) {
+          const filteredFormats = CONFIG.detectorFormats.filter((format) => supportedFormats.includes(format));
+          formats = filteredFormats.length > 0 ? filteredFormats : supportedFormats.filter(Boolean);
+        }
+      }
+
+      state.detector = formats.length
+        ? new DetectorClass({ formats: formats })
+        : new DetectorClass();
       return state.detector;
     } catch {
       return null;
     }
-  }
-
-  function getZxingHints() {
-    const ZXing = window.ZXing || window.ZXingBrowser?.ZXing;
-    if (!ZXing?.Map || !ZXing?.DecodeHintType || !ZXing?.BarcodeFormat) {
-      return undefined;
-    }
-
-    const hints = new ZXing.Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-      ZXing.BarcodeFormat.QR_CODE,
-      ZXing.BarcodeFormat.EAN_13,
-      ZXing.BarcodeFormat.EAN_8,
-      ZXing.BarcodeFormat.UPC_A,
-      ZXing.BarcodeFormat.UPC_E,
-      ZXing.BarcodeFormat.CODE_128,
-      ZXing.BarcodeFormat.CODE_39,
-      ZXing.BarcodeFormat.ITF,
-      ZXing.BarcodeFormat.CODABAR
-    ]);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    return hints;
   }
 
   function cacheResultFieldElements() {
@@ -1619,10 +1581,7 @@
   }
 
   function supportsConfiguredScannerEngine() {
-    if (isIOSDevice()) {
-      return Boolean(window.Quagga);
-    }
-    return true;
+    return Boolean(getPonyfillDetectorClass());
   }
 
   function getCameraSupportIssue() {
@@ -1750,38 +1709,7 @@
     const scanner = state.scanner;
     const currentStream = state.stream;
     state.scanner = null;
-    const engine = state.scannerEngine;
     state.scannerEngine = "";
-
-    if (engine === "zxing") {
-      if (scanner?.controls?.stop) {
-        try {
-          scanner.controls.stop();
-        } catch {
-          // Ignore teardown issues from partially started sessions.
-        }
-      }
-      if (scanner?.reader?.reset) {
-        try {
-          scanner.reader.reset();
-        } catch {
-          // Ignore cleanup issues from browsers with partial support.
-        }
-      }
-    } else if (engine === "quagga" && window.Quagga) {
-      if (scanner?.onDetected && window.Quagga.offDetected) {
-        try {
-          window.Quagga.offDetected(scanner.onDetected);
-        } catch {
-          // Ignore listener cleanup issues.
-        }
-      }
-      try {
-        window.Quagga.stop();
-      } catch {
-        // Ignore cleanup issues from browsers with partial support.
-      }
-    }
 
     state.stream = null;
     state.track = null;
@@ -1915,42 +1843,83 @@
     return Math.max(1, Math.min(width, height));
   }
 
-  function drawSquareFrame() {
+  function drawDetectionFrame(mode) {
     const video = state.els.cameraPreview;
     const canvas = state.els.captureCanvas;
     const context = canvas.getContext("2d", { alpha: false });
-    const squareSize = getSquareCropSize(video);
-    const sx = Math.max(0, Math.floor((video.videoWidth - squareSize) / 2));
-    const sy = Math.max(0, Math.floor((video.videoHeight - squareSize) / 2));
-    const outputSize = state.isMobileUi ? 512 : 720;
+    const videoWidth = video.videoWidth || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
+    const videoHeight = video.videoHeight || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
+    let sx = 0;
+    let sy = 0;
+    let sw = videoWidth;
+    let sh = videoHeight;
 
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-    context.drawImage(video, sx, sy, squareSize, squareSize, 0, 0, canvas.width, canvas.height);
+    if (mode === "wide") {
+      sw = Math.max(1, Math.floor(videoWidth * 0.94));
+      sh = Math.max(1, Math.floor(videoHeight * 0.38));
+      sx = Math.max(0, Math.floor((videoWidth - sw) / 2));
+      sy = Math.max(0, Math.floor((videoHeight - sh) / 2));
+    } else if (mode === "square") {
+      const squareSize = getSquareCropSize(video);
+      sw = squareSize;
+      sh = squareSize;
+      sx = Math.max(0, Math.floor((videoWidth - squareSize) / 2));
+      sy = Math.max(0, Math.floor((videoHeight - squareSize) / 2));
+    }
+
+    const maxOutputSize = state.isMobileUi ? 720 : 960;
+    const scale = Math.min(1, maxOutputSize / Math.max(sw, sh));
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
+    context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
 
-  async function readBarcodeFromCanvas(canvas) {
+  function normalizeDetectedText(result) {
+    return String(
+      result?.rawValue ||
+      result?.rawValueString ||
+      result?.codeResult?.code ||
+      result?.value ||
+      ""
+    ).trim();
+  }
+
+  async function detectBarcodeInFrame() {
     const detector = await createDetector();
     if (!detector) {
-      return [];
+      return "";
     }
 
-    try {
-      return await detector.detect(canvas);
-    } catch {
-      return [];
+    const sources = CONFIG.detectionCropModes.map(function (mode) {
+      return {
+        mode: mode,
+        source: mode === "full" ? state.els.cameraPreview : drawDetectionFrame(mode)
+      };
+    });
+
+    for (let index = 0; index < sources.length; index += 1) {
+      const currentSource = sources[index];
+      try {
+        const results = await detector.detect(currentSource.source);
+        const detectedText = normalizeDetectedText(results?.[0]);
+        if (detectedText) {
+          return detectedText;
+        }
+      } catch {
+        // Ignore a single failed crop and continue with the next one.
+      }
     }
+
+    return "";
   }
 
   async function captureAttempt() {
-    if (!state.isCameraRunning || !state.track) {
+    if (!state.isCameraRunning || !state.track || state.els.cameraPreview.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       return false;
     }
 
-    const canvas = drawSquareFrame();
-    const detections = await readBarcodeFromCanvas(canvas);
-    const detectedText = detections[0]?.rawValue || "";
+    const detectedText = await detectBarcodeInFrame();
 
     if (!detectedText) {
       setStatus("Scanning... point the barcode inside the square");
@@ -2008,8 +1977,8 @@
     }, CONFIG.scanIntervalMs);
   }
 
-  async function startCameraWithNativeDetector(preferredCameraId, activeVideoConfig) {
-    setActivePreviewEngine("native");
+  async function startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig) {
+    setActivePreviewEngine("ponyfill");
 
     const constraints = {
       audio: false,
@@ -2034,104 +2003,13 @@
     state.stream = stream;
     state.track = track;
     state.scanner = { stream: stream };
-    state.scannerEngine = "native";
+    state.scannerEngine = "ponyfill";
     state.activeDeviceId = track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
 
     state.els.cameraPreview.srcObject = stream;
     await state.els.cameraPreview.play();
     await applyTrackEnhancements(track, activeVideoConfig);
-    await refreshDevices(state.activeDeviceId);
-    await syncTorchSupport();
-  }
-
-  async function startCameraWithZxing(preferredCameraId, activeVideoConfig) {
-    setActivePreviewEngine("zxing");
-    const reader = new window.ZXingBrowser.BrowserMultiFormatReader(
-      getZxingHints(),
-      isAndroidDevice() ? 20 : (state.isMobileUi ? 60 : 50)
-    );
-
-    const controls = await reader.decodeFromVideoDevice(
-      preferredCameraId || undefined,
-      "cameraPreview",
-      function (result) {
-        if (result?.getText) {
-          handleDetectedCode(result.getText()).catch(() => {
-            // Ignore async decode handler noise.
-          });
-        }
-      }
-    );
-
-    state.scanner = { reader: reader, controls: controls };
-    state.scannerEngine = "zxing";
-    state.track = await waitForActiveTrack();
-    state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
-    saveCameraId(state.activeDeviceId);
-    await applyTrackEnhancements(state.track, activeVideoConfig);
-    await refreshDevices(state.activeDeviceId);
-    await syncTorchSupport();
-  }
-
-  async function startCameraWithQuagga(preferredCameraId, activeVideoConfig) {
-    setActivePreviewEngine("quagga");
-    state.els.cameraPreviewQuagga.innerHTML = "";
-
-    await new Promise(function (resolve, reject) {
-      window.Quagga.init({
-        inputStream: {
-          name: "Live",
-          type: "LiveStream",
-          target: state.els.cameraPreviewQuagga,
-          constraints: preferredCameraId
-            ? {
-                deviceId: preferredCameraId,
-                width: activeVideoConfig.video.width.ideal,
-                height: activeVideoConfig.video.height.ideal,
-                facingMode: "environment"
-              }
-            : {
-                facingMode: "environment",
-                width: activeVideoConfig.video.width.ideal,
-                height: activeVideoConfig.video.height.ideal
-              }
-        },
-        locator: {
-          patchSize: state.isMobileUi ? "medium" : "large",
-          halfSample: true
-        },
-        numOfWorkers: 0,
-        frequency: state.isMobileUi ? 10 : 12,
-        decoder: {
-          readers: getPreferredReaders(),
-          multiple: false
-        },
-        locate: true
-      }, function (error) {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve();
-      });
-    });
-
-    const onDetected = function (result) {
-      const code = result?.codeResult?.code || "";
-      handleDetectedCode(code).catch(() => {
-        // Ignore async decode handler noise.
-      });
-    };
-
-    window.Quagga.onDetected(onDetected);
-    window.Quagga.start();
-    state.scanner = { onDetected: onDetected };
-    state.scannerEngine = "quagga";
-    state.track = await waitForActiveTrack(2200);
-    state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
-    saveCameraId(state.activeDeviceId);
-    await applyTrackEnhancements(state.track, activeVideoConfig);
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
   }
@@ -2239,11 +2117,7 @@
     const activeVideoConfig = getActiveVideoConfig();
     await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
     const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
-    if (isIOSDevice()) {
-      await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
-    } else {
-      await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
-    }
+    await startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig);
 
     state.isCameraRunning = true;
     state.isScanning = false;
@@ -2265,17 +2139,12 @@
     state.isScanning = true;
     updateScanButton();
     updateModePill();
-    if (usesNativeAndroidScanner()) {
-      setStatus("Scanning started");
-      if (await captureAttempt()) {
-        return;
-      }
-      cleanupScanTimer();
-      await runScanLoop();
+    setStatus("Scanning started");
+    if (await captureAttempt()) {
       return;
     }
-
-    setStatus("Scanning... point the barcode inside the square");
+    cleanupScanTimer();
+    await runScanLoop();
   }
 
   function stopScanning(keepStatusMessage) {
