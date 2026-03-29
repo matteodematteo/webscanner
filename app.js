@@ -225,7 +225,7 @@
   }
 
   function getPonyfillDetectorClass() {
-    return window.BarcodeDetectionAPI?.BarcodeDetector || null;
+    return window.BarcodeDetectionAPI?.BarcodeDetector || window.BarcodeDetector || null;
   }
 
   async function createDetector() {
@@ -2440,6 +2440,14 @@
   }
 
   async function init() {
+    if (window.__ponyfillReadyPromise) {
+      try {
+        await window.__ponyfillReadyPromise;
+      } catch {
+        // Surface the regular scanner support error below if bootstrap failed.
+      }
+    }
+
     state.els = queryElements();
     requireElements(state.els);
     state.isMobileUi = detectMobileUi();
