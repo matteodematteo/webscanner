@@ -35,10 +35,7 @@
     * { box-sizing: border-box; }
 
     html,
-    body {
-      min-height: 100%;
-      -webkit-text-size-adjust: 100%;
-    }
+    body { min-height: 100%; }
 
     body {
       margin: 0;
@@ -302,11 +299,7 @@
       border-color: rgba(20, 28, 36, 0.12);
       background: rgba(255, 255, 255, 0.96);
       color: var(--text);
-      font-size: 16px;
-    }
-
-    .select {
-      font-size: 16px;
+      font-size: 0.84rem;
     }
 
     .textarea {
@@ -516,27 +509,6 @@
       transform: translateX(-50%) translateY(0);
     }
 
-    body.is-ios .card,
-    body.is-ios .dialog-card,
-    body.is-ios .badge {
-      backdrop-filter: none;
-    }
-
-    body.is-ios .card,
-    body.is-ios .dialog-card,
-    body.is-ios .fab {
-      box-shadow: 0 10px 22px rgba(18, 24, 31, 0.1);
-    }
-
-    body.is-ios .preview-grid,
-    body.is-ios .scan-line {
-      display: none;
-    }
-
-    body.is-ios .scan-window {
-      box-shadow: 0 0 0 999px rgba(6, 10, 14, 0.18);
-    }
-
     body.is-compact .top-tools,
     body.is-compact #statusText,
     body.is-compact #productInfoTitle,
@@ -690,13 +662,13 @@
         </div>
 
         <div class="preview-placeholder" id="previewPlaceholder">
-          On iPhone, tap "Start Scanning" first so Safari can ask for camera permission and open the live preview.
+          The app is trying to open the live camera preview automatically. If permission was blocked, tap "Start Scanning" to try again.
         </div>
       </div>
 
       <div class="controls">
         <div class="lookup-row">
-          <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Barcode value" />
+          <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Barcode value" />
           <button class="btn btn-muted" id="clearBarcodeBtn" type="button">Clear</button>
         </div>
       </div>
@@ -757,11 +729,11 @@
       <div class="field-list">
         <label>
           <span class="visually-hidden">Shop key</span>
-          <input class="input" id="shopKeyInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Shop key" />
+          <input class="input" id="shopKeyInput" type="text" autocomplete="off" placeholder="Shop key" />
         </label>
         <label>
           <span class="visually-hidden">Login</span>
-          <input class="input" id="loginInput" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Login" />
+          <input class="input" id="loginInput" type="text" autocomplete="username" placeholder="Login" />
         </label>
         <label>
           <span class="visually-hidden">Password</span>
@@ -812,7 +784,7 @@
         </label>
         <label>
           <span>Italian Name</span>
-          <input class="input" id="historyEditItalianNameInput" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <input class="input" id="historyEditItalianNameInput" type="text" />
         </label>
         <label>
           <span>Cost</span>
@@ -846,6 +818,6 @@
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
   <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
-  <script src="app.js?v=50" defer></script>
+  <script src="app.js?v=43" defer></script>
 </body>
 </html>
