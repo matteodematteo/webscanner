@@ -73,6 +73,7 @@
     devices: [],
     activeDeviceId: "",
     detector: null,
+    zxingFrameReader: null,
     scanner: null,
     scannerEngine: "",
     isCameraRunning: false,
@@ -172,8 +173,8 @@
     return /Android/i.test(navigator.userAgent || "");
   }
 
-  function usesNativeAndroidScanner() {
-    return !isIOSDevice();
+  function usesFrameCaptureScanner() {
+    return state.scannerEngine === "native";
   }
 
   function getActiveVideoConfig() {
@@ -339,6 +340,30 @@
     return {
       facingMode: { exact: "environment" }
     };
+  }
+
+  function createZxingFrameReader() {
+    if (state.zxingFrameReader) {
+      return state.zxingFrameReader;
+    }
+
+    const ZXing = window.ZXing || window.ZXingBrowser?.ZXing;
+    if (!ZXing?.MultiFormatReader || !ZXing?.BinaryBitmap || !ZXing?.HybridBinarizer || !ZXing?.RGBLuminanceSource) {
+      return null;
+    }
+
+    const reader = new ZXing.MultiFormatReader();
+    const hints = getZxingHints();
+    if (hints?.size || hints) {
+      try {
+        reader.setHints(hints);
+      } catch {
+        // Keep default hints if this runtime rejects the custom map.
+      }
+    }
+
+    state.zxingFrameReader = reader;
+    return state.zxingFrameReader;
   }
 
   function cacheResultFieldElements() {
@@ -1668,7 +1693,7 @@
 
   function supportsConfiguredScannerEngine() {
     if (isIOSDevice()) {
-      return Boolean(window.Html5Qrcode || window.ZXingBrowser);
+      return Boolean(window.ZXing || window.ZXingBrowser);
     }
     return true;
   }
@@ -1849,6 +1874,7 @@
     state.stream = null;
     state.track = null;
     state.detector = null;
+    state.zxingFrameReader = null;
     setActivePreviewEngine("");
 
     if (scanner?.stream?.getTracks) {
@@ -2006,14 +2032,51 @@
     }
   }
 
+  function readBarcodeFromCanvasWithZxing(canvas) {
+    const reader = createZxingFrameReader();
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!reader || !context) {
+      return "";
+    }
+
+    const ZXing = window.ZXing || window.ZXingBrowser?.ZXing;
+    if (!ZXing?.RGBLuminanceSource || !ZXing?.HybridBinarizer || !ZXing?.BinaryBitmap) {
+      return "";
+    }
+
+    try {
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const luminanceSource = new ZXing.RGBLuminanceSource(imageData.data, canvas.width, canvas.height);
+      const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+      const result = reader.decode(binaryBitmap);
+      return result?.getText ? String(result.getText() || "").trim() : "";
+    } catch {
+      return "";
+    } finally {
+      if (reader?.reset) {
+        try {
+          reader.reset();
+        } catch {
+          // Ignore per-frame reset issues.
+        }
+      }
+    }
+  }
+
   async function captureAttempt() {
     if (!state.isCameraRunning || !state.track) {
       return false;
     }
 
     const canvas = drawSquareFrame();
-    const detections = await readBarcodeFromCanvas(canvas);
-    const detectedText = detections[0]?.rawValue || "";
+    let detectedText = "";
+
+    if (isIOSDevice()) {
+      detectedText = readBarcodeFromCanvasWithZxing(canvas);
+    } else {
+      const detections = await readBarcodeFromCanvas(canvas);
+      detectedText = detections[0]?.rawValue || "";
+    }
 
     if (!detectedText) {
       setStatus("Scanning... point the barcode inside the square");
@@ -2351,11 +2414,7 @@
     await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
     const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
     if (isIOSDevice()) {
-      if (window.Html5Qrcode) {
-        await startCameraWithHtml5Qrcode(preferredCameraId, activeVideoConfig);
-      } else {
-        await startCameraWithZxing(preferredCameraId, activeVideoConfig);
-      }
+      await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
     } else {
       await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
     }
@@ -2380,7 +2439,7 @@
     state.isScanning = true;
     updateScanButton();
     updateModePill();
-    if (usesNativeAndroidScanner()) {
+    if (usesFrameCaptureScanner()) {
       setStatus("Scanning started");
       if (await captureAttempt()) {
         return;
