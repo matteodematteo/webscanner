@@ -363,6 +363,66 @@
     return Boolean(window.ZXingBrowser?.BrowserMultiFormatReader);
   }
 
+  function normalizeCameraError(error, fallbackMessage) {
+    const name = String(error?.name || "");
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      return new Error("Camera permission was blocked. Allow access in Safari and try again.");
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return new Error("No camera was found on this device.");
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return new Error("The camera is already in use by another app or tab.");
+    }
+    if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+      return new Error("This camera does not support the requested scan mode.");
+    }
+    return new Error(error?.message || fallbackMessage || "Could not open the camera.");
+  }
+
+  function buildPermissionConstraints(preferredCameraId, activeVideoConfig) {
+    const baseVideoConfig = activeVideoConfig?.video || getActiveVideoConfig().video;
+    const constraints = {
+      audio: false,
+      video: {
+        width: { ideal: baseVideoConfig.width.ideal },
+        height: { ideal: baseVideoConfig.height.ideal },
+        aspectRatio: { ideal: baseVideoConfig.aspectRatio.ideal },
+        frameRate: { ideal: baseVideoConfig.frameRate.ideal }
+      }
+    };
+
+    if (preferredCameraId) {
+      constraints.video.deviceId = { exact: preferredCameraId };
+    } else {
+      constraints.video.facingMode = { ideal: "environment" };
+    }
+
+    return constraints;
+  }
+
+  async function ensureCameraPermission(preferredCameraId, activeVideoConfig) {
+    let tempStream = null;
+    try {
+      tempStream = await navigator.mediaDevices.getUserMedia(
+        buildPermissionConstraints(preferredCameraId, activeVideoConfig)
+      );
+    } catch (error) {
+      throw normalizeCameraError(error, "Could not request camera access.");
+    } finally {
+      if (tempStream?.getTracks) {
+        const tracks = tempStream.getTracks();
+        for (let index = 0; index < tracks.length; index += 1) {
+          try {
+            tracks[index].stop();
+          } catch {
+            // Ignore temporary permission stream cleanup issues.
+          }
+        }
+      }
+    }
+  }
+
   async function createDetector() {
     if (!supportsBarcodeDetector()) return null;
     if (state.detector) return state.detector;
@@ -2412,10 +2472,27 @@
     await stopTracks();
 
     const activeVideoConfig = getActiveVideoConfig();
-    await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
-    const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
+    const requestedDeviceId = deviceId || state.activeDeviceId || readSavedCameraId();
     if (isIOSDevice()) {
-      await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
+      await ensureCameraPermission(requestedDeviceId, activeVideoConfig);
+    }
+
+    await refreshDevices(requestedDeviceId);
+    const preferredCameraId = requestedDeviceId || chooseBestDefaultDevice(state.devices);
+    if (isIOSDevice()) {
+      try {
+        await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
+      } catch (error) {
+        if (!preferredCameraId) {
+          throw normalizeCameraError(error, "Could not start the iPhone camera.");
+        }
+        await stopTracks();
+        try {
+          await startCameraWithQuagga("", activeVideoConfig);
+        } catch (fallbackError) {
+          throw normalizeCameraError(fallbackError, "Could not start the iPhone camera.");
+        }
+      }
     } else {
       await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
     }
@@ -2704,92 +2781,4 @@
     });
 
     state.els.printDialog.addEventListener("click", function (event) {
-      if (event.target === state.els.printDialog) {
-        closePrintDialog();
-      }
-    });
-
-    state.els.historyEditSaveBtn.addEventListener("click", async function () {
-      state.els.historyEditSaveBtn.disabled = true;
-      try {
-        await saveHistoryEditorChanges();
-      } catch (error) {
-        state.els.historyEditSaveNote.textContent = error.message || "Save failed.";
-        if (!error?.toastShown) {
-          showToast("Save failed");
-        }
-      } finally {
-        state.els.historyEditSaveBtn.disabled = false;
-      }
-    });
-
-    state.els.historyEditBackBtn.addEventListener("click", closeHistoryEditDialog);
-
-    state.els.historyEditSPriceInput.addEventListener("input", refreshHistoryEditDiscountPrice);
-    state.els.historyEditSDiscountInput.addEventListener("input", refreshHistoryEditDiscountPrice);
-
-    state.els.historyEditDialog.addEventListener("click", function (event) {
-      if (event.target === state.els.historyEditDialog) {
-        closeHistoryEditDialog();
-      }
-    });
-
-    window.addEventListener("beforeunload", function () {
-      stopScanning(true);
-      stopTracks();
-    });
-
-    document.addEventListener("visibilitychange", function () {
-      if (!document.hidden) {
-        state.lastPreviewTime = Number(getPreviewVideoElement()?.currentTime || 0);
-        state.stalledPreviewChecks = 0;
-      }
-    });
-
-    if (navigator.mediaDevices?.addEventListener) {
-      navigator.mediaDevices.addEventListener("devicechange", function () {
-        refreshDevices(state.activeDeviceId).catch(() => {
-          // Ignore transient device change errors.
-        });
-      });
-    }
-  }
-
-  async function init() {
-    state.els = queryElements();
-    requireElements(state.els);
-    state.isMobileUi = detectMobileUi();
-    document.body.classList.toggle("is-ios", isIOSDevice());
-    cacheResultFieldElements();
-
-    const savedSettings = readSavedSettings();
-    loadCookieState();
-    loadHistoryState();
-    fillSettingsForm(savedSettings);
-    applyCompactMode(savedSettings.compactMode);
-    clearResultFields();
-    renderHistory();
-    bindEvents();
-
-    const supportIssue = getCameraSupportIssue();
-    if (supportIssue) {
-      setStatus(supportIssue);
-      state.els.scanBtn.disabled = true;
-      state.els.cameraSelect.disabled = true;
-      state.els.torchBtn.disabled = true;
-      return;
-    }
-
-    try {
-      await refreshDevices(readSavedCameraId());
-      await startCamera(state.activeDeviceId);
-    } catch (error) {
-      setStatus(error.message || "Camera preview could not start automatically");
-    }
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      init().catch((error) => {
-        if (state.els?.statusText) {
-          setStatus(error.message || "The 
+      if (event.target === state.els.printDia
