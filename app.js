@@ -968,6 +968,19 @@
     }, 0);
   }
 
+  function moveFocusToInput(input) {
+    if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLTextAreaElement)) {
+      return;
+    }
+
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+    keepHistoryFieldVisible(input);
+  }
+
   function formatTimestamp() {
     const now = new Date();
     const yy = String(now.getFullYear()).slice(-2);
@@ -2533,6 +2546,18 @@
       input.addEventListener("focus", function (event) {
         keepHistoryFieldVisible(event.target);
       });
+    });
+
+    state.els.historyEditItalianNameInput.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      moveFocusToInput(state.els.historyEditPPriceInput);
+    });
+
+    state.els.historyEditPPriceInput.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      moveFocusToInput(state.els.historyEditSPriceInput);
     });
 
     state.els.historyEditDialog.addEventListener("click", function (event) {
