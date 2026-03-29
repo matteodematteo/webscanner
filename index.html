@@ -588,9 +588,7 @@
       width: min(100%, 400px);
       padding: 14px;
       max-height: min(calc(100dvh - 36px), 100%);
-      overflow: auto;
-      overscroll-behavior: contain;
-      -webkit-overflow-scrolling: touch;
+      overflow: hidden;
       touch-action: manipulation;
     }
 
@@ -602,8 +600,12 @@
 
     #historyEditDialog .dialog-card {
       width: min(100%, 420px);
+      height: min(50dvh, 430px);
       max-height: min(50dvh, 430px);
-      padding-bottom: 14px;
+      padding: 10px 12px 12px;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto auto;
+      gap: 6px;
     }
 
     #historyEditDialog .input {
@@ -611,13 +613,14 @@
     }
 
     .history-edit-grid {
-      gap: 8px;
+      gap: 6px;
+      min-height: 0;
     }
 
     .history-edit-row {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 6px;
     }
 
     .history-edit-row-primary {
@@ -626,14 +629,16 @@
 
     .history-edit-field {
       display: grid;
-      gap: 4px;
+      gap: 3px;
+      min-width: 0;
     }
 
     .history-edit-field > span {
       color: var(--muted);
-      font-size: 0.72rem;
+      font-size: clamp(0.6rem, 1.35vh, 0.7rem);
       font-weight: 700;
       letter-spacing: 0.02em;
+      line-height: 1.05;
     }
 
     .history-edit-field-hidden {
@@ -641,7 +646,7 @@
     }
 
     .history-edit-actions {
-      margin-top: 8px;
+      margin-top: 4px;
     }
 
     .dialog-card p {
@@ -651,10 +656,10 @@
     }
 
     .save-note {
-      margin-top: 12px;
-      min-height: 1.3em;
+      margin-top: 4px;
+      min-height: 1.1em;
       color: var(--success);
-      font-size: 0.92rem;
+      font-size: clamp(0.72rem, 1.5vh, 0.82rem);
     }
 
     .visually-hidden {
@@ -691,7 +696,8 @@
       }
 
       #historyEditDialog .dialog-card {
-        max-height: min(50dvh, 420px);
+        height: min(50dvh, 400px);
+        max-height: min(50dvh, 400px);
       }
     }
 
@@ -713,6 +719,30 @@
       .compact-toggle-btn { font-size: 0.92rem; }
       .history-detail-btn { min-height: 30px; width: auto; padding: 0 8px; margin-right: 32px; font-size: 0.68rem; }
       .toast { width: calc(100% - 28px); text-align: center; }
+
+      #historyEditDialog .dialog-card {
+        width: min(100%, 100%);
+        padding: 8px 10px 10px;
+        gap: 4px;
+      }
+
+      .history-edit-grid,
+      .history-edit-row {
+        gap: 4px;
+      }
+
+      .history-edit-field > span {
+        font-size: clamp(0.56rem, 1.2vh, 0.64rem);
+      }
+
+      #historyEditDialog .input {
+        min-height: 34px;
+        padding: 7px 8px;
+      }
+
+      .history-edit-actions {
+        margin-top: 2px;
+      }
     }
 
     @media (max-height: 900px) {
@@ -809,6 +839,32 @@
 
       .history-list {
         max-height: clamp(170px, 24vh, 210px);
+      }
+
+      #historyEditDialog .dialog-card {
+        height: min(50dvh, 360px);
+        max-height: min(50dvh, 360px);
+        padding: 8px 10px 10px;
+        gap: 4px;
+      }
+
+      #historyEditDialog .input {
+        min-height: 32px;
+        padding: 6px 8px;
+        font-size: clamp(0.78rem, 1.8vh, 0.92rem);
+      }
+
+      .history-edit-grid,
+      .history-edit-row {
+        gap: 4px;
+      }
+
+      .history-edit-field > span {
+        font-size: clamp(0.56rem, 1.15vh, 0.64rem);
+      }
+
+      .history-edit-actions {
+        margin-top: 2px;
       }
     }
 
@@ -970,7 +1026,7 @@
             <input class="input" id="historyEditBarcodeInput" type="text" readonly />
           </label>
           <label class="history-edit-field">
-            <span>Qty</span>
+            <span>Inventory</span>
             <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
           </label>
         </div>
@@ -1028,6 +1084,6 @@
       window.__resolvePonyfillReady();
     }
   </script>
-  <script src="app.js?v=48" defer></script>
+  <script src="app.js?v=49" defer></script>
 </body>
 </html>
