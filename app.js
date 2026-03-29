@@ -925,27 +925,7 @@
     state.els.historyEditDialog.setAttribute("aria-hidden", "true");
     window.setTimeout(function () {
       unlockPageScroll();
-      state.els.historyEditDialog.querySelector(".dialog-card")?.scrollTo({ top: 0, behavior: "auto" });
     }, 60);
-  }
-
-  function keepHistoryFieldVisible(target) {
-    if (!(target instanceof HTMLElement) || !state.els.historyEditDialog.classList.contains("is-open")) {
-      return;
-    }
-
-    const dialogCard = state.els.historyEditDialog.querySelector(".dialog-card");
-    if (!(dialogCard instanceof HTMLElement)) {
-      return;
-    }
-
-    window.setTimeout(function () {
-      try {
-        target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-      } catch {
-        target.scrollIntoView();
-      }
-    }, 140);
   }
 
   function selectEntireInputValue(event) {
@@ -978,7 +958,6 @@
     } catch {
       input.focus();
     }
-    keepHistoryFieldVisible(input);
   }
 
   function formatTimestamp() {
@@ -2534,18 +2513,6 @@
     state.els.historyEditQtyInput.addEventListener("pointerup", function (event) {
       event.preventDefault();
       selectEntireInputValue(event);
-    });
-
-    [
-      state.els.historyEditItalianNameInput,
-      state.els.historyEditPPriceInput,
-      state.els.historyEditSPriceInput,
-      state.els.historyEditSDiscountInput,
-      state.els.historyEditQtyInput
-    ].forEach(function (input) {
-      input.addEventListener("focus", function (event) {
-        keepHistoryFieldVisible(event.target);
-      });
     });
 
     state.els.historyEditItalianNameInput.addEventListener("keydown", function (event) {
