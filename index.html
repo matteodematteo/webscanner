@@ -37,6 +37,10 @@
     html,
     body { min-height: 100%; }
 
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+
     body {
       margin: 0;
       color: var(--text);
@@ -610,6 +614,8 @@
 
     #historyEditDialog .input {
       touch-action: manipulation;
+      font-size: 16px;
+      min-height: 36px;
     }
 
     .history-edit-grid {
@@ -851,7 +857,7 @@
       #historyEditDialog .input {
         min-height: 32px;
         padding: 6px 8px;
-        font-size: clamp(0.78rem, 1.8vh, 0.92rem);
+        font-size: 16px;
       }
 
       .history-edit-grid,
@@ -1026,7 +1032,7 @@
             <input class="input" id="historyEditBarcodeInput" type="text" readonly />
           </label>
           <label class="history-edit-field">
-            <span>Inventory</span>
+            <span>Quantity</span>
             <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
           </label>
         </div>
@@ -1084,6 +1090,6 @@
       window.__resolvePonyfillReady();
     }
   </script>
-  <script src="app.js?v=49" defer></script>
+  <script src="app.js?v=50" defer></script>
 </body>
 </html>
