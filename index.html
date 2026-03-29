@@ -35,7 +35,10 @@
     * { box-sizing: border-box; }
 
     html,
-    body { min-height: 100%; }
+    body {
+      min-height: 100%;
+      -webkit-text-size-adjust: 100%;
+    }
 
     body {
       margin: 0;
@@ -299,7 +302,11 @@
       border-color: rgba(20, 28, 36, 0.12);
       background: rgba(255, 255, 255, 0.96);
       color: var(--text);
-      font-size: 0.84rem;
+      font-size: 16px;
+    }
+
+    .select {
+      font-size: 16px;
     }
 
     .textarea {
@@ -668,7 +675,7 @@
 
       <div class="controls">
         <div class="lookup-row">
-          <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Barcode value" />
+          <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Barcode value" />
           <button class="btn btn-muted" id="clearBarcodeBtn" type="button">Clear</button>
         </div>
       </div>
@@ -729,11 +736,11 @@
       <div class="field-list">
         <label>
           <span class="visually-hidden">Shop key</span>
-          <input class="input" id="shopKeyInput" type="text" autocomplete="off" placeholder="Shop key" />
+          <input class="input" id="shopKeyInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Shop key" />
         </label>
         <label>
           <span class="visually-hidden">Login</span>
-          <input class="input" id="loginInput" type="text" autocomplete="username" placeholder="Login" />
+          <input class="input" id="loginInput" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Login" />
         </label>
         <label>
           <span class="visually-hidden">Password</span>
@@ -784,7 +791,7 @@
         </label>
         <label>
           <span>Italian Name</span>
-          <input class="input" id="historyEditItalianNameInput" type="text" />
+          <input class="input" id="historyEditItalianNameInput" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" />
         </label>
         <label>
           <span>Cost</span>
@@ -818,6 +825,6 @@
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
   <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
-  <script src="app.js?v=43" defer></script>
+  <script src="app.js?v=44" defer></script>
 </body>
 </html>
