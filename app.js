@@ -265,19 +265,16 @@
       "ean_8_reader",
       "upc_reader",
       "upc_e_reader",
-      "code_128_reader",
-      "code_39_reader",
-      "codabar_reader",
-      "i2of5_reader"
+      "code_128_reader"
     ];
   }
 
   function getQuaggaScanArea() {
     return {
-      top: "12%",
-      right: "12%",
-      bottom: "12%",
-      left: "12%"
+      top: "14%",
+      right: "14%",
+      bottom: "14%",
+      left: "14%"
     };
   }
 
@@ -1764,7 +1761,7 @@
 
   function supportsConfiguredScannerEngine() {
     if (isIOSDevice()) {
-      return supportsZxingReader() || Boolean(window.Quagga);
+      return Boolean(window.Quagga);
     }
     return true;
   }
@@ -1778,7 +1775,7 @@
     }
     if (!supportsConfiguredScannerEngine()) {
       return isIOSDevice()
-        ? "The iPhone barcode scanner libraries did not load."
+        ? "The iPhone barcode scanner library did not load."
         : "The Android barcode scanner library did not load.";
     }
     return "";
@@ -1998,10 +1995,31 @@
 
   function chooseBestDefaultDevice(devices) {
     if (!devices || devices.length === 0) return "";
-    const rear = devices.find((device) => /back|rear|environment|wide|ultra/i.test(device.label || ""));
-    if (rear) {
-      return rear.deviceId;
+
+    let bestDevice = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (let index = 0; index < devices.length; index += 1) {
+      const device = devices[index];
+      const label = String(device?.label || "").toLowerCase();
+      let score = 0;
+
+      if (/back|rear|environment/.test(label)) score += 120;
+      if (/wide|1x|main|default|dual wide/.test(label)) score += 35;
+      if (/tele|zoom/.test(label)) score += 12;
+      if (/ultra|ultrawide|macro/.test(label)) score -= 55;
+      if (/front|user|facetime|true.?depth/.test(label)) score -= 160;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestDevice = device;
+      }
     }
+
+    if (bestDevice?.deviceId) {
+      return bestDevice.deviceId;
+    }
+
     if (devices.length > 1) {
       return devices[devices.length - 1].deviceId;
     }
@@ -2258,7 +2276,7 @@
           halfSample: false
         },
         numOfWorkers: 0,
-        frequency: isIOSDevice() ? 10 : (state.isMobileUi ? 14 : 12),
+        frequency: isIOSDevice() ? 12 : (state.isMobileUi ? 14 : 12),
         decoder: {
           readers: getPreferredReaders(),
           multiple: false
@@ -2397,18 +2415,7 @@
     await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
     const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
     if (isIOSDevice()) {
-      let started = false;
-      if (supportsZxingReader()) {
-        try {
-          await startCameraWithZxing(preferredCameraId, activeVideoConfig);
-          started = true;
-        } catch {
-          await stopTracks();
-        }
-      }
-      if (!started) {
-        await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
-      }
+      await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
     } else {
       await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
     }
@@ -2785,15 +2792,4 @@
     document.addEventListener("DOMContentLoaded", function () {
       init().catch((error) => {
         if (state.els?.statusText) {
-          setStatus(error.message || "The app could not start");
-        }
-      });
-    });
-  } else {
-    init().catch((error) => {
-      if (state.els?.statusText) {
-        setStatus(error.message || "The app could not start");
-      }
-    });
-  }
-}());
+          setStatus(error.message || "The 
