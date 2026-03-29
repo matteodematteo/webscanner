@@ -47,6 +47,14 @@
         linear-gradient(180deg, #fbf8f2 0%, var(--bg) 100%);
     }
 
+    body.is-dialog-open {
+      position: fixed;
+      left: 0;
+      right: 0;
+      width: 100%;
+      overflow: hidden;
+    }
+
     .app-shell {
       width: min(820px, calc(100% - 24px));
       margin: 0 auto;
@@ -581,10 +589,17 @@
       padding: 14px;
       max-height: min(calc(100dvh - 36px), 100%);
       overflow: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      touch-action: manipulation;
     }
 
     #historyEditDialog .dialog-card {
       padding-bottom: 54px;
+    }
+
+    #historyEditDialog .input {
+      touch-action: manipulation;
     }
 
     .dialog-card p {
@@ -628,6 +643,10 @@
       .preview-frame { width: min(100%, 30vh); }
       .preview-meta { top: 8px; left: 8px; right: 8px; }
       .preview-placeholder { font-size: 0.74rem; }
+
+      #historyEditDialog .input {
+        font-size: 16px;
+      }
     }
 
     @media (max-width: 430px) {
