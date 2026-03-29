@@ -244,7 +244,6 @@
     .dialog-actions {
       grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
       margin-top: 16px;
-      margin-bottom: 30px;
     }
 
     button,
@@ -785,27 +784,27 @@
         </label>
         <label>
           <span>Italian Name</span>
-          <input class="input" id="historyEditItalianNameInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <input class="input" id="historyEditItalianNameInput" type="text" />
         </label>
         <label>
           <span>Cost</span>
-          <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" />
         </label>
         <label>
           <span>Price</span>
-          <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" />
         </label>
         <label>
           <span>Discount%</span>
-          <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" />
         </label>
         <label>
           <span>Disc. Price</span>
-          <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly autocomplete="off" />
+          <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly />
         </label>
         <label>
           <span>Comparison Qty</span>
-          <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
         </label>
       </div>
       <div class="save-note" id="historyEditSaveNote" aria-live="polite"></div>
@@ -817,8 +816,8 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
   <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
-  <script src="app.js?v=44" defer></script>
+  <script src="app.js?v=43" defer></script>
 </body>
 </html>
