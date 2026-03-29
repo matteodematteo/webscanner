@@ -15,9 +15,6 @@
     historyStorageKey: "web_barcode_scanner_history",
     cameraStorageKey: "web_barcode_scanner_camera",
     scanIntervalMs: 1200,
-    iosDetectionConfirmations: 1,
-    iosDetectionResetMs: 900,
-    quaggaMaxAverageError: 0.22,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
     preferredSquareSize: 2160,
@@ -53,17 +50,6 @@
         height: { ideal: 1440, max: 2160 },
         aspectRatio: { ideal: 1 },
         frameRate: { ideal: 24, max: 30 },
-        resizeMode: "crop-and-scale"
-      }
-    },
-    iosVideoConstraints: {
-      audio: false,
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 960, max: 1280 },
-        height: { ideal: 960, max: 1280 },
-        aspectRatio: { ideal: 1 },
-        frameRate: { ideal: 18, max: 24 },
         resizeMode: "crop-and-scale"
       }
     },
@@ -112,10 +98,7 @@
     stalledPreviewChecks: 0,
     isRecoveringPreview: false,
     lookupSequence: 0,
-    isCompactMode: false,
-    pendingDetectedCode: "",
-    pendingDetectedCount: 0,
-    pendingDetectedAt: 0
+    isCompactMode: false
   };
 
   function queryElements() {
@@ -194,9 +177,6 @@
   }
 
   function getActiveVideoConfig() {
-    if (isIOSDevice()) {
-      return CONFIG.iosVideoConstraints;
-    }
     if (isAndroidDevice()) {
       return CONFIG.androidVideoConstraints;
     }
@@ -265,234 +245,16 @@
       "ean_reader",
       "ean_8_reader",
       "upc_reader",
-      "upc_e_reader"
+      "upc_e_reader",
+      "code_128_reader",
+      "code_39_reader",
+      "codabar_reader",
+      "i2of5_reader"
     ];
-  }
-
-  function getQuaggaScanArea() {
-    return {
-      top: "12%",
-      right: "12%",
-      bottom: "12%",
-      left: "12%"
-    };
-  }
-
-  function configurePreviewVideoElement(video) {
-    if (!(video instanceof HTMLVideoElement)) {
-      return;
-    }
-
-    video.setAttribute("playsinline", "");
-    video.setAttribute("webkit-playsinline", "true");
-    video.muted = true;
-    video.autoplay = true;
-    video.playsInline = true;
-  }
-
-  function isTextEntryElement(target) {
-    if (!(target instanceof HTMLElement)) {
-      return false;
-    }
-
-    if (target.isContentEditable) {
-      return true;
-    }
-
-    return Boolean(target.closest("input, textarea, select"));
-  }
-
-  function pauseScanningForInteraction(options) {
-    if (!state.isScanning) {
-      return;
-    }
-
-    stopScanning(true);
-    if (!options?.silentStatus) {
-      setStatus("Scanner paused while editing");
-    }
-  }
-
-  function sanitizeDetectedCode(detectedText) {
-    return String(detectedText || "").replace(/\s+/g, "").trim();
-  }
-
-  function isNumericBarcode(code) {
-    return /^\d+$/.test(String(code || ""));
-  }
-
-  function hasValidGtinChecksum(code) {
-    const normalizedCode = String(code || "").trim();
-    if (!isNumericBarcode(normalizedCode) || ![8, 12, 13, 14].includes(normalizedCode.length)) {
-      return false;
-    }
-
-    const digits = normalizedCode.split("").map(function (digit) {
-      return Number(digit);
-    });
-    const checkDigit = digits.pop();
-    let factor = 3;
-    let sum = 0;
-
-    for (let index = digits.length - 1; index >= 0; index -= 1) {
-      sum += digits[index] * factor;
-      factor = factor === 3 ? 1 : 3;
-    }
-
-    return ((10 - (sum % 10)) % 10) === checkDigit;
-  }
-
-  function isLikelyRetailBarcode(code) {
-    return hasValidGtinChecksum(code);
-  }
-
-  function getQuaggaAverageError(result) {
-    const decodedCodes = result?.codeResult?.decodedCodes;
-    if (!Array.isArray(decodedCodes) || decodedCodes.length === 0) {
-      return null;
-    }
-
-    const errorValues = decodedCodes
-      .map(function (entry) {
-        return Number(entry?.error);
-      })
-      .filter(function (value) {
-        return Number.isFinite(value);
-      });
-
-    if (errorValues.length === 0) {
-      return null;
-    }
-
-    const totalError = errorValues.reduce(function (sum, value) {
-      return sum + value;
-    }, 0);
-
-    return totalError / errorValues.length;
-  }
-
-  function getReliableQuaggaDetection(result) {
-    const code = sanitizeDetectedCode(result?.codeResult?.code || "");
-    if (!isLikelyRetailBarcode(code)) {
-      return null;
-    }
-
-    const averageError = getQuaggaAverageError(result);
-    if (typeof averageError === "number" && averageError > CONFIG.quaggaMaxAverageError) {
-      return null;
-    }
-
-    return {
-      code: code,
-      format: String(result?.codeResult?.format || ""),
-      averageError: averageError
-    };
-  }
-
-  function resetPendingDetection() {
-    state.pendingDetectedCode = "";
-    state.pendingDetectedCount = 0;
-    state.pendingDetectedAt = 0;
-  }
-
-  function needsIOSDetectionConfirmation(source) {
-    return source === "quagga" && isIOSDevice();
-  }
-
-  function shouldAcceptDetectedCode(code, source) {
-    if (!needsIOSDetectionConfirmation(source)) {
-      return true;
-    }
-
-    const now = Date.now();
-    const isFreshRepeat =
-      state.pendingDetectedCode === code &&
-      now - state.pendingDetectedAt <= CONFIG.iosDetectionResetMs;
-
-    if (isFreshRepeat) {
-      state.pendingDetectedCount += 1;
-    } else {
-      state.pendingDetectedCode = code;
-      state.pendingDetectedCount = 1;
-    }
-
-    state.pendingDetectedAt = now;
-
-    if (state.pendingDetectedCount >= CONFIG.iosDetectionConfirmations) {
-      resetPendingDetection();
-      return true;
-    }
-
-    setStatus("Barcode detected. Hold steady for a cleaner read...");
-    return false;
   }
 
   function supportsBarcodeDetector() {
     return "BarcodeDetector" in window;
-  }
-
-  function supportsZxingReader() {
-    return Boolean(window.ZXingBrowser?.BrowserMultiFormatReader);
-  }
-
-  function normalizeCameraError(error, fallbackMessage) {
-    const name = String(error?.name || "");
-    if (name === "NotAllowedError" || name === "SecurityError") {
-      return new Error("Camera permission was blocked. Allow access in Safari and try again.");
-    }
-    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-      return new Error("No camera was found on this device.");
-    }
-    if (name === "NotReadableError" || name === "TrackStartError") {
-      return new Error("The camera is already in use by another app or tab.");
-    }
-    if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
-      return new Error("This camera does not support the requested scan mode.");
-    }
-    return new Error(error?.message || fallbackMessage || "Could not open the camera.");
-  }
-
-  function buildPermissionConstraints(preferredCameraId, activeVideoConfig) {
-    const baseVideoConfig = activeVideoConfig?.video || getActiveVideoConfig().video;
-    const constraints = {
-      audio: false,
-      video: {
-        width: { ideal: baseVideoConfig.width.ideal },
-        height: { ideal: baseVideoConfig.height.ideal },
-        aspectRatio: { ideal: baseVideoConfig.aspectRatio.ideal },
-        frameRate: { ideal: baseVideoConfig.frameRate.ideal }
-      }
-    };
-
-    if (preferredCameraId) {
-      constraints.video.deviceId = { exact: preferredCameraId };
-    } else {
-      constraints.video.facingMode = { ideal: "environment" };
-    }
-
-    return constraints;
-  }
-
-  async function ensureCameraPermission(preferredCameraId, activeVideoConfig) {
-    let tempStream = null;
-    try {
-      tempStream = await navigator.mediaDevices.getUserMedia(
-        buildPermissionConstraints(preferredCameraId, activeVideoConfig)
-      );
-    } catch (error) {
-      throw normalizeCameraError(error, "Could not request camera access.");
-    } finally {
-      if (tempStream?.getTracks) {
-        const tracks = tempStream.getTracks();
-        for (let index = 0; index < tracks.length; index += 1) {
-          try {
-            tracks[index].stop();
-          } catch {
-            // Ignore temporary permission stream cleanup issues.
-          }
-        }
-      }
-    }
   }
 
   async function createDetector() {
@@ -517,6 +279,7 @@
 
     const hints = new ZXing.Map();
     hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.QR_CODE,
       ZXing.BarcodeFormat.EAN_13,
       ZXing.BarcodeFormat.EAN_8,
       ZXing.BarcodeFormat.UPC_A,
@@ -577,12 +340,9 @@
 
       const context = state.audioContext;
       if (context.state === "suspended") {
-        context.resume().then(function () {
-          playCaptureSound();
-        }).catch(() => {
+        context.resume().catch(() => {
           // Ignore resume errors triggered by browser policies.
         });
-        return;
       }
 
       const now = context.currentTime;
@@ -601,27 +361,6 @@
       gainNode.connect(context.destination);
       oscillator.start(now);
       oscillator.stop(now + 0.16);
-    } catch {
-      // Audio is optional.
-    }
-  }
-
-  function primeCaptureSound() {
-    try {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) {
-        return;
-      }
-
-      if (!state.audioContext || state.audioContext.state === "closed") {
-        state.audioContext = new AudioContextClass();
-      }
-
-      if (state.audioContext.state === "suspended") {
-        state.audioContext.resume().catch(() => {
-          // Ignore resume errors triggered by browser policies.
-        });
-      }
     } catch {
       // Audio is optional.
     }
@@ -682,9 +421,6 @@
   }
 
   function openSettingsDialog() {
-    if (isIOSDevice()) {
-      pauseScanningForInteraction({ silentStatus: true });
-    }
     fillSettingsForm(readSavedSettings());
     state.els.settingsSaveNote.textContent = "";
     state.els.settingsDialog.classList.add("is-open");
@@ -1151,9 +887,6 @@
   }
 
   function openConfirmDialog(message, onConfirm) {
-    if (isIOSDevice()) {
-      pauseScanningForInteraction({ silentStatus: true });
-    }
     state.pendingConfirmAction = typeof onConfirm === "function" ? onConfirm : null;
     state.els.confirmDialogText.textContent = message;
     state.els.confirmDialog.classList.add("is-open");
@@ -1167,9 +900,6 @@
   }
 
   function openPrintDialog() {
-    if (isIOSDevice()) {
-      pauseScanningForInteraction({ silentStatus: true });
-    }
     state.els.printDialog.classList.add("is-open");
     state.els.printDialog.setAttribute("aria-hidden", "false");
   }
@@ -1192,9 +922,6 @@
   }
 
   function openHistoryEditDialog(item) {
-    if (isIOSDevice()) {
-      pauseScanningForInteraction({ silentStatus: true });
-    }
     fillHistoryEditForm(item);
     state.els.historyEditSaveNote.textContent = "";
     state.els.historyEditDialog.classList.add("is-open");
@@ -1378,109 +1105,6 @@
     return cookieParts.join("; ");
   }
 
-  function tryParseResponsePayload(responseText) {
-    const text = String(responseText || "");
-    if (!text) {
-      return "";
-    }
-
-    try {
-      return JSON.parse(text);
-    } catch {
-      return text;
-    }
-  }
-
-  function extractResponseMessage(payload, fallbackText) {
-    const fallback = String(fallbackText || "").trim();
-
-    if (typeof payload === "string") {
-      const text = payload.trim();
-      return text || fallback;
-    }
-
-    if (!payload || typeof payload !== "object") {
-      return fallback;
-    }
-
-    const queue = [payload];
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current || typeof current !== "object") {
-        continue;
-      }
-
-      const directMessage =
-        current.message ||
-        current.msg ||
-        current.error ||
-        current.reason ||
-        current.details ||
-        current.statusText ||
-        current.data?.message ||
-        current.data?.error ||
-        "";
-
-      if (typeof directMessage === "string" && directMessage.trim()) {
-        return directMessage.trim();
-      }
-
-      const values = Object.values(current);
-      for (let index = 0; index < values.length; index += 1) {
-        const value = values[index];
-        if (typeof value === "string" && /(fail|error|invalid|denied|blocked|timeout|loading)/i.test(value)) {
-          return value.trim();
-        }
-        if (value && typeof value === "object") {
-          queue.push(value);
-        }
-      }
-    }
-
-    return fallback;
-  }
-
-  function buildLoginRequestVariants(shopKey, login, password, targetSite) {
-    const payload = {
-      shopkey: shopKey,
-      shopKey: shopKey,
-      login_name: login,
-      loginName: login,
-      login: login,
-      username: login,
-      password: password,
-      site: targetSite,
-      targetSite: targetSite,
-      host: targetSite
-    };
-
-    const form = new URLSearchParams();
-    const entries = Object.entries(payload);
-    for (let index = 0; index < entries.length; index += 1) {
-      const [key, value] = entries[index];
-      form.set(key, value);
-    }
-
-    return [
-      {
-        label: "form",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: form.toString()
-      },
-      {
-        label: "json",
-        headers: {
-          Accept: "application/json, text/plain, */*",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      }
-    ];
-  }
-
   async function loginAndRefreshCookie(settingsOverride) {
     const settings = settingsOverride || readSavedSettings();
     const shopKey = (settings.shopKey || "").trim();
@@ -1496,50 +1120,45 @@
       return "";
     }
 
+    const params = new URLSearchParams();
+    params.set("shopkey", shopKey);
+    params.set("login_name", login);
+    params.set("password", password);
+
     state.els.settingsSaveNote.textContent = `Sending login request for ${login} on ${targetSite}...`;
     saveCookieState(state.authCookie, `Refreshing cookie for ${login} on ${targetSite}...`);
     setStatus("Requesting new cookie...");
 
-    const requestVariants = buildLoginRequestVariants(shopKey, login, password, targetSite);
-    let lastError = new Error("Login request failed.");
-
-    for (let index = 0; index < requestVariants.length; index += 1) {
-      const requestVariant = requestVariants[index];
-      state.els.settingsSaveNote.textContent = `Trying ${requestVariant.label} login request...`;
-
-      try {
-        const response = await fetch(CONFIG.cookieProxyEndpoint, {
-          method: "POST",
-          body: requestVariant.body,
-          cache: "no-store",
-          headers: requestVariant.headers
-        });
-
-        const responseText = await response.text();
-        const parsed = tryParseResponsePayload(responseText);
-        const responseMessage = extractResponseMessage(parsed, responseText);
-
-        if (!response.ok) {
-          lastError = new Error(responseMessage || `Proxy request failed with status ${response.status}`);
-          continue;
-        }
-
-        const cookie = extractCookieFromResponse(parsed);
-        if (!cookie) {
-          lastError = new Error(responseMessage || "Proxy answered, but no usable cookie was returned.");
-          continue;
-        }
-
-        saveCookieState(cookie, `Cookie refreshed successfully for ${login} on ${targetSite}.`);
-        state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
-        setStatus("Cookie refreshed");
-        return cookie;
-      } catch (error) {
-        lastError = new Error(error?.message || "Login request failed.");
+    const response = await fetch(CONFIG.cookieProxyEndpoint, {
+      method: "POST",
+      body: params.toString(),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded"
       }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Proxy request failed with status ${response.status}`);
     }
 
-    throw lastError;
+    const responseText = await response.text();
+    let parsed = responseText;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      // Keep plain text fallback.
+    }
+
+    const cookie = extractCookieFromResponse(parsed);
+    if (!cookie) {
+      throw new Error("Proxy answered, but no usable cookie was returned.");
+    }
+
+    saveCookieState(cookie, `Cookie refreshed successfully for ${login} on ${targetSite}.`);
+    state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
+    setStatus("Cookie refreshed");
+    return cookie;
   }
 
   function clearResultFields() {
@@ -2235,31 +1854,10 @@
 
   function chooseBestDefaultDevice(devices) {
     if (!devices || devices.length === 0) return "";
-
-    let bestDevice = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    for (let index = 0; index < devices.length; index += 1) {
-      const device = devices[index];
-      const label = String(device?.label || "").toLowerCase();
-      let score = 0;
-
-      if (/back|rear|environment/.test(label)) score += 120;
-      if (/wide|1x|main|default|dual wide/.test(label)) score += 35;
-      if (/tele|zoom/.test(label)) score += 12;
-      if (/ultra|ultrawide|macro/.test(label)) score -= 55;
-      if (/front|user|facetime|true.?depth/.test(label)) score -= 160;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestDevice = device;
-      }
+    const rear = devices.find((device) => /back|rear|environment|wide|ultra/i.test(device.label || ""));
+    if (rear) {
+      return rear.deviceId;
     }
-
-    if (bestDevice?.deviceId) {
-      return bestDevice.deviceId;
-    }
-
     if (devices.length > 1) {
       return devices[devices.length - 1].deviceId;
     }
@@ -2293,14 +1891,9 @@
     }
   }
 
-  async function handleDetectedCode(detectedText, options) {
-    const source = options?.source || state.scannerEngine || "unknown";
-    const code = sanitizeDetectedCode(detectedText);
+  async function handleDetectedCode(detectedText) {
+    const code = String(detectedText || "").trim();
     if (!state.isScanning || !code) {
-      return;
-    }
-
-    if (!shouldAcceptDetectedCode(code, source)) {
       return;
     }
 
@@ -2357,7 +1950,7 @@
 
     const canvas = drawSquareFrame();
     const detections = await readBarcodeFromCanvas(canvas);
-    const detectedText = sanitizeDetectedCode(detections[0]?.rawValue || "");
+    const detectedText = detections[0]?.rawValue || "";
 
     if (!detectedText) {
       setStatus("Scanning... point the barcode inside the square");
@@ -2446,7 +2039,6 @@
     saveCameraId(state.activeDeviceId);
 
     state.els.cameraPreview.srcObject = stream;
-    configurePreviewVideoElement(state.els.cameraPreview);
     await state.els.cameraPreview.play();
     await applyTrackEnhancements(track, activeVideoConfig);
     await refreshDevices(state.activeDeviceId);
@@ -2457,7 +2049,7 @@
     setActivePreviewEngine("zxing");
     const reader = new window.ZXingBrowser.BrowserMultiFormatReader(
       getZxingHints(),
-      isIOSDevice() ? 35 : (isAndroidDevice() ? 20 : (state.isMobileUi ? 60 : 50))
+      isAndroidDevice() ? 20 : (state.isMobileUi ? 60 : 50)
     );
 
     const controls = await reader.decodeFromVideoDevice(
@@ -2465,7 +2057,7 @@
       "cameraPreview",
       function (result) {
         if (result?.getText) {
-          handleDetectedCode(result.getText(), { source: "zxing" }).catch(() => {
+          handleDetectedCode(result.getText()).catch(() => {
             // Ignore async decode handler noise.
           });
         }
@@ -2475,7 +2067,6 @@
     state.scanner = { reader: reader, controls: controls };
     state.scannerEngine = "zxing";
     state.track = await waitForActiveTrack();
-    configurePreviewVideoElement(getPreviewVideoElement());
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
     await applyTrackEnhancements(state.track, activeVideoConfig);
@@ -2493,36 +2084,30 @@
           name: "Live",
           type: "LiveStream",
           target: state.els.cameraPreviewQuagga,
-          willReadFrequently: true,
           constraints: preferredCameraId
             ? {
                 deviceId: preferredCameraId,
                 width: activeVideoConfig.video.width.ideal,
                 height: activeVideoConfig.video.height.ideal,
-                aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
-                frameRate: activeVideoConfig.video.frameRate.ideal,
                 facingMode: "environment"
               }
             : {
                 facingMode: "environment",
                 width: activeVideoConfig.video.width.ideal,
-                height: activeVideoConfig.video.height.ideal,
-                aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
-                frameRate: activeVideoConfig.video.frameRate.ideal
+                height: activeVideoConfig.video.height.ideal
               }
         },
-        area: getQuaggaScanArea(),
         locator: {
-          patchSize: isIOSDevice() ? "medium" : (state.isMobileUi ? "small" : "medium"),
-          halfSample: false
+          patchSize: state.isMobileUi ? "medium" : "large",
+          halfSample: true
         },
         numOfWorkers: 0,
-        frequency: isIOSDevice() ? 8 : (state.isMobileUi ? 14 : 12),
+        frequency: state.isMobileUi ? 10 : 12,
         decoder: {
           readers: getPreferredReaders(),
           multiple: false
         },
-        locate: !isIOSDevice()
+        locate: true
       }, function (error) {
         if (error) {
           reject(error);
@@ -2533,15 +2118,8 @@
     });
 
     const onDetected = function (result) {
-      const detection = getReliableQuaggaDetection(result);
-      if (!detection) {
-        return;
-      }
-
-      handleDetectedCode(detection.code, {
-        source: "quagga",
-        format: detection.format
-      }).catch(() => {
+      const code = result?.codeResult?.code || "";
+      handleDetectedCode(code).catch(() => {
         // Ignore async decode handler noise.
       });
     };
@@ -2551,7 +2129,6 @@
     state.scanner = { onDetected: onDetected };
     state.scannerEngine = "quagga";
     state.track = await waitForActiveTrack(2200);
-    configurePreviewVideoElement(getPreviewVideoElement());
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
     await applyTrackEnhancements(state.track, activeVideoConfig);
@@ -2596,7 +2173,7 @@
       advanced.push({ focusMode: "continuous" });
     }
 
-    if (!isIOSDevice() && capabilities.zoom && typeof capabilities.zoom.max === "number") {
+    if (capabilities.zoom && typeof capabilities.zoom.max === "number") {
       const minZoom = typeof capabilities.zoom.min === "number" ? capabilities.zoom.min : 1;
       const desiredZoom = Math.min(capabilities.zoom.max, Math.max(minZoom, 1.2));
       advanced.push({ zoom: desiredZoom });
@@ -2660,27 +2237,10 @@
     await stopTracks();
 
     const activeVideoConfig = getActiveVideoConfig();
-    const requestedDeviceId = deviceId || state.activeDeviceId || readSavedCameraId();
+    await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
+    const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
     if (isIOSDevice()) {
-      await ensureCameraPermission(requestedDeviceId, activeVideoConfig);
-    }
-
-    await refreshDevices(requestedDeviceId);
-    const preferredCameraId = requestedDeviceId || chooseBestDefaultDevice(state.devices);
-    if (isIOSDevice()) {
-      try {
-        await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
-      } catch (error) {
-        if (!preferredCameraId) {
-          throw normalizeCameraError(error, "Could not start the iPhone camera.");
-        }
-        await stopTracks();
-        try {
-          await startCameraWithQuagga("", activeVideoConfig);
-        } catch (fallbackError) {
-          throw normalizeCameraError(fallbackError, "Could not start the iPhone camera.");
-        }
-      }
+      await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
     } else {
       await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
     }
@@ -2702,7 +2262,6 @@
 
     if (state.isScanning) return;
 
-    resetPendingDetection();
     state.isScanning = true;
     updateScanButton();
     updateModePill();
@@ -2721,7 +2280,6 @@
 
   function stopScanning(keepStatusMessage) {
     cleanupScanTimer();
-    resetPendingDetection();
     state.isScanning = false;
     updateScanButton();
     updateModePill();
@@ -2759,7 +2317,6 @@
   function bindEvents() {
     state.els.scanBtn.addEventListener("click", async function () {
       state.els.scanBtn.disabled = true;
-      primeCaptureSound();
       try {
         await handleMainButton();
       } catch (error) {
@@ -2874,13 +2431,6 @@
       } catch (error) {
         setStatus(error.message || "Could not load product info");
       }
-    });
-
-    document.addEventListener("focusin", function (event) {
-      if (!isIOSDevice() || !isTextEntryElement(event.target)) {
-        return;
-      }
-      pauseScanningForInteraction({ silentStatus: true });
     });
 
     state.els.cameraSelect.addEventListener("change", async function () {
@@ -3024,7 +2574,6 @@
     state.els = queryElements();
     requireElements(state.els);
     state.isMobileUi = detectMobileUi();
-    document.body.classList.toggle("is-ios", isIOSDevice());
     cacheResultFieldElements();
 
     const savedSettings = readSavedSettings();
@@ -3047,15 +2596,7 @@
 
     try {
       await refreshDevices(readSavedCameraId());
-      if (isIOSDevice()) {
-        setPreviewActive(false);
-        updateResolutionBadge();
-        updateScanButton();
-        updateModePill();
-        setStatus("Tap Start Scanning to allow camera access.");
-      } else {
-        await startCamera(state.activeDeviceId);
-      }
+      await startCamera(state.activeDeviceId);
     } catch (error) {
       setStatus(error.message || "Camera preview could not start automatically");
     }
@@ -3072,4 +2613,8 @@
   } else {
     init().catch((error) => {
       if (state.els?.statusText) {
-        setStatus(error.message || "The app could not 
+        setStatus(error.message || "The app could not start");
+      }
+    });
+  }
+}());
