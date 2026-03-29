@@ -172,8 +172,8 @@
     return /Android/i.test(navigator.userAgent || "");
   }
 
-  function usesFrameCaptureScanner() {
-    return state.scannerEngine === "native";
+  function usesNativeAndroidScanner() {
+    return !isIOSDevice();
   }
 
   function getActiveVideoConfig() {
@@ -189,14 +189,14 @@
   }
 
   function setActivePreviewEngine(engine) {
-    const useEmbeddedPreview = engine === "quagga" || engine === "html5qrcode";
+    const useQuaggaPreview = engine === "quagga";
     if (state.els?.cameraPreview) {
-      state.els.cameraPreview.hidden = useEmbeddedPreview;
-      state.els.cameraPreview.style.display = useEmbeddedPreview ? "none" : "block";
+      state.els.cameraPreview.hidden = useQuaggaPreview;
+      state.els.cameraPreview.style.display = useQuaggaPreview ? "none" : "block";
     }
     if (state.els?.cameraPreviewQuagga) {
-      state.els.cameraPreviewQuagga.hidden = !useEmbeddedPreview;
-      state.els.cameraPreviewQuagga.style.display = useEmbeddedPreview ? "block" : "none";
+      state.els.cameraPreviewQuagga.hidden = !useQuaggaPreview;
+      state.els.cameraPreviewQuagga.style.display = useQuaggaPreview ? "block" : "none";
     }
   }
 
@@ -205,7 +205,7 @@
       return null;
     }
 
-    if (state.scannerEngine === "quagga" || state.scannerEngine === "html5qrcode") {
+    if (state.scannerEngine === "quagga") {
       return state.els.cameraPreviewQuagga?.querySelector("video") || null;
     }
 
@@ -253,47 +253,18 @@
     ];
   }
 
-  function getPreferredBarcodeFormats() {
-    return [
-      "ean_13",
-      "ean_8",
-      "upc_a",
-      "upc_e",
-      "code_128",
-      "code_39",
-      "codabar",
-      "itf",
-      "databar",
-      "databar_expanded",
-      "databar_limited"
-    ];
-  }
-
-  function getPreferredBarcodeDetectorClass() {
-    if (isIOSDevice()) {
-      return window.BarcodeDetectionAPI?.BarcodeDetector || window.BarcodeDetector || null;
-    }
-    return window.BarcodeDetector || null;
+  function supportsBarcodeDetector() {
+    return "BarcodeDetector" in window;
   }
 
   async function createDetector() {
-    const DetectorClass = getPreferredBarcodeDetectorClass();
-    if (!DetectorClass) return null;
+    if (!supportsBarcodeDetector()) return null;
     if (state.detector) return state.detector;
 
     try {
-      const preferredFormats = getPreferredBarcodeFormats();
-      const supportedFormats = typeof DetectorClass.getSupportedFormats === "function"
-        ? await DetectorClass.getSupportedFormats()
-        : [];
-      const formats = Array.isArray(supportedFormats) && supportedFormats.length > 0
-        ? preferredFormats.filter(function (format) {
-            return supportedFormats.includes(format);
-          })
-        : preferredFormats;
-      state.detector = formats.length > 0
-        ? new DetectorClass({ formats: formats })
-        : new DetectorClass();
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      if (!formats || formats.length === 0) return null;
+      state.detector = new window.BarcodeDetector({ formats: formats.filter(Boolean) });
       return state.detector;
     } catch {
       return null;
@@ -1514,35 +1485,6 @@
       showToast("Unsupported symbols removed from name");
     }
 
-    const normalizedCurrentItem = normalizeHistoryItem(currentItem);
-    const hasProductFieldChanges =
-      payload.id !== String(normalizedCurrentItem.goods_id || "") ||
-      payload.barcode !== String(normalizedCurrentItem.barcode || "") ||
-      payload.italian_name !== String(normalizedCurrentItem.italian_name || "") ||
-      payload.p_price !== String(normalizedCurrentItem.p_price || "") ||
-      payload.s_price !== String(normalizedCurrentItem.s_price || "") ||
-      payload.s_discount !== String(normalizedCurrentItem.s_discount || "");
-    const hasQtyChange = comparisonQty !== Math.max(1, Number(normalizedCurrentItem.comparison_qty || 1) || 1);
-
-    if (!hasProductFieldChanges && hasQtyChange) {
-      updateHistoryItem(currentItem.id, { comparison_qty: comparisonQty });
-      if (state.currentProductRecord?.barcode === normalizedCurrentItem.barcode) {
-        state.currentProductRecord = {
-          ...state.currentProductRecord,
-          comparison_qty: comparisonQty
-        };
-      }
-      setStatus(`Saved ${normalizedCurrentItem.barcode}`);
-      closeHistoryEditDialog();
-      return;
-    }
-
-    if (!hasProductFieldChanges && !hasQtyChange) {
-      setStatus(`Saved ${normalizedCurrentItem.barcode}`);
-      closeHistoryEditDialog();
-      return;
-    }
-
     const cookie = await getCookieForRequests();
     state.els.historyEditSaveNote.textContent = originalItalianName !== payload.italian_name
       ? "Italian name cleaned before save."
@@ -1562,12 +1504,8 @@
     const shouldAddNewProduct = !existingProduct;
 
     if (shouldAddNewProduct) {
-      if (!payload.p_price) {
-        payload.p_price = "0";
-        state.els.historyEditPPriceInput.value = "0";
-      }
-      if (!payload.italian_name || !payload.s_price) {
-        throw new Error("Italian name and price are required for a new barcode.");
+      if (!payload.italian_name || !payload.p_price || !payload.s_price) {
+        throw new Error("Italian name, cost, and price are required for a new barcode.");
       }
     } else {
       payload.id = String(existingProduct.id || payload.id || currentItem.goods_id || "").trim();
@@ -1652,16 +1590,6 @@
       s_price: updatedItem.s_price,
       s_discount: updatedItem.s_discount,
       discount_price: updatedItem.discount_price,
-      has_discount: updatedItem.has_discount
-    });
-    updateHistoryItem(currentItem.id, {
-      goods_id: updatedItem.goods_id,
-      barcode: updatedItem.barcode,
-      italian_name: updatedItem.italian_name,
-      p_price: updatedItem.p_price,
-      s_price: updatedItem.s_price,
-      s_discount: updatedItem.s_discount,
-      discount_price: updatedItem.discount_price,
       has_discount: updatedItem.has_discount,
       comparison_qty: updatedItem.comparison_qty
     });
@@ -1692,7 +1620,7 @@
 
   function supportsConfiguredScannerEngine() {
     if (isIOSDevice()) {
-      return Boolean(window.BarcodeDetectionAPI?.BarcodeDetector || window.BarcodeDetector);
+      return Boolean(window.Quagga);
     }
     return true;
   }
@@ -1836,21 +1764,6 @@
       if (scanner?.reader?.reset) {
         try {
           scanner.reader.reset();
-        } catch {
-          // Ignore cleanup issues from browsers with partial support.
-        }
-      }
-    } else if (engine === "html5qrcode") {
-      if (scanner?.reader?.stop) {
-        try {
-          await scanner.reader.stop();
-        } catch {
-          // Ignore teardown issues from partially started sessions.
-        }
-      }
-      if (scanner?.reader?.clear) {
-        try {
-          scanner.reader.clear();
         } catch {
           // Ignore cleanup issues from browsers with partial support.
         }
@@ -2002,58 +1915,32 @@
     return Math.max(1, Math.min(width, height));
   }
 
-  function drawCaptureFrame(mode) {
+  function drawSquareFrame() {
     const video = state.els.cameraPreview;
     const canvas = state.els.captureCanvas;
     const context = canvas.getContext("2d", { alpha: false });
-    const videoWidth = video.videoWidth || (state.isMobileUi ? 960 : 1280);
-    const videoHeight = video.videoHeight || (state.isMobileUi ? 720 : 960);
-    let sx = 0;
-    let sy = 0;
-    let sw = videoWidth;
-    let sh = videoHeight;
+    const squareSize = getSquareCropSize(video);
+    const sx = Math.max(0, Math.floor((video.videoWidth - squareSize) / 2));
+    const sy = Math.max(0, Math.floor((video.videoHeight - squareSize) / 2));
+    const outputSize = state.isMobileUi ? 512 : 720;
 
-    if (mode === "wide") {
-      sw = Math.max(1, Math.floor(videoWidth * 0.94));
-      sh = Math.max(1, Math.floor(videoHeight * 0.42));
-      sx = Math.max(0, Math.floor((videoWidth - sw) / 2));
-      sy = Math.max(0, Math.floor((videoHeight - sh) / 2));
-    } else if (mode === "square") {
-      const squareSize = getSquareCropSize(video);
-      sw = squareSize;
-      sh = squareSize;
-      sx = Math.max(0, Math.floor((videoWidth - squareSize) / 2));
-      sy = Math.max(0, Math.floor((videoHeight - squareSize) / 2));
-    }
-
-    const maxOutputWidth = state.isMobileUi ? 960 : 1280;
-    const scale = Math.min(1, maxOutputWidth / sw);
-    canvas.width = Math.max(1, Math.floor(sw * scale));
-    canvas.height = Math.max(1, Math.floor(sh * scale));
-    context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    context.drawImage(video, sx, sy, squareSize, squareSize, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
 
-  async function readBarcodesFromSource(source) {
+  async function readBarcodeFromCanvas(canvas) {
     const detector = await createDetector();
     if (!detector) {
       return [];
     }
 
     try {
-      return await detector.detect(source);
+      return await detector.detect(canvas);
     } catch {
       return [];
     }
-  }
-
-  function getDetectedText(detections) {
-    return (
-      detections[0]?.rawValue ||
-      detections[0]?.rawValueString ||
-      detections[0]?.value ||
-      ""
-    );
   }
 
   async function captureAttempt() {
@@ -2061,23 +1948,9 @@
       return false;
     }
 
-    const video = state.els.cameraPreview;
-    let detectedText = "";
-
-    if (isIOSDevice()) {
-      detectedText = getDetectedText(await readBarcodesFromSource(video));
-      if (!detectedText) {
-        detectedText = getDetectedText(await readBarcodesFromSource(drawCaptureFrame("full")));
-      }
-      if (!detectedText) {
-        detectedText = getDetectedText(await readBarcodesFromSource(drawCaptureFrame("wide")));
-      }
-      if (!detectedText) {
-        detectedText = getDetectedText(await readBarcodesFromSource(drawCaptureFrame("square")));
-      }
-    } else {
-      detectedText = getDetectedText(await readBarcodesFromSource(drawCaptureFrame("square")));
-    }
+    const canvas = drawSquareFrame();
+    const detections = await readBarcodeFromCanvas(canvas);
+    const detectedText = detections[0]?.rawValue || "";
 
     if (!detectedText) {
       setStatus("Scanning... point the barcode inside the square");
@@ -2194,54 +2067,6 @@
     state.scanner = { reader: reader, controls: controls };
     state.scannerEngine = "zxing";
     state.track = await waitForActiveTrack();
-    state.stream = getPreviewVideoElement()?.srcObject || null;
-    state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
-    saveCameraId(state.activeDeviceId);
-    await applyTrackEnhancements(state.track, activeVideoConfig);
-    await refreshDevices(state.activeDeviceId);
-    await syncTorchSupport();
-  }
-
-  async function startCameraWithHtml5Qrcode(preferredCameraId, activeVideoConfig) {
-    setActivePreviewEngine("html5qrcode");
-    state.els.cameraPreviewQuagga.innerHTML = "";
-
-    const scanner = new window.Html5Qrcode("cameraPreviewQuagga");
-    const cameraConfig = getIosCameraSelectionConfig(preferredCameraId);
-    const scanConfig = getHtml5QrcodeScanConfig();
-
-    scanConfig.videoConstraints = {
-      width: { ideal: activeVideoConfig.video.width.ideal, max: activeVideoConfig.video.width.max },
-      height: { ideal: activeVideoConfig.video.height.ideal, max: activeVideoConfig.video.height.max },
-      aspectRatio: activeVideoConfig.video.aspectRatio.ideal,
-      frameRate: {
-        ideal: activeVideoConfig.video.frameRate.ideal,
-        max: activeVideoConfig.video.frameRate.max
-      }
-    };
-    if (preferredCameraId) {
-      scanConfig.videoConstraints.deviceId = { exact: preferredCameraId };
-    } else {
-      scanConfig.videoConstraints.facingMode = { exact: "environment" };
-    }
-
-    await scanner.start(
-      cameraConfig,
-      scanConfig,
-      function (decodedText) {
-        handleDetectedCode(decodedText).catch(() => {
-          // Ignore async decode handler noise.
-        });
-      },
-      function () {
-        // Read misses are expected while the camera is searching.
-      }
-    );
-
-    state.scanner = { reader: scanner };
-    state.scannerEngine = "html5qrcode";
-    state.track = await waitForActiveTrack(2500);
-    state.stream = getPreviewVideoElement()?.srcObject || null;
     state.activeDeviceId = state.track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
     saveCameraId(state.activeDeviceId);
     await applyTrackEnhancements(state.track, activeVideoConfig);
@@ -2415,7 +2240,7 @@
     await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
     const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
     if (isIOSDevice()) {
-      await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
+      await startCameraWithQuagga(preferredCameraId, activeVideoConfig);
     } else {
       await startCameraWithNativeDetector(preferredCameraId, activeVideoConfig);
     }
@@ -2440,7 +2265,7 @@
     state.isScanning = true;
     updateScanButton();
     updateModePill();
-    if (usesFrameCaptureScanner()) {
+    if (usesNativeAndroidScanner()) {
       setStatus("Scanning started");
       if (await captureAttempt()) {
         return;
