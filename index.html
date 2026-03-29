@@ -816,14 +816,26 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.9.15/dist/index.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/index.js"></script>
   <script>
+    window.__ponyfillReadyPromise = new Promise(function (resolve) {
+      window.__resolvePonyfillReady = resolve;
+    });
+  </script>
+  <script type="module">
+    import { BarcodeDetectorPolyfill } from "https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js";
+
+    try {
+      await window.BarcodeDetector.getSupportedFormats();
+    } catch {
+      window.BarcodeDetector = BarcodeDetectorPolyfill;
+    }
+
     window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
-    if (window.barcodeDetectorPolyfill?.BarcodeDetectorPolyfill) {
-      window.BarcodeDetectionAPI.BarcodeDetector = window.barcodeDetectorPolyfill.BarcodeDetectorPolyfill;
+    window.BarcodeDetectionAPI.BarcodeDetector = window.BarcodeDetector;
+    if (window.__resolvePonyfillReady) {
+      window.__resolvePonyfillReady();
     }
   </script>
-  <script src="app.js?v=45" defer></script>
+  <script src="app.js?v=47" defer></script>
 </body>
 </html>
