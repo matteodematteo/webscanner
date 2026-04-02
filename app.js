@@ -110,7 +110,8 @@
     isRecoveringPreview: false,
     lookupSequence: 0,
     isCompactMode: false,
-    lockedScrollY: 0
+    lockedScrollY: 0,
+    cameraStartPromise: null
   };
 
   function queryElements() {
@@ -234,8 +235,12 @@
 
     try {
       let DetectorClass = getPonyfillDetectorClass();
-      if (!DetectorClass && typeof window.__ensureBarcodeDetectorReady === "function") {
-        await window.__ensureBarcodeDetectorReady();
+      if (!DetectorClass && window.__ponyfillReadyPromise) {
+        try {
+          await window.__ponyfillReadyPromise;
+        } catch {
+          // Surface a null detector below if the lazy bootstrap failed.
+        }
         DetectorClass = getPonyfillDetectorClass();
       }
       if (!DetectorClass) {
@@ -1679,7 +1684,7 @@
   }
 
   function supportsConfiguredScannerEngine() {
-    return Boolean(getPonyfillDetectorClass() || window.__ensureBarcodeDetectorReady);
+    return Boolean(getPonyfillDetectorClass() || window.__ponyfillReadyPromise);
   }
 
   function getCameraSupportIssue() {
@@ -2206,25 +2211,51 @@
   }
 
   async function startCamera(deviceId) {
-    const supportIssue = getCameraSupportIssue();
-    if (supportIssue) throw new Error(supportIssue);
+    if (state.cameraStartPromise) {
+      await state.cameraStartPromise;
+      if (state.isCameraRunning && (!deviceId || deviceId === state.activeDeviceId)) {
+        return;
+      }
+    }
 
-    cleanupScanTimer();
-    await stopTracks();
+    const startPromise = (async function () {
+      const supportIssue = getCameraSupportIssue();
+      if (supportIssue) throw new Error(supportIssue);
 
-    const activeVideoConfig = getActiveVideoConfig();
-    await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
-    const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
-    await startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig);
+      cleanupScanTimer();
+      await stopTracks();
 
-    state.isCameraRunning = true;
-    state.isScanning = false;
-    setPreviewActive(true);
-    updateResolutionBadge();
-    updateScanButton();
-    updateModePill();
-    startPreviewWatchdog();
-    setStatus("Camera ready");
+      const activeVideoConfig = getActiveVideoConfig();
+      await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
+      const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
+      await startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig);
+
+      state.isCameraRunning = true;
+      state.isScanning = false;
+      setPreviewActive(true);
+      updateResolutionBadge();
+      updateScanButton();
+      updateModePill();
+      startPreviewWatchdog();
+      setStatus("Camera ready");
+    }());
+
+    state.cameraStartPromise = startPromise;
+    try {
+      await startPromise;
+    } finally {
+      if (state.cameraStartPromise === startPromise) {
+        state.cameraStartPromise = null;
+      }
+    }
+  }
+
+  function schedulePreviewWarmStart() {
+    window.setTimeout(function () {
+      startCamera(state.activeDeviceId).catch((error) => {
+        setStatus(error.message || "Camera preview could not start automatically");
+      });
+    }, 0);
   }
 
   async function startScanning() {
@@ -2579,17 +2610,13 @@
       return;
     }
 
-    try {
-      await refreshDevices(readSavedCameraId());
-      await startCamera(state.activeDeviceId);
-      window.setTimeout(function () {
-        createDetector().catch(() => {
-          // Leave scanning available with native support even if the polyfill prewarm fails.
-        });
-      }, 150);
-    } catch (error) {
-      setStatus(error.message || "Camera preview could not start automatically");
-    }
+    updateScanButton();
+    updateModePill();
+    setStatus("Opening camera preview...");
+    refreshDevices(readSavedCameraId()).catch(() => {
+      // Camera labels can fail before permission is granted.
+    });
+    schedulePreviewWarmStart();
   }
 
   if (document.readyState === "loading") {
