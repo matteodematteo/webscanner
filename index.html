@@ -37,10 +37,6 @@
     html,
     body { min-height: 100%; }
 
-    html {
-      -webkit-text-size-adjust: 100%;
-    }
-
     body {
       margin: 0;
       color: var(--text);
@@ -51,23 +47,10 @@
         linear-gradient(180deg, #fbf8f2 0%, var(--bg) 100%);
     }
 
-    body.is-dialog-open {
-      position: fixed;
-      left: 0;
-      right: 0;
-      width: 100%;
-      overflow: hidden;
-    }
-
     .app-shell {
       width: min(820px, calc(100% - 24px));
       margin: 0 auto;
       padding: max(10px, env(safe-area-inset-top)) 0 max(16px, env(safe-area-inset-bottom));
-      min-height: 100dvh;
-      display: grid;
-      grid-template-rows: auto auto minmax(0, 1fr);
-      gap: 10px;
-      overflow: hidden;
     }
 
     .card,
@@ -80,12 +63,6 @@
     }
 
     .card { padding: 12px; }
-
-    .app-shell > .section-card:last-of-type {
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
 
     h2 {
       margin: 0;
@@ -110,7 +87,7 @@
     .preview-frame {
       position: relative;
       margin: 10px auto 0;
-      width: min(100%, 34vh);
+      width: min(100%, 38vh);
       aspect-ratio: 1 / 1;
       overflow: hidden;
       border-radius: var(--radius-lg);
@@ -267,6 +244,7 @@
     .dialog-actions {
       grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
       margin-top: 16px;
+      margin-bottom: 15px;
     }
 
     button,
@@ -344,7 +322,7 @@
     }
 
     .section-card {
-      margin-top: 0;
+      margin-top: 10px;
     }
 
     .field-card {
@@ -489,13 +467,6 @@
       background: rgba(191, 90, 49, 0.1);
     }
 
-    .history-list {
-      min-height: 0;
-      max-height: clamp(185px, 25vh, 235px);
-      overflow: auto;
-      padding-right: 2px;
-    }
-
     .fab {
       position: fixed;
       right: max(16px, env(safe-area-inset-right));
@@ -591,68 +562,6 @@
     .dialog-card {
       width: min(100%, 400px);
       padding: 14px;
-      max-height: min(calc(100dvh - 36px), 100%);
-      overflow: hidden;
-      touch-action: manipulation;
-    }
-
-    #historyEditDialog {
-      align-items: flex-start;
-      padding-top: max(10px, env(safe-area-inset-top));
-      padding-bottom: 0;
-    }
-
-    #historyEditDialog .dialog-card {
-      width: min(100%, 420px);
-      height: min(50dvh, 430px);
-      max-height: min(50dvh, 430px);
-      padding: 10px 12px 12px;
-      display: grid;
-      grid-template-rows: minmax(0, 1fr) auto auto;
-      gap: 6px;
-    }
-
-    #historyEditDialog .input {
-      touch-action: manipulation;
-      font-size: 16px;
-      min-height: 36px;
-    }
-
-    .history-edit-grid {
-      gap: 6px;
-      min-height: 0;
-    }
-
-    .history-edit-row {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
-    }
-
-    .history-edit-row-primary {
-      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    }
-
-    .history-edit-field {
-      display: grid;
-      gap: 3px;
-      min-width: 0;
-    }
-
-    .history-edit-field > span {
-      color: var(--muted);
-      font-size: clamp(0.6rem, 1.35vh, 0.7rem);
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      line-height: 1.05;
-    }
-
-    .history-edit-field-hidden {
-      display: none;
-    }
-
-    .history-edit-actions {
-      margin-top: 4px;
     }
 
     .dialog-card p {
@@ -662,10 +571,10 @@
     }
 
     .save-note {
-      margin-top: 4px;
-      min-height: 1.1em;
+      margin-top: 12px;
+      min-height: 1.3em;
       color: var(--success);
-      font-size: clamp(0.72rem, 1.5vh, 0.82rem);
+      font-size: 0.92rem;
     }
 
     .visually-hidden {
@@ -693,18 +602,9 @@
       .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
       .helper-row { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.75fr) minmax(0, 2.5fr); }
       .card { border-radius: 22px; }
-      .preview-frame { width: min(100%, 30vh); }
+      .preview-frame { width: min(100%, 34vh); }
       .preview-meta { top: 8px; left: 8px; right: 8px; }
       .preview-placeholder { font-size: 0.74rem; }
-
-      #historyEditDialog .input {
-        font-size: 16px;
-      }
-
-      #historyEditDialog .dialog-card {
-        height: min(50dvh, 400px);
-        max-height: min(50dvh, 400px);
-      }
     }
 
     @media (max-width: 430px) {
@@ -725,153 +625,6 @@
       .compact-toggle-btn { font-size: 0.92rem; }
       .history-detail-btn { min-height: 30px; width: auto; padding: 0 8px; margin-right: 32px; font-size: 0.68rem; }
       .toast { width: calc(100% - 28px); text-align: center; }
-
-      #historyEditDialog .dialog-card {
-        width: min(100%, 100%);
-        padding: 8px 10px 10px;
-        gap: 4px;
-      }
-
-      .history-edit-grid,
-      .history-edit-row {
-        gap: 4px;
-      }
-
-      .history-edit-field > span {
-        font-size: clamp(0.56rem, 1.2vh, 0.64rem);
-      }
-
-      #historyEditDialog .input {
-        min-height: 34px;
-        padding: 7px 8px;
-      }
-
-      .history-edit-actions {
-        margin-top: 2px;
-      }
-    }
-
-    @media (max-height: 900px) {
-      .app-shell {
-        width: min(100%, calc(100% - 14px));
-        padding: max(8px, env(safe-area-inset-top)) 0 max(10px, env(safe-area-inset-bottom));
-        gap: 8px;
-      }
-
-      .card,
-      .dialog-card {
-        box-shadow: 0 12px 24px rgba(18, 24, 31, 0.1);
-        backdrop-filter: none;
-      }
-
-      .card {
-        padding: 10px;
-      }
-
-      .controls,
-      .lookup-row,
-      .field-grid,
-      .helper-row,
-      .dialog-actions,
-      .field-list,
-      .history-list {
-        gap: 8px;
-      }
-
-      .top-status {
-        margin-top: 4px;
-        padding: 4px 8px;
-        font-size: 0.72rem;
-      }
-
-      .preview-frame {
-        width: min(100%, 26vh);
-        margin-top: 8px;
-      }
-
-      .field-grid {
-        margin-top: 8px;
-      }
-
-      .field-card {
-        padding: 7px 8px;
-      }
-
-      .field-card label {
-        font-size: 0.62rem;
-        margin-bottom: 4px;
-      }
-
-      .field-value {
-        font-size: 0.72rem;
-        min-height: 1.1em;
-      }
-
-      .btn,
-      .input,
-      .select {
-        min-height: 36px;
-      }
-
-      .btn {
-        font-size: 0.74rem;
-      }
-
-      .history-actions {
-        gap: 8px;
-        margin-bottom: 6px;
-      }
-
-      .history-item {
-        padding: 8px 10px;
-      }
-
-      .history-primary {
-        font-size: 0.84rem;
-      }
-
-      .history-qty,
-      .history-name,
-      .history-meta,
-      .history-detail-btn {
-        font-size: 0.66rem;
-      }
-
-      .history-name,
-      .history-meta,
-      .history-footer {
-        margin-top: 5px;
-      }
-
-      .history-list {
-        max-height: clamp(170px, 24vh, 210px);
-      }
-
-      #historyEditDialog .dialog-card {
-        height: min(50dvh, 360px);
-        max-height: min(50dvh, 360px);
-        padding: 8px 10px 10px;
-        gap: 4px;
-      }
-
-      #historyEditDialog .input {
-        min-height: 32px;
-        padding: 6px 8px;
-        font-size: 16px;
-      }
-
-      .history-edit-grid,
-      .history-edit-row {
-        gap: 4px;
-      }
-
-      .history-edit-field > span {
-        font-size: clamp(0.56rem, 1.15vh, 0.64rem);
-      }
-
-      .history-edit-actions {
-        margin-top: 2px;
-      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1021,48 +774,42 @@
 
   <div class="dialog-backdrop" id="historyEditDialog" aria-hidden="true">
     <div class="dialog-card" role="dialog" aria-modal="true" aria-label="Edit Barcode">
-      <div class="field-list history-edit-grid">
-        <label class="history-edit-field history-edit-field-hidden">
+      <div class="field-list">
+        <label>
           <span>ID</span>
           <input class="input" id="historyEditIdInput" type="text" readonly />
         </label>
-        <div class="history-edit-row history-edit-row-primary">
-          <label class="history-edit-field">
-            <span>Barcode</span>
-            <input class="input" id="historyEditBarcodeInput" type="text" readonly />
-          </label>
-          <label class="history-edit-field">
-            <span>Quantity</span>
-            <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
-          </label>
-        </div>
-        <label class="history-edit-field">
-          <span>Italian Name</span>
-          <input class="input" id="historyEditItalianNameInput" type="text" />
+        <label>
+          <span>Barcode</span>
+          <input class="input" id="historyEditBarcodeInput" type="text" readonly />
         </label>
-        <div class="history-edit-row">
-          <label class="history-edit-field">
-            <span>Cost</span>
-            <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" />
-          </label>
-          <label class="history-edit-field">
-            <span>Price</span>
-            <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" />
-          </label>
-        </div>
-        <div class="history-edit-row">
-          <label class="history-edit-field">
-            <span>Discount%</span>
-            <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" />
-          </label>
-          <label class="history-edit-field">
-            <span>Disc. Price</span>
-            <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly />
-          </label>
-        </div>
+        <label>
+          <span>Italian Name</span>
+          <input class="input" id="historyEditItalianNameInput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </label>
+        <label>
+          <span>Cost</span>
+          <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </label>
+        <label>
+          <span>Price</span>
+          <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </label>
+        <label>
+          <span>Discount%</span>
+          <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </label>
+        <label>
+          <span>Disc. Price</span>
+          <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly autocomplete="off" />
+        </label>
+        <label>
+          <span>Comparison Qty</span>
+          <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </label>
       </div>
       <div class="save-note" id="historyEditSaveNote" aria-live="polite"></div>
-      <div class="dialog-actions history-edit-actions">
+      <div class="dialog-actions">
         <button class="btn btn-primary" id="historyEditSaveBtn" type="button">Save</button>
         <button class="btn btn-muted" id="historyEditBackBtn" type="button">Back</button>
       </div>
@@ -1070,29 +817,8 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script>
-    window.__ponyfillReadyPromise = new Promise(function (resolve) {
-      window.__resolvePonyfillReady = resolve;
-    });
-  </script>
-  <script type="module">
-    try {
-      if (window.BarcodeDetector && typeof window.BarcodeDetector.getSupportedFormats === "function") {
-        await window.BarcodeDetector.getSupportedFormats();
-      } else {
-        const module = await import("https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js");
-        window.BarcodeDetector = module.BarcodeDetectorPolyfill;
-      }
-    } catch {
-      // Leave BarcodeDetector unset if the external library cannot be loaded.
-    }
-
-    window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
-    window.BarcodeDetectionAPI.BarcodeDetector = window.BarcodeDetector;
-    if (window.__resolvePonyfillReady) {
-      window.__resolvePonyfillReady();
-    }
-  </script>
-  <script src="app (2).js?v=52" defer></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
+  <script src="app.js?v=44" defer></script>
 </body>
 </html>
