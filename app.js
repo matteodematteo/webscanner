@@ -197,6 +197,21 @@
     return /iPad|iPhone|iPod/i.test(userAgent) || (/Mac/i.test(userAgent) && "ontouchend" in document);
   }
 
+  async function waitForPonyfillReady(timeoutMs) {
+    if (!window.__ponyfillReadyPromise) {
+      return;
+    }
+
+    await Promise.race([
+      window.__ponyfillReadyPromise.catch(function () {
+        // Ignore lazy scanner bootstrap failures here.
+      }),
+      new Promise(function (resolve) {
+        window.setTimeout(resolve, timeoutMs);
+      })
+    ]);
+  }
+
   function setActivePreviewEngine(engine) {
     if (state.els?.cameraPreview) {
       state.els.cameraPreview.hidden = false;
@@ -2587,13 +2602,7 @@
   }
 
   async function init() {
-    if (window.__ponyfillReadyPromise) {
-      try {
-        await window.__ponyfillReadyPromise;
-      } catch {
-        // Surface the regular scanner support error below if bootstrap failed.
-      }
-    }
+    await waitForPonyfillReady(2200);
 
     state.els = queryElements();
     requireElements(state.els);
