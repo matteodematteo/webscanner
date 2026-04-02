@@ -1071,36 +1071,25 @@
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script>
-    window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
-    window.__barcodePolyfillInitPromise = null;
+    window.__ponyfillReadyPromise = new Promise(function (resolve) {
+      window.__resolvePonyfillReady = resolve;
+    });
+  </script>
+  <script type="module">
+    import { BarcodeDetectorPolyfill } from "https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js";
 
-    if (window.BarcodeDetector) {
-      window.BarcodeDetectionAPI.BarcodeDetector = window.BarcodeDetector;
+    try {
+      await window.BarcodeDetector.getSupportedFormats();
+    } catch {
+      window.BarcodeDetector = BarcodeDetectorPolyfill;
     }
 
-    window.__ensureBarcodeDetectorReady = async function () {
-      if (window.BarcodeDetectionAPI.BarcodeDetector || window.BarcodeDetector) {
-        window.BarcodeDetectionAPI.BarcodeDetector = window.BarcodeDetectionAPI.BarcodeDetector || window.BarcodeDetector;
-        return window.BarcodeDetectionAPI.BarcodeDetector;
-      }
-
-      if (!window.__barcodePolyfillInitPromise) {
-        window.__barcodePolyfillInitPromise = import("https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js")
-          .then(function (module) {
-            const BarcodeDetectorPolyfill = module?.BarcodeDetectorPolyfill || null;
-            if (BarcodeDetectorPolyfill) {
-              window.BarcodeDetectionAPI.BarcodeDetector = BarcodeDetectorPolyfill;
-            }
-            return window.BarcodeDetectionAPI.BarcodeDetector || null;
-          })
-          .catch(function () {
-            return null;
-          });
-      }
-
-      return window.__barcodePolyfillInitPromise;
-    };
+    window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
+    window.BarcodeDetectionAPI.BarcodeDetector = window.BarcodeDetector;
+    if (window.__resolvePonyfillReady) {
+      window.__resolvePonyfillReady();
+    }
   </script>
-  <script src="app (1).js?v=51" defer></script>
+  <script src="app (2).js?v=51" defer></script>
 </body>
 </html>
