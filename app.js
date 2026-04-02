@@ -1405,10 +1405,10 @@
     const lookupSequence = state.lookupSequence + 1;
     state.lookupSequence = lookupSequence;
 
-    const cookie = await getCookieForRequests();
-
     addHistoryItem(code);
     setStatus("Requesting product info...");
+
+    const cookie = await getCookieForRequests();
 
     const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
 
@@ -2587,6 +2587,14 @@
   }
 
   async function init() {
+    if (window.__ponyfillReadyPromise) {
+      try {
+        await window.__ponyfillReadyPromise;
+      } catch {
+        // Surface the regular scanner support error below if bootstrap failed.
+      }
+    }
+
     state.els = queryElements();
     requireElements(state.els);
     state.isMobileUi = detectMobileUi();
@@ -2610,13 +2618,12 @@
       return;
     }
 
-    updateScanButton();
-    updateModePill();
-    setStatus("Opening camera preview...");
-    refreshDevices(readSavedCameraId()).catch(() => {
-      // Camera labels can fail before permission is granted.
-    });
-    schedulePreviewWarmStart();
+    try {
+      await refreshDevices(readSavedCameraId());
+      await startCamera(state.activeDeviceId);
+    } catch (error) {
+      setStatus(error.message || "Camera preview could not start automatically");
+    }
   }
 
   if (document.readyState === "loading") {
