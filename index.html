@@ -1076,12 +1076,15 @@
     });
   </script>
   <script type="module">
-    import { BarcodeDetectorPolyfill } from "https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js";
-
     try {
-      await window.BarcodeDetector.getSupportedFormats();
+      if (window.BarcodeDetector && typeof window.BarcodeDetector.getSupportedFormats === "function") {
+        await window.BarcodeDetector.getSupportedFormats();
+      } else {
+        const module = await import("https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js");
+        window.BarcodeDetector = module.BarcodeDetectorPolyfill;
+      }
     } catch {
-      window.BarcodeDetector = BarcodeDetectorPolyfill;
+      // Leave BarcodeDetector unset if the external library cannot be loaded.
     }
 
     window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
@@ -1090,6 +1093,6 @@
       window.__resolvePonyfillReady();
     }
   </script>
-  <script src="app (2).js?v=51" defer></script>
+  <script src="app (2).js?v=52" defer></script>
 </body>
 </html>
