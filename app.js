@@ -17,8 +17,8 @@
     scanIntervalMs: 1200,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
-    preferredSquareSize: 2160,
-    mobilePreferredSquareSize: 960,
+    preferredSquareSize: 1280,
+    mobilePreferredSquareSize: 720,
     detectorFormats: [
       "ean_13",
       "ean_8",
@@ -46,10 +46,10 @@
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 2160, max: 3840 },
-        height: { ideal: 2160, max: 3840 },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 1280, max: 1920 },
         aspectRatio: { ideal: 1 },
-        frameRate: { ideal: 30, max: 60 },
+        frameRate: { ideal: 24, max: 30 },
         resizeMode: "crop-and-scale"
       }
     },
@@ -57,8 +57,8 @@
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1440, max: 2160 },
-        height: { ideal: 1440, max: 2160 },
+        width: { ideal: 960, max: 1280 },
+        height: { ideal: 960, max: 1280 },
         aspectRatio: { ideal: 1 },
         frameRate: { ideal: 24, max: 30 },
         resizeMode: "crop-and-scale"
@@ -68,10 +68,10 @@
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 2160, max: 3840 },
-        height: { ideal: 2160, max: 3840 },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 1280, max: 1920 },
         aspectRatio: { ideal: 1 },
-        frameRate: { ideal: 30, max: 60 },
+        frameRate: { ideal: 24, max: 30 },
         resizeMode: "crop-and-scale"
       }
     }
@@ -233,7 +233,11 @@
     if (state.detector) return state.detector;
 
     try {
-      const DetectorClass = getPonyfillDetectorClass();
+      let DetectorClass = getPonyfillDetectorClass();
+      if (!DetectorClass && typeof window.__ensureBarcodeDetectorReady === "function") {
+        await window.__ensureBarcodeDetectorReady();
+        DetectorClass = getPonyfillDetectorClass();
+      }
       if (!DetectorClass) {
         return null;
       }
@@ -558,9 +562,6 @@
     const entry = createHistoryEntry(barcode);
     if (!entry.barcode) return null;
     state.history.unshift(entry);
-    if (state.history.length > 12) {
-      state.history.length = 12;
-    }
     state.selectedHistoryIndex = 0;
     saveHistoryState();
     renderHistory();
@@ -1678,7 +1679,7 @@
   }
 
   function supportsConfiguredScannerEngine() {
-    return Boolean(getPonyfillDetectorClass());
+    return Boolean(getPonyfillDetectorClass() || window.__ensureBarcodeDetectorReady);
   }
 
   function getCameraSupportIssue() {
@@ -2555,14 +2556,6 @@
   }
 
   async function init() {
-    if (window.__ponyfillReadyPromise) {
-      try {
-        await window.__ponyfillReadyPromise;
-      } catch {
-        // Surface the regular scanner support error below if bootstrap failed.
-      }
-    }
-
     state.els = queryElements();
     requireElements(state.els);
     state.isMobileUi = detectMobileUi();
@@ -2589,6 +2582,11 @@
     try {
       await refreshDevices(readSavedCameraId());
       await startCamera(state.activeDeviceId);
+      window.setTimeout(function () {
+        createDetector().catch(() => {
+          // Leave scanning available with native support even if the polyfill prewarm fails.
+        });
+      }, 150);
     } catch (error) {
       setStatus(error.message || "Camera preview could not start automatically");
     }
