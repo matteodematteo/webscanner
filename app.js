@@ -111,7 +111,8 @@
     lookupSequence: 0,
     isCompactMode: false,
     lockedScrollY: 0,
-    cameraStartPromise: null
+    cameraStartPromise: null,
+    focusRefreshTimers: []
   };
 
   function queryElements() {
@@ -1750,6 +1751,17 @@
     state.isScanInFlight = false;
   }
 
+  function clearFocusRefreshTimers() {
+    if (!Array.isArray(state.focusRefreshTimers)) {
+      state.focusRefreshTimers = [];
+      return;
+    }
+    for (let index = 0; index < state.focusRefreshTimers.length; index += 1) {
+      window.clearTimeout(state.focusRefreshTimers[index]);
+    }
+    state.focusRefreshTimers = [];
+  }
+
   function stopPreviewWatchdog() {
     if (state.previewWatchdogTimer) {
       window.clearInterval(state.previewWatchdogTimer);
@@ -1820,6 +1832,7 @@
 
   async function stopTracks() {
     stopPreviewWatchdog();
+    clearFocusRefreshTimers();
     state.isCameraRunning = false;
     state.torchOn = false;
     updateTorchUi(false, false);
@@ -2128,8 +2141,55 @@
     state.els.cameraPreview.srcObject = stream;
     await state.els.cameraPreview.play();
     await applyTrackEnhancements(track, activeVideoConfig);
+    scheduleFocusRefresh(track);
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
+  }
+
+  async function requestFocusRefresh(track) {
+    if (!track?.getCapabilities || !track.applyConstraints || track.readyState === "ended") {
+      return;
+    }
+
+    const capabilities = track.getCapabilities();
+    const advanced = [];
+
+    if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
+      advanced.push({ focusMode: "continuous" });
+    } else if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("single-shot")) {
+      advanced.push({ focusMode: "single-shot" });
+    }
+
+    if (!isIOSDevice() && capabilities.zoom && typeof capabilities.zoom.max === "number") {
+      const minZoom = typeof capabilities.zoom.min === "number" ? capabilities.zoom.min : 1;
+      const desiredZoom = capabilities.zoom.max >= 1.4 ? Math.max(minZoom, 1.1) : minZoom;
+      if (desiredZoom > minZoom) {
+        advanced.push({ zoom: desiredZoom });
+      }
+    }
+
+    if (advanced.length === 0) {
+      return;
+    }
+
+    try {
+      await track.applyConstraints({ advanced: advanced });
+    } catch {
+      // Device-specific camera focus controls can fail transiently.
+    }
+  }
+
+  function scheduleFocusRefresh(track) {
+    clearFocusRefreshTimers();
+    const delays = isIOSDevice() ? [150, 700, 1600] : [120, 500, 1200];
+    for (let index = 0; index < delays.length; index += 1) {
+      const timerId = window.setTimeout(function () {
+        requestFocusRefresh(track).catch(() => {
+          // Ignore autofocus refresh noise.
+        });
+      }, delays[index]);
+      state.focusRefreshTimers.push(timerId);
+    }
   }
 
   async function applyTrackEnhancements(track, activeVideoConfig) {
@@ -2163,25 +2223,8 @@
     }
 
     const capabilities = track.getCapabilities();
-    const advanced = [];
-
-    if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
-      advanced.push({ focusMode: "continuous" });
-    }
-
-    if (capabilities.zoom && typeof capabilities.zoom.max === "number") {
-      const minZoom = typeof capabilities.zoom.min === "number" ? capabilities.zoom.min : 1;
-      const desiredZoom = Math.min(capabilities.zoom.max, Math.max(minZoom, 1.2));
-      advanced.push({ zoom: desiredZoom });
-    }
-
-    if (advanced.length === 0) return;
-
-    try {
-      await track.applyConstraints({ advanced: advanced });
-    } catch {
-      // Device-specific support.
-    }
+    if (!capabilities) return;
+    await requestFocusRefresh(track);
   }
 
   function updateTorchUi(supported, enabled) {
@@ -2273,14 +2316,6 @@
     }, 0);
   }
 
-  function schedulePreviewWarmStart() {
-    window.setTimeout(function () {
-      startCamera(state.activeDeviceId).catch((error) => {
-        setStatus(error.message || "Camera preview could not start automatically");
-      });
-    }, 0);
-  }
-
   async function startScanning() {
     if (!state.isCameraRunning) {
       await startCamera(state.activeDeviceId);
@@ -2288,6 +2323,7 @@
 
     if (state.isScanning) return;
 
+    scheduleFocusRefresh(state.track);
     state.isScanning = true;
     updateScanButton();
     updateModePill();
