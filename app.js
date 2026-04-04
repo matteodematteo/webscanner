@@ -1331,6 +1331,12 @@
       .trim();
   }
 
+  function normalizeDecimalInput(value) {
+    return String(value || "")
+      .trim()
+      .replace(/,/g, ".");
+  }
+
   function getHistoryDisplayPrice(item) {
     const entry = normalizeHistoryItem(item);
     const sPrice = numberFromValue(entry.s_price);
@@ -1517,18 +1523,23 @@
     }
 
     const currentItem = state.history[index];
-    const rawPPrice = state.els.historyEditPPriceInput.value.trim();
+    const rawPPrice = normalizeDecimalInput(state.els.historyEditPPriceInput.value);
+    const normalizedSPrice = normalizeDecimalInput(state.els.historyEditSPriceInput.value);
+    const normalizedSDiscount = normalizeDecimalInput(state.els.historyEditSDiscountInput.value);
     const payload = {
       id: state.els.historyEditIdInput.value.trim(),
       barcode: state.els.historyEditBarcodeInput.value.trim(),
       italian_name: sanitizeItalianName(state.els.historyEditItalianNameInput.value),
       p_price: rawPPrice || "0",
-      s_price: state.els.historyEditSPriceInput.value.trim(),
-      s_discount: state.els.historyEditSDiscountInput.value.trim()
+      s_price: normalizedSPrice,
+      s_discount: normalizedSDiscount
     };
     const comparisonQty = Math.max(1, Number(state.els.historyEditQtyInput.value || 1) || 1);
     const originalItalianName = state.els.historyEditItalianNameInput.value.trim();
     state.els.historyEditItalianNameInput.value = payload.italian_name;
+    state.els.historyEditPPriceInput.value = rawPPrice;
+    state.els.historyEditSPriceInput.value = normalizedSPrice;
+    state.els.historyEditSDiscountInput.value = normalizedSDiscount;
     if (originalItalianName !== payload.italian_name) {
       showToast("Unsupported symbols removed from name");
     }
