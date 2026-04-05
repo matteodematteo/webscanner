@@ -122,7 +122,8 @@
     cameraStartPromise: null,
     focusRefreshTimers: [],
     focusIndicatorTimer: 0,
-    lastTapToFocusAt: 0
+    lastTapToFocusAt: 0,
+    iosWarmRestartDone: false
   };
 
   function queryElements() {
@@ -1895,7 +1896,11 @@
     const focusPoint = getPreviewFocusPoint(clientX, clientY);
     const focused = await refocusAtPoint(state.track, focusPoint);
     if (!focused) {
-      setStatus("Tap detected, asking camera to refocus");
+      setStatus(
+        isIOSDevice()
+          ? "Tap detected, but iPhone Safari is not exposing manual focus here"
+          : "Tap detected, but this camera did not expose manual focus"
+      );
       return;
     }
     setStatus("Focus adjusted");
@@ -2050,16 +2055,78 @@
     return device.label || `Camera ${index + 1}`;
   }
 
+  function isLikelyProblematicIOSCameraLabel(label) {
+    return /ultra|tele|macro|0\.5x|2x|3x|continuity|desk|front|true.?depth|facetime/i.test(label || "");
+  }
+
+  function scoreVideoDevice(device, index) {
+    const label = String(device?.label || "");
+    let score = 0;
+
+    if (/back camera|rear camera/i.test(label)) {
+      score += 140;
+    }
+    if (/back|rear|environment/i.test(label)) {
+      score += 90;
+    }
+    if (/\bwide\b|main|1x/i.test(label)) {
+      score += 40;
+    }
+    if (/front|user|true.?depth|facetime/i.test(label)) {
+      score -= 140;
+    }
+    if (/ultra|tele|macro|0\.5x|2x|3x|continuity|desk/i.test(label)) {
+      score -= 80;
+    }
+    if (!label && index === 0) {
+      score += 5;
+    }
+    if (isIOSDevice() && !label) {
+      score += Math.max(0, 10 - index);
+    }
+
+    return score;
+  }
+
   function chooseBestDefaultDevice(devices) {
     if (!devices || devices.length === 0) return "";
-    const rear = devices.find((device) => /back|rear|environment|wide|ultra/i.test(device.label || ""));
-    if (rear) {
-      return rear.deviceId;
+
+    const rankedDevices = devices
+      .map(function (device, index) {
+        return {
+          device: device,
+          score: scoreVideoDevice(device, index),
+          index: index
+        };
+      })
+      .sort(function (left, right) {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+        return left.index - right.index;
+      });
+
+    return rankedDevices[0]?.device?.deviceId || devices[0].deviceId;
+  }
+
+  function resolvePreferredDeviceId(devices, preferredDeviceId) {
+    if (!devices || devices.length === 0) {
+      return "";
     }
-    if (devices.length > 1) {
-      return devices[devices.length - 1].deviceId;
+
+    const preferredDevice = devices.find(function (device) {
+      return device.deviceId === preferredDeviceId;
+    });
+
+    if (
+      isIOSDevice() &&
+      preferredDevice &&
+      isLikelyProblematicIOSCameraLabel(preferredDevice.label)
+    ) {
+      return chooseBestDefaultDevice(devices);
     }
-    return devices[0].deviceId;
+
+    return preferredDevice?.deviceId || chooseBestDefaultDevice(devices);
   }
 
   async function refreshDevices(preferredDeviceId) {
@@ -2068,7 +2135,8 @@
 
     state.devices = devices;
     const savedCameraId = readSavedCameraId();
-    const fallbackId = preferredDeviceId || state.activeDeviceId || savedCameraId || chooseBestDefaultDevice(state.devices);
+    const requestedId = preferredDeviceId || state.activeDeviceId || savedCameraId || "";
+    const fallbackId = resolvePreferredDeviceId(state.devices, requestedId);
     const hasMatch = state.devices.some((device) => device.deviceId === fallbackId);
     const currentId = hasMatch ? fallbackId : chooseBestDefaultDevice(state.devices);
     state.activeDeviceId = currentId;
@@ -2492,6 +2560,16 @@
       await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
       const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
       await startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig);
+
+      if (isIOSDevice() && !state.iosWarmRestartDone) {
+        state.iosWarmRestartDone = true;
+        const restartDeviceId = state.activeDeviceId || preferredCameraId;
+        await new Promise(function (resolve) {
+          window.setTimeout(resolve, 220);
+        });
+        await stopTracks();
+        await startCameraWithPonyfillDetector(restartDeviceId, activeVideoConfig);
+      }
 
       state.isCameraRunning = true;
       state.isScanning = false;
