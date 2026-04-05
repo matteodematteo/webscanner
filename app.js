@@ -2029,12 +2029,40 @@
   }
 
   function isLikelyProblematicIOSCameraLabel(label) {
-    return /ultra|tele|macro|0\.5x|2x|3x|continuity|desk|front|true.?depth|facetime/i.test(label || "");
+    return /tele|triple|long.?focus|0\.5x|2x|3x|continuity|desk|front|true.?depth|facetime|前置|长焦|三镜头/i.test(label || "");
   }
 
   function scoreVideoDevice(device, index) {
     const label = String(device?.label || "");
     let score = 0;
+
+    if (isIOSDevice()) {
+      if (/超广角|ultra.?wide/i.test(label)) {
+        score += 260;
+      }
+      if (/双广角|dual.?wide/i.test(label)) {
+        score += 220;
+      }
+      if (/后置相机|back camera|rear camera/i.test(label)) {
+        score += 180;
+      }
+      if (/后置双镜头|dual camera/i.test(label)) {
+        score += 120;
+      }
+      if (/三镜头|triple/i.test(label)) {
+        score -= 140;
+      }
+      if (/长焦|tele/i.test(label)) {
+        score -= 220;
+      }
+      if (/前置|front|user|true.?depth|facetime/i.test(label)) {
+        score -= 260;
+      }
+      if (!label && index === 0) {
+        score -= 30;
+      }
+      return score;
+    }
 
     if (/back camera|rear camera/i.test(label)) {
       score += 140;
