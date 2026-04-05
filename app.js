@@ -120,7 +120,9 @@
     isCompactMode: false,
     lockedScrollY: 0,
     cameraStartPromise: null,
-    focusRefreshTimers: []
+    focusRefreshTimers: [],
+    focusIndicatorTimer: 0,
+    lastTapToFocusAt: 0
   };
 
   function queryElements() {
@@ -140,6 +142,7 @@
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
       compactToggleBtn: document.getElementById("compactToggleBtn"),
+      focusIndicator: document.getElementById("focusIndicator"),
       historyEmpty: document.getElementById("historyEmpty"),
       historyEditBackBtn: document.getElementById("historyEditBackBtn"),
       historyEditBarcodeInput: document.getElementById("historyEditBarcodeInput"),
@@ -1784,6 +1787,120 @@
     state.focusRefreshTimers = [];
   }
 
+  function showFocusIndicator(clientX, clientY) {
+    const frame = state.els?.previewFrame;
+    const indicator = state.els?.focusIndicator;
+    if (!frame || !indicator) {
+      return;
+    }
+
+    const rect = frame.getBoundingClientRect();
+    const left = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const top = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    indicator.style.left = `${left}px`;
+    indicator.style.top = `${top}px`;
+    indicator.classList.add("is-visible");
+
+    if (state.focusIndicatorTimer) {
+      window.clearTimeout(state.focusIndicatorTimer);
+    }
+    state.focusIndicatorTimer = window.setTimeout(function () {
+      indicator.classList.remove("is-visible");
+      state.focusIndicatorTimer = 0;
+    }, 900);
+  }
+
+  function getPreviewFocusPoint(clientX, clientY) {
+    const frame = state.els?.previewFrame;
+    const video = getPreviewVideoElement();
+    if (!frame || !video) {
+      return null;
+    }
+
+    const rect = frame.getBoundingClientRect();
+    const videoWidth = Number(video.videoWidth || 0);
+    const videoHeight = Number(video.videoHeight || 0);
+    if (!rect.width || !rect.height || !videoWidth || !videoHeight) {
+      return null;
+    }
+
+    const localX = clientX - rect.left;
+    const localY = clientY - rect.top;
+    const scale = Math.max(rect.width / videoWidth, rect.height / videoHeight);
+    const drawnWidth = videoWidth * scale;
+    const drawnHeight = videoHeight * scale;
+    const offsetX = (rect.width - drawnWidth) / 2;
+    const offsetY = (rect.height - drawnHeight) / 2;
+    const normalizedX = (localX - offsetX) / drawnWidth;
+    const normalizedY = (localY - offsetY) / drawnHeight;
+
+    return {
+      x: Math.max(0, Math.min(1, normalizedX)),
+      y: Math.max(0, Math.min(1, normalizedY))
+    };
+  }
+
+  async function refocusAtPoint(track, focusPoint) {
+    if (!track?.getCapabilities || !track.applyConstraints || track.readyState === "ended") {
+      return false;
+    }
+
+    const capabilities = track.getCapabilities();
+    const advanced = [];
+    const supportsPointsOfInterest = Object.prototype.hasOwnProperty.call(capabilities, "pointsOfInterest");
+    const supportsSingleShot =
+      Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("single-shot");
+    const supportsContinuous =
+      Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous");
+
+    if (supportsPointsOfInterest && focusPoint) {
+      advanced.push({ pointsOfInterest: [focusPoint] });
+    }
+    if (supportsSingleShot) {
+      advanced.push({ focusMode: "single-shot" });
+    } else if (supportsContinuous) {
+      advanced.push({ focusMode: "continuous" });
+    }
+
+    if (advanced.length === 0) {
+      await requestFocusRefresh(track);
+      return false;
+    }
+
+    try {
+      await track.applyConstraints({ advanced: advanced });
+      if (supportsSingleShot && supportsContinuous) {
+        window.setTimeout(function () {
+          if (!track?.applyConstraints || track.readyState === "ended") {
+            return;
+          }
+          track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => {
+            // Ignore returning to continuous focus if unsupported in practice.
+          });
+        }, 700);
+      }
+      return true;
+    } catch {
+      await requestFocusRefresh(track);
+      return false;
+    }
+  }
+
+  async function handlePreviewTap(clientX, clientY) {
+    if (!state.isCameraRunning || !state.track) {
+      return;
+    }
+
+    showFocusIndicator(clientX, clientY);
+    const focusPoint = getPreviewFocusPoint(clientX, clientY);
+    const focused = await refocusAtPoint(state.track, focusPoint);
+    if (!focused) {
+      setStatus("Tap detected, asking camera to refocus");
+      return;
+    }
+    setStatus("Focus adjusted");
+  }
+
   function stopPreviewWatchdog() {
     if (state.previewWatchdogTimer) {
       window.clearInterval(state.previewWatchdogTimer);
@@ -2460,6 +2577,32 @@
   }
 
   function bindEvents() {
+    const onPreviewTap = function (clientX, clientY) {
+      const now = Date.now();
+      if (now - state.lastTapToFocusAt < 350) {
+        return;
+      }
+      state.lastTapToFocusAt = now;
+      handlePreviewTap(clientX, clientY).catch(() => {
+        setStatus("Tap to focus failed on this device");
+      });
+    };
+
+    state.els.previewFrame.addEventListener("pointerup", function (event) {
+      if (event.pointerType === "mouse" && event.button !== 0) {
+        return;
+      }
+      onPreviewTap(event.clientX, event.clientY);
+    });
+
+    state.els.previewFrame.addEventListener("touchend", function (event) {
+      const touch = event.changedTouches?.[0];
+      if (!touch) {
+        return;
+      }
+      onPreviewTap(touch.clientX, touch.clientY);
+    }, { passive: true });
+
     state.els.scanBtn.addEventListener("click", async function () {
       state.els.scanBtn.disabled = true;
       try {
