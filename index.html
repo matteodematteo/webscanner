@@ -1,1083 +1,2902 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#131a22" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Web Scanner" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
-  <title>Web Barcode Scanner</title>
-  <style>
-    :root {
-      --bg: #f3efe7;
-      --panel: rgba(255, 252, 247, 0.93);
-      --panel-line: rgba(20, 28, 36, 0.1);
-      --text: #18212a;
-      --muted: #667483;
-      --accent: #bf5a31;
-      --accent-strong: #a34a26;
-      --surface: #0f161e;
-      --success: #136f63;
-      --danger: #9c3041;
-      --shadow: 0 22px 50px rgba(18, 24, 31, 0.14);
-      --radius-xl: 22px;
-      --radius-lg: 18px;
-      --radius-md: 12px;
-      --radius-sm: 10px;
-      --font: "Aptos", "Segoe UI", sans-serif;
-    }
-
-    * { box-sizing: border-box; }
-
-    html,
-    body { min-height: 100%; }
-
-    html {
-      -webkit-text-size-adjust: 100%;
-    }
-
-    body {
-      margin: 0;
-      color: var(--text);
-      font-family: var(--font);
-      background:
-        radial-gradient(circle at top left, rgba(191, 90, 49, 0.18), transparent 28%),
-        radial-gradient(circle at top right, rgba(19, 111, 99, 0.14), transparent 24%),
-        linear-gradient(180deg, #fbf8f2 0%, var(--bg) 100%);
-    }
-
-    body.is-dialog-open {
-      position: fixed;
-      left: 0;
-      right: 0;
-      width: 100%;
-      overflow: hidden;
-    }
-
-    .app-shell {
-      width: min(820px, calc(100% - 24px));
-      margin: 0 auto;
-      padding: max(10px, env(safe-area-inset-top)) 0 max(16px, env(safe-area-inset-bottom));
-      min-height: 100dvh;
-      display: grid;
-      grid-template-rows: auto auto minmax(0, 1fr);
-      gap: 10px;
-      overflow: hidden;
-    }
-
-    .card,
-    .dialog-card {
-      background: var(--panel);
-      border: 1px solid var(--panel-line);
-      border-radius: var(--radius-xl);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-    }
-
-    .card { padding: 12px; }
-
-    .app-shell > .section-card:last-of-type {
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-    }
-
-    h2 {
-      margin: 0;
-      letter-spacing: -0.04em;
-    }
-
-    h2 {
-      font-size: 0.96rem;
-      line-height: 1.1;
-    }
-
-    .top-status {
-      display: inline-flex;
-      margin-top: 6px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(20, 28, 36, 0.06);
-      color: var(--muted);
-      font-size: 0.78rem;
-    }
-
-    .preview-frame {
-      position: relative;
-      margin: 10px auto 0;
-      width: min(100%, 34vh);
-      aspect-ratio: 1 / 1;
-      overflow: hidden;
-      border-radius: var(--radius-lg);
-      background:
-        linear-gradient(180deg, rgba(6, 10, 14, 0.12), rgba(6, 10, 14, 0.45)),
-        var(--surface);
-    }
-
-    #cameraPreview,
-    #cameraPreviewQuagga,
-    .preview-placeholder,
-    .preview-grid,
-    .scan-line {
-      position: absolute;
-      inset: 0;
-    }
-
-    #cameraPreview,
-    #cameraPreviewQuagga {
-      width: 100%;
-      height: 100%;
-      display: block;
-      background: #05080b;
-    }
-
-    #cameraPreviewQuagga[hidden] {
-      display: none !important;
-    }
-
-    #cameraPreview,
-    #cameraPreviewQuagga video,
-    #cameraPreviewQuagga canvas {
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover;
-      display: block;
-    }
-
-    .preview-grid {
-      pointer-events: none;
-      background:
-        linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-      background-size: 22% 22%;
-      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent 85%);
-    }
-
-    .scan-window {
-      position: absolute;
-      inset: 10%;
-      border: 2px solid rgba(255, 255, 255, 0.92);
-      border-radius: 24px;
-      box-shadow: 0 0 0 999px rgba(6, 10, 14, 0.24);
-      pointer-events: none;
-    }
-
-    .scan-line {
-      top: 14%;
-      bottom: auto;
-      height: 3px;
-      left: 14%;
-      right: 14%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, transparent, rgba(255, 175, 141, 0.96), transparent);
-      box-shadow: 0 0 18px rgba(255, 146, 92, 0.95);
-      opacity: 0;
-    }
-
-    .preview-frame.is-scanning .scan-line {
-      opacity: 0;
-    }
-
-    .preview-placeholder {
-      display: grid;
-      place-items: center;
-      padding: 16px;
-      text-align: center;
-      color: rgba(255, 255, 255, 0.9);
-      background: linear-gradient(180deg, rgba(10, 16, 22, 0.16), rgba(10, 16, 22, 0.78));
-      font-size: 0.82rem;
-    }
-
-    .preview-placeholder[hidden] { display: none; }
-
-    .preview-meta {
-      position: absolute;
-      top: 14px;
-      left: 14px;
-      right: 14px;
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      pointer-events: none;
-    }
-
-    .badge,
-    .mini-pill {
-      padding: 5px 9px;
-      border-radius: 999px;
-      font-size: 0.72rem;
-    }
-
-    .badge {
-      background: rgba(8, 12, 16, 0.58);
-      color: #fff;
-      backdrop-filter: blur(12px);
-    }
-
-    .controls,
-    .lookup-row,
-    .field-grid,
-    .helper-row,
-    .dialog-actions,
-    .field-list,
-    .history-list {
-      display: grid;
-      gap: 12px;
-    }
-
-    .controls { margin-top: 10px; }
-
-    .top-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .button-row { grid-template-columns: 1fr; }
-    .lookup-row { grid-template-columns: minmax(0, 1fr) 88px; }
-
-    .field-grid {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      margin-top: 10px;
-    }
-
-    .span-half { grid-column: span 3; }
-    .span-full { grid-column: 1 / -1; }
-    .span-third { grid-column: span 2; }
-
-    .helper-row {
-      grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.75fr) minmax(0, 2.5fr);
-      margin-top: 8px;
-    }
-
-    .compact-toggle-btn {
-      min-width: 44px;
-      padding: 0;
-      font-size: 1rem;
-    }
-
-    .dialog-actions {
-      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-      margin-top: 16px;
-    }
-
-    button,
-    select,
-    input,
-    textarea {
-      font: inherit;
-    }
-
-    .btn,
-    .input,
-    .select {
-      min-height: 42px;
-      border-radius: var(--radius-md);
-      border: 1px solid transparent;
-      width: 100%;
-    }
-
-    .btn {
-      cursor: pointer;
-      padding: 0 10px;
-      font-weight: 700;
-      font-size: 0.82rem;
-    }
-
-    .btn:disabled,
-    .input:disabled,
-    .select:disabled { opacity: 0.55; cursor: not-allowed; }
-
-    .btn-primary {
-      color: #fff7f2;
-      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-      box-shadow: 0 16px 28px rgba(191, 90, 49, 0.22);
-    }
-
-    .btn-primary[data-mode="stop"] {
-      background: linear-gradient(135deg, #7d2431, #9f3343);
-      box-shadow: 0 16px 28px rgba(125, 36, 49, 0.18);
-    }
-
-    .btn-muted,
-    .input,
-    .select {
-      color: var(--text);
-      background: rgba(20, 28, 36, 0.06);
-      border-color: rgba(20, 28, 36, 0.08);
-    }
-
-    .input,
-    .select,
-    .textarea {
-      padding: 9px 10px;
-      border-color: rgba(20, 28, 36, 0.12);
-      background: rgba(255, 255, 255, 0.96);
-      color: var(--text);
-      font-size: 16px;
-    }
-
-    .textarea {
-      min-height: 96px;
-      resize: vertical;
-    }
-
-    .input:focus,
-    .select:focus,
-    .textarea:focus {
-      outline: 2px solid rgba(191, 90, 49, 0.28);
-      outline-offset: 1px;
-    }
-
-    .mini-pill {
-      background: rgba(20, 28, 36, 0.05);
-      color: var(--muted);
-      text-align: center;
-    }
-
-    .section-card {
-      margin-top: 0;
-    }
-
-    .field-card {
-      padding: 9px 10px;
-      border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.68);
-      border: 1px solid rgba(20, 28, 36, 0.08);
-    }
-
-    .field-card label {
-      display: block;
-      color: var(--muted);
-      font-size: 0.68rem;
-      margin-bottom: 5px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-
-    .field-value {
-      font-size: 0.8rem;
-      font-weight: 700;
-      line-height: 1.28;
-      word-break: break-word;
-      min-height: 1.25em;
-    }
-
-    .field-card[hidden] {
-      display: none;
-    }
-
-    .field-value.is-discount {
-      color: #b42318;
-      font-weight: 800;
-    }
-
-    .history-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-
-    .history-actions {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-
-    .history-empty {
-      margin: 0;
-      padding: 14px;
-      border-radius: var(--radius-md);
-      background: rgba(20, 28, 36, 0.04);
-      color: var(--muted);
-      text-align: center;
-    }
-
-    .history-item {
-      padding: 10px 12px;
-      border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.68);
-      border: 1px solid rgba(20, 28, 36, 0.08);
-      font-size: 1rem;
-      font-weight: 700;
-      line-height: 1.35;
-      word-break: break-word;
-      cursor: pointer;
-    }
-
-    .history-primary {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 0.96rem;
-      font-weight: 800;
-    }
-
-    .history-code {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .history-qty {
-      color: var(--accent-strong);
-      font-size: 0.74rem;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-
-    .history-name {
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 0.72rem;
-      line-height: 1.28;
-      font-weight: 600;
-    }
-
-    .history-meta {
-      display: flex;
-      gap: 14px;
-      margin-top: 8px;
-      color: var(--text);
-      font-size: 0.73rem;
-      font-weight: 700;
-      flex-wrap: wrap;
-    }
-
-    .history-meta span {
-      white-space: nowrap;
-    }
-
-    .history-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-top: 8px;
-    }
-
-    .history-detail-btn {
-      min-height: 32px;
-      width: auto;
-      padding: 0 10px;
-      margin-left: auto;
-      margin-right: 50px;
-      font-size: 0.72rem;
-      border-radius: 999px;
-      flex: 0 0 auto;
-    }
-
-    .history-item.is-selected {
-      border-color: rgba(191, 90, 49, 0.44);
-      background: rgba(191, 90, 49, 0.1);
-    }
-
-    .history-list {
-      min-height: 0;
-      max-height: none;
-      overflow: visible;
-      padding-right: 2px;
-    }
-
-    .fab {
-      position: fixed;
-      right: max(16px, env(safe-area-inset-right));
-      bottom: max(16px, env(safe-area-inset-bottom));
-      width: 50px;
-      height: 50px;
-      border: none;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: linear-gradient(135deg, #1b2430, #101720);
-      color: #fff;
-      box-shadow: 0 18px 35px rgba(17, 24, 31, 0.28);
-      z-index: 15;
-    }
-
-    .fab svg {
-      width: 24px;
-      height: 24px;
-    }
-
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: max(78px, calc(env(safe-area-inset-bottom) + 78px));
-      transform: translateX(-50%);
-      padding: 10px 14px;
-      border-radius: 999px;
-      background: rgba(24, 33, 42, 0.94);
-      color: #fff;
-      font-size: 0.8rem;
-      font-weight: 700;
-      opacity: 0;
-      pointer-events: none;
-      z-index: 30;
-    }
-
-    .toast.is-visible {
-      opacity: 1;
-      transform: translateX(-50%);
-    }
-
-    body.is-compact .top-tools,
-    body.is-compact #statusText,
-    body.is-compact #productInfoTitle,
-    body.is-compact #field_goods_code_card,
-    body.is-compact #field_supplier_name_card,
-    body.is-compact #field_spec_card,
-    body.is-compact #field_id_card,
-    body.is-compact #historyTitle {
-      display: none !important;
-    }
-
-    body.is-compact .field-grid {
-      grid-template-columns: repeat(10, minmax(0, 1fr));
-    }
-
-    body.is-compact #field_italian_name_card {
-      grid-column: 1 / span 7;
-    }
-
-    body.is-compact #field_supplier_name_compact_card {
-      grid-column: 8 / span 3;
-      display: block !important;
-    }
-
-    body.is-compact #field_p_price_card {
-      grid-column: 1 / span 3;
-    }
-
-    body.is-compact #field_s_price_card {
-      grid-column: 4 / span 3;
-    }
-
-    body.is-compact #field_real_inventory_card {
-      grid-column: 7 / span 4;
-    }
-
-    .dialog-backdrop {
-      position: fixed;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-      background: rgba(10, 16, 22, 0.45);
-      z-index: 20;
-    }
-
-    .dialog-backdrop.is-open { display: flex; }
-
-    .dialog-card {
-      width: min(100%, 400px);
-      padding: 14px;
-      max-height: min(calc(100dvh - 36px), 100%);
-      overflow: hidden;
-      touch-action: manipulation;
-    }
-
-    #historyEditDialog {
-      align-items: flex-start;
-      padding-top: max(10px, env(safe-area-inset-top));
-      padding-bottom: 0;
-    }
-
-    #historyEditDialog .dialog-card {
-      width: min(100%, 420px);
-      height: min(50dvh, 430px);
-      max-height: min(50dvh, 430px);
-      padding: 10px 12px 12px;
-      display: grid;
-      grid-template-rows: minmax(0, 1fr) auto auto;
-      gap: 6px;
-    }
-
-    #historyEditDialog .input {
-      touch-action: manipulation;
-      font-size: 16px;
-      min-height: 36px;
-    }
-
-    .history-edit-grid {
-      gap: 6px;
-      min-height: 0;
-    }
-
-    .history-edit-row {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
-    }
-
-    .history-edit-row-primary {
-      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    }
-
-    .history-edit-field {
-      display: grid;
-      gap: 3px;
-      min-width: 0;
-    }
-
-    .history-edit-field > span {
-      color: var(--muted);
-      font-size: clamp(0.6rem, 1.35vh, 0.7rem);
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      line-height: 1.05;
-    }
-
-    .history-edit-field-hidden {
-      display: none;
-    }
-
-    .history-edit-actions {
-      margin-top: 4px;
-    }
-
-    .dialog-card p {
-      margin: 10px 0 0;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    .save-note {
-      margin-top: 4px;
-      min-height: 1.1em;
-      color: var(--success);
-      font-size: clamp(0.72rem, 1.5vh, 0.82rem);
-    }
-
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    @media (max-width: 680px) {
-      .app-shell { width: min(100%, calc(100% - 16px)); }
-      .card,
-      .dialog-card {
-        box-shadow: 0 12px 24px rgba(18, 24, 31, 0.1);
-        backdrop-filter: none;
+"use strict";
+
+(function bootstrapWebBarcodeScanner() {
+  const CONFIG = {
+    cookieProxyEndpoint: "https://lgkiller.mattoteo96.workers.dev/",
+    infoEndpoint: "https://lgerp.cc/goods/ongoodsCode",
+    infoProxyEndpoint: "https://lgkillergetinfo.mattoteo96.workers.dev/",
+    discountProxyEndpoint: "https://lgkillerdiscountinfo.mattoteo96.workers.dev/",
+    updateProxyEndpoint: "https://lgkillerupdate.mattoteo96.workers.dev/",
+    addProductProxyEndpoint: "https://lgkilleraddproduct.mattoteo96.workers.dev/",
+    sendTxtEndpoint: "https://withered-base-e090.mattoteo96.workers.dev/",
+    settingsStorageKey: "web_barcode_scanner_settings",
+    cookieStorageKey: "web_barcode_scanner_cookie",
+    cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
+    historyStorageKey: "web_barcode_scanner_history",
+    cameraStorageKey: "web_barcode_scanner_camera",
+    scanIntervalMs: 1200,
+    previewWatchIntervalMs: 3500,
+    previewStallThreshold: 2,
+    preferredSquareSize: 960,
+    mobilePreferredSquareSize: 640,
+    iosPreferredZoom: 2,
+    detectorFormats: [
+      "ean_13",
+      "ean_8",
+      "upc_a",
+      "upc_e",
+      "code_128",
+      "code_39",
+      "codabar",
+      "itf"
+    ],
+    detectionCropModes: ["wide", "square", "full"],
+    resultFields: [
+      "id",
+      "goods_code",
+      "italian_name",
+      "p_price",
+      "s_price",
+      "real_inventory",
+      "discount_price",
+      "discount_percent",
+      "supplier_name",
+      "spec"
+    ],
+    videoConstraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 960, max: 1280 },
+        height: { ideal: 960, max: 1280 },
+        aspectRatio: { ideal: 1 },
+        frameRate: { ideal: 20, max: 24 },
+        resizeMode: "crop-and-scale"
       }
-      .top-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .button-row { grid-template-columns: 1fr; }
-      .lookup-row { grid-template-columns: minmax(0, 1fr) 74px; }
-      .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-      .helper-row { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.75fr) minmax(0, 2.5fr); }
-      .card { border-radius: 22px; }
-      .preview-frame { width: min(100%, 30vh); }
-      .preview-meta { top: 8px; left: 8px; right: 8px; }
-      .preview-placeholder { font-size: 0.74rem; }
-
-      #historyEditDialog .input {
-        font-size: 16px;
+    },
+    mobileVideoConstraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 720, max: 960 },
+        height: { ideal: 720, max: 960 },
+        aspectRatio: { ideal: 1 },
+        frameRate: { ideal: 18, max: 24 },
+        resizeMode: "crop-and-scale"
       }
-
-      #historyEditDialog .dialog-card {
-        height: min(50dvh, 400px);
-        max-height: min(50dvh, 400px);
+    },
+    iosVideoConstraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 960, max: 1440 }
+      }
+    },
+    androidVideoConstraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 960, max: 1280 },
+        height: { ideal: 960, max: 1280 },
+        aspectRatio: { ideal: 1 },
+        frameRate: { ideal: 20, max: 24 },
+        resizeMode: "crop-and-scale"
       }
     }
+  };
 
-    @media (max-width: 430px) {
-      .top-tools,
-      .button-row { gap: 8px; }
-      .btn,
-      .input,
-      .select { min-height: 38px; }
-      .btn { font-size: 0.74rem; padding: 0 8px; }
-      .field-grid { gap: 8px; }
-      .field-card { padding: 8px; }
-      .field-value { font-size: 0.74rem; }
-      .history-actions { gap: 8px; }
-      .history-primary { font-size: 0.88rem; }
-      .history-qty { font-size: 0.68rem; }
-      .history-name { font-size: 0.68rem; }
-      .history-meta { gap: 10px; font-size: 0.68rem; }
-      .compact-toggle-btn { font-size: 0.92rem; }
-      .history-detail-btn { min-height: 30px; width: auto; padding: 0 8px; margin-right: 32px; font-size: 0.68rem; }
-      .toast { width: calc(100% - 28px); text-align: center; }
+  const state = {
+    els: null,
+    stream: null,
+    track: null,
+    devices: [],
+    activeDeviceId: "",
+    detector: null,
+    scanner: null,
+    scannerEngine: "",
+    isCameraRunning: false,
+    isScanning: false,
+    torchOn: false,
+    scanTimer: 0,
+    authCookie: "",
+    authStatus: "",
+    history: [],
+    selectedHistoryIndex: -1,
+    pendingConfirmAction: null,
+    currentProductRecord: null,
+    editingHistoryId: "",
+    fieldEls: {},
+    lastStatusMessage: "",
+    isMobileUi: false,
+    isScanLoopScheduled: false,
+    isScanInFlight: false,
+    audioContext: null,
+    toastTimer: 0,
+    previewWatchdogTimer: 0,
+    lastPreviewTime: 0,
+    stalledPreviewChecks: 0,
+    isRecoveringPreview: false,
+    lookupSequence: 0,
+    isCompactMode: false,
+    lockedScrollY: 0,
+    cameraStartPromise: null,
+    focusRefreshTimers: [],
+    iosWarmRestartDone: false
+  };
 
-      #historyEditDialog .dialog-card {
-        width: min(100%, 100%);
-        padding: 8px 10px 10px;
-        gap: 4px;
-      }
+  function queryElements() {
+    return {
+      barcodeInput: document.getElementById("barcodeInput"),
+      cameraBadge: document.getElementById("cameraBadge"),
+      cameraPreview: document.getElementById("cameraPreview"),
+      cameraPreviewQuagga: document.getElementById("cameraPreviewQuagga"),
+      cameraSelect: document.getElementById("cameraSelect"),
+      clearAllBtn: document.getElementById("clearAllBtn"),
+      clearBarcodeBtn: document.getElementById("clearBarcodeBtn"),
+      clearSelectedBtn: document.getElementById("clearSelectedBtn"),
+      confirmDialog: document.getElementById("confirmDialog"),
+      confirmDialogCancelBtn: document.getElementById("confirmDialogCancelBtn"),
+      confirmDialogOkBtn: document.getElementById("confirmDialogOkBtn"),
+      confirmDialogText: document.getElementById("confirmDialogText"),
+      captureCanvas: document.getElementById("captureCanvas"),
+      closeSettingsBtn: document.getElementById("closeSettingsBtn"),
+      compactToggleBtn: document.getElementById("compactToggleBtn"),
+      historyEmpty: document.getElementById("historyEmpty"),
+      historyEditBackBtn: document.getElementById("historyEditBackBtn"),
+      historyEditBarcodeInput: document.getElementById("historyEditBarcodeInput"),
+      historyEditDialog: document.getElementById("historyEditDialog"),
+      historyEditDiscountPriceInput: document.getElementById("historyEditDiscountPriceInput"),
+      historyEditIdInput: document.getElementById("historyEditIdInput"),
+      historyEditItalianNameInput: document.getElementById("historyEditItalianNameInput"),
+      historyEditPPriceInput: document.getElementById("historyEditPPriceInput"),
+      historyEditQtyInput: document.getElementById("historyEditQtyInput"),
+      historyEditSaveBtn: document.getElementById("historyEditSaveBtn"),
+      historyEditSaveNote: document.getElementById("historyEditSaveNote"),
+      historyEditSDiscountInput: document.getElementById("historyEditSDiscountInput"),
+      historyEditSPriceInput: document.getElementById("historyEditSPriceInput"),
+      historyList: document.getElementById("historyList"),
+      loginInput: document.getElementById("loginInput"),
+      loginSettingsBtn: document.getElementById("loginSettingsBtn"),
+      passwordInput: document.getElementById("passwordInput"),
+      printBackBtn: document.getElementById("printBackBtn"),
+      printBigBtn: document.getElementById("printBigBtn"),
+      printBtn: document.getElementById("printBtn"),
+      printDialog: document.getElementById("printDialog"),
+      printStickerBtn: document.getElementById("printStickerBtn"),
+      previewFrame: document.getElementById("previewFrame"),
+      previewPlaceholder: document.getElementById("previewPlaceholder"),
+      refreshCookieBtn: document.getElementById("refreshCookieBtn"),
+      resolutionBadge: document.getElementById("resolutionBadge"),
+      scanBtn: document.getElementById("scanBtn"),
+      searchBarcodeBtn: document.getElementById("searchBarcodeBtn"),
+      sendTxtBtn: document.getElementById("sendTxtBtn"),
+      settingsBtn: document.getElementById("settingsBtn"),
+      settingsDialog: document.getElementById("settingsDialog"),
+      settingsSaveNote: document.getElementById("settingsSaveNote"),
+      shopKeyInput: document.getElementById("shopKeyInput"),
+      statusText: document.getElementById("statusText"),
+      toast: document.getElementById("toast"),
+      torchBtn: document.getElementById("torchBtn")
+    };
+  }
 
-      .history-edit-grid,
-      .history-edit-row {
-        gap: 4px;
-      }
+  function requireElements(els) {
+    const missing = Object.entries(els).filter(([, value]) => !value).map(([key]) => key);
+    if (missing.length > 0) {
+      throw new Error(`Missing DOM elements: ${missing.join(", ")}`);
+    }
+  }
 
-      .history-edit-field > span {
-        font-size: clamp(0.56rem, 1.2vh, 0.64rem);
-      }
+  function detectMobileUi() {
+    const width = window.innerWidth || screen.width || 0;
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") || width <= 768;
+  }
 
-      #historyEditDialog .input {
-        min-height: 34px;
-        padding: 7px 8px;
-      }
+  function isAndroidDevice() {
+    return /Android/i.test(navigator.userAgent || "");
+  }
 
-      .history-edit-actions {
-        margin-top: 2px;
-      }
+  function getActiveVideoConfig() {
+    if (isIOSDevice()) {
+      return CONFIG.iosVideoConstraints;
+    }
+    if (isAndroidDevice()) {
+      return CONFIG.androidVideoConstraints;
+    }
+    return state.isMobileUi ? CONFIG.mobileVideoConstraints : CONFIG.videoConstraints;
+  }
+
+  function isIOSDevice() {
+    const userAgent = navigator.userAgent || "";
+    return /iPad|iPhone|iPod/i.test(userAgent) || (/Mac/i.test(userAgent) && "ontouchend" in document);
+  }
+
+  async function waitForPonyfillReady(timeoutMs) {
+    if (!window.__ponyfillReadyPromise) {
+      return;
     }
 
-    @media (max-height: 900px) {
-      .app-shell {
-        width: min(100%, calc(100% - 14px));
-        padding: max(8px, env(safe-area-inset-top)) 0 max(10px, env(safe-area-inset-bottom));
-        gap: 8px;
-      }
+    await Promise.race([
+      window.__ponyfillReadyPromise.catch(function () {
+        // Ignore lazy scanner bootstrap failures here.
+      }),
+      new Promise(function (resolve) {
+        window.setTimeout(resolve, timeoutMs);
+      })
+    ]);
+  }
 
-      .card,
-      .dialog-card {
-        box-shadow: 0 12px 24px rgba(18, 24, 31, 0.1);
-        backdrop-filter: none;
-      }
-
-      .card {
-        padding: 10px;
-      }
-
-      .controls,
-      .lookup-row,
-      .field-grid,
-      .helper-row,
-      .dialog-actions,
-      .field-list,
-      .history-list {
-        gap: 8px;
-      }
-
-      .top-status {
-        margin-top: 4px;
-        padding: 4px 8px;
-        font-size: 0.72rem;
-      }
-
-      .preview-frame {
-        width: min(100%, 26vh);
-        margin-top: 8px;
-      }
-
-      .field-grid {
-        margin-top: 8px;
-      }
-
-      .field-card {
-        padding: 7px 8px;
-      }
-
-      .field-card label {
-        font-size: 0.62rem;
-        margin-bottom: 4px;
-      }
-
-      .field-value {
-        font-size: 0.72rem;
-        min-height: 1.1em;
-      }
-
-      .btn,
-      .input,
-      .select {
-        min-height: 36px;
-      }
-
-      .btn {
-        font-size: 0.74rem;
-      }
-
-      .history-actions {
-        gap: 8px;
-        margin-bottom: 6px;
-      }
-
-      .history-item {
-        padding: 8px 10px;
-      }
-
-      .history-primary {
-        font-size: 0.84rem;
-      }
-
-      .history-qty,
-      .history-name,
-      .history-meta,
-      .history-detail-btn {
-        font-size: 0.66rem;
-      }
-
-      .history-name,
-      .history-meta,
-      .history-footer {
-        margin-top: 5px;
-      }
-
-      .history-list {
-        max-height: none;
-      }
-
-      #historyEditDialog .dialog-card {
-        height: min(50dvh, 360px);
-        max-height: min(50dvh, 360px);
-        padding: 8px 10px 10px;
-        gap: 4px;
-      }
-
-      #historyEditDialog .input {
-        min-height: 32px;
-        padding: 6px 8px;
-        font-size: 16px;
-      }
-
-      .history-edit-grid,
-      .history-edit-row {
-        gap: 4px;
-      }
-
-      .history-edit-field > span {
-        font-size: clamp(0.56rem, 1.15vh, 0.64rem);
-      }
-
-      .history-edit-actions {
-        margin-top: 2px;
-      }
+  function setActivePreviewEngine(engine) {
+    if (state.els?.cameraPreview) {
+      state.els.cameraPreview.hidden = false;
+      state.els.cameraPreview.style.display = "block";
     }
-
-    @media (prefers-reduced-motion: reduce) {
-      *,
-      *::before,
-      *::after {
-        animation: none !important;
-        transition: none !important;
-        scroll-behavior: auto !important;
-      }
+    if (state.els?.cameraPreviewQuagga) {
+      state.els.cameraPreviewQuagga.hidden = true;
+      state.els.cameraPreviewQuagga.style.display = "none";
     }
-  </style>
-</head>
-<body>
-  <main class="app-shell">
-    <section class="card">
-      <div class="controls top-tools">
-        <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
-        <label id="cameraSelectWrap">
-          <span class="visually-hidden">Choose camera</span>
-          <select class="select" id="cameraSelect" disabled></select>
-        </label>
-      </div>
-      <div class="top-status" id="statusText" aria-live="polite">Opening camera preview...</div>
+  }
 
-      <div class="preview-frame" id="previewFrame">
-        <video id="cameraPreview" autoplay playsinline muted></video>
-        <div id="cameraPreviewQuagga" hidden></div>
-        <div class="preview-grid" aria-hidden="true"></div>
-        <div class="scan-window" aria-hidden="true"></div>
-        <div class="scan-line" aria-hidden="true"></div>
+  function getPreviewVideoElement() {
+    if (!state.els) {
+      return null;
+    }
+    return state.els.cameraPreview instanceof HTMLVideoElement
+      ? state.els.cameraPreview
+      : state.els.cameraPreview?.querySelector("video") || null;
+  }
 
-        <div class="preview-meta">
-          <div class="badge" id="cameraBadge">Preview off</div>
-          <div class="badge" id="resolutionBadge">0 x 0</div>
-        </div>
+  function getActiveStreamTrackFromPreview() {
+    const video = getPreviewVideoElement();
+    const stream = video?.srcObject;
+    if (!stream?.getVideoTracks) {
+      return null;
+    }
+    return stream.getVideoTracks()[0] || null;
+  }
 
-        <div class="preview-placeholder" id="previewPlaceholder">
-          The app is trying to open the live camera preview automatically. If permission was blocked, tap "Start Scanning" to try again.
-        </div>
-      </div>
+  function getPonyfillDetectorClass() {
+    return window.BarcodeDetectionAPI?.BarcodeDetector || window.BarcodeDetector || null;
+  }
 
-      <div class="controls">
-        <div class="lookup-row">
-          <input class="input" id="barcodeInput" type="text" inputmode="numeric" autocomplete="off" placeholder="Barcode value" />
-          <button class="btn btn-muted" id="clearBarcodeBtn" type="button">Clear</button>
-        </div>
-      </div>
+  async function createDetector() {
+    if (state.detector) return state.detector;
 
-      <div class="helper-row">
-        <button class="btn btn-muted compact-toggle-btn" id="compactToggleBtn" type="button" aria-label="Toggle compact mode">-</button>
-        <button class="btn btn-muted" id="refreshCookieBtn" type="button">Refresh Cookie</button>
-        <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
-      </div>
-    </section>
-
-    <section class="card section-card">
-      <h2 id="productInfoTitle">Product Info</h2>
-      <div class="field-grid">
-        <div class="field-card span-half" id="field_goods_code_card"><label for="field_goods_code">Goods Code</label><div class="field-value" id="field_goods_code"></div></div>
-        <div class="field-card span-half" id="field_supplier_name_card"><label for="field_supplier_name">Supplier</label><div class="field-value" id="field_supplier_name"></div></div>
-        <div class="field-card span-full" id="field_italian_name_card"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
-        <div class="field-card span-half" id="field_supplier_name_compact_card" hidden><label for="field_supplier_name_compact">Supplier</label><div class="field-value" id="field_supplier_name_compact"></div></div>
-        <div class="field-card span-third" id="field_p_price_card"><label for="field_p_price">Cost</label><div class="field-value" id="field_p_price"></div></div>
-        <div class="field-card span-third" id="field_s_price_card"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
-        <div class="field-card span-third" id="field_real_inventory_card"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
-        <div class="field-card span-half" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
-        <div class="field-card span-half" id="field_discount_percent_card" hidden><label for="field_discount_percent">Discount%</label><div class="field-value is-discount" id="field_discount_percent"></div></div>
-        <div class="field-card span-half" id="field_spec_card"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
-        <div class="field-card span-half" id="field_id_card"><label for="field_id">ID</label><div class="field-value" id="field_id"></div></div>
-      </div>
-    </section>
-
-    <section class="card section-card">
-      <div class="history-head">
-        <h2 id="historyTitle">Barcode List View</h2>
-      </div>
-      <div class="history-actions">
-        <button class="btn btn-muted" id="clearSelectedBtn" type="button" disabled>Clean Selected</button>
-        <button class="btn btn-muted" id="clearAllBtn" type="button">Clean All</button>
-        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
-        <button class="btn btn-primary" id="printBtn" type="button">Print</button>
-      </div>
-      <div class="history-list" id="historyList" aria-live="polite">
-        <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
-      </div>
-    </section>
-  </main>
-
-  <div class="toast" id="toast" aria-live="polite"></div>
-
-  <button class="fab" id="settingsBtn" type="button" aria-label="Open settings">
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="3.2"></circle>
-      <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1 0 2.8 2 2 0 0 1-2.8 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 0 1-4 0v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 0 1-2.8 0 2 2 0 0 1 0-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 0 1 0-4h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 0 1 0-2.8 2 2 0 0 1 2.8 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 0 1 4 0v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 0 1 2.8 0 2 2 0 0 1 0 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a2 2 0 0 1 0 4h-.2a1 1 0 0 0-.9.6z"></path>
-    </svg>
-  </button>
-
-  <div class="dialog-backdrop" id="settingsDialog" aria-hidden="true">
-    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="settingsDialogTitle">
-      <h2 id="settingsDialogTitle">Settings</h2>
-      <p>Save your credentials on this device. The app can reuse them to refresh the cookie automatically before product requests.</p>
-      <div class="field-list">
-        <label>
-          <span class="visually-hidden">Shop key</span>
-          <input class="input" id="shopKeyInput" type="text" autocomplete="off" placeholder="Shop key" />
-        </label>
-        <label>
-          <span class="visually-hidden">Login</span>
-          <input class="input" id="loginInput" type="text" autocomplete="username" placeholder="Login" />
-        </label>
-        <label>
-          <span class="visually-hidden">Password</span>
-          <input class="input" id="passwordInput" type="password" autocomplete="current-password" placeholder="Password" />
-        </label>
-      </div>
-      <div class="save-note" id="settingsSaveNote" aria-live="polite"></div>
-      <div class="dialog-actions">
-        <button class="btn btn-primary" id="loginSettingsBtn" type="button">Login</button>
-        <button class="btn btn-muted" id="closeSettingsBtn" type="button">Back</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="dialog-backdrop" id="confirmDialog" aria-hidden="true">
-    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle">
-      <h2 id="confirmDialogTitle">Confirm action</h2>
-      <p id="confirmDialogText">Are you sure?</p>
-      <div class="dialog-actions">
-        <button class="btn btn-primary" id="confirmDialogOkBtn" type="button">Confirm</button>
-        <button class="btn btn-muted" id="confirmDialogCancelBtn" type="button">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="dialog-backdrop" id="printDialog" aria-hidden="true">
-    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="printDialogTitle">
-      <h2 id="printDialogTitle">Print Format</h2>
-      <p>Choose the label size for the current barcode list.</p>
-      <div class="dialog-actions">
-        <button class="btn btn-primary" id="printBigBtn" type="button">[BIG] 60*38</button>
-        <button class="btn btn-primary" id="printStickerBtn" type="button">[STICKER] 40*25</button>
-        <button class="btn btn-muted" id="printBackBtn" type="button">Back</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="dialog-backdrop" id="historyEditDialog" aria-hidden="true">
-    <div class="dialog-card" role="dialog" aria-modal="true" aria-label="Edit Barcode">
-      <div class="field-list history-edit-grid">
-        <label class="history-edit-field history-edit-field-hidden">
-          <span>ID</span>
-          <input class="input" id="historyEditIdInput" type="text" readonly />
-        </label>
-        <div class="history-edit-row history-edit-row-primary">
-          <label class="history-edit-field">
-            <span>Barcode</span>
-            <input class="input" id="historyEditBarcodeInput" type="text" readonly />
-          </label>
-          <label class="history-edit-field">
-            <span>Quantity</span>
-            <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
-          </label>
-        </div>
-        <label class="history-edit-field">
-          <span>Italian Name</span>
-          <input class="input" id="historyEditItalianNameInput" type="text" />
-        </label>
-        <div class="history-edit-row">
-          <label class="history-edit-field">
-            <span>Cost</span>
-            <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" />
-          </label>
-          <label class="history-edit-field">
-            <span>Price</span>
-            <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" />
-          </label>
-        </div>
-        <div class="history-edit-row">
-          <label class="history-edit-field">
-            <span>Discount%</span>
-            <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" />
-          </label>
-          <label class="history-edit-field">
-            <span>Disc. Price</span>
-            <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly />
-          </label>
-        </div>
-      </div>
-      <div class="save-note" id="historyEditSaveNote" aria-live="polite"></div>
-      <div class="dialog-actions history-edit-actions">
-        <button class="btn btn-primary" id="historyEditSaveBtn" type="button">Save</button>
-        <button class="btn btn-muted" id="historyEditBackBtn" type="button">Back</button>
-      </div>
-    </div>
-  </div>
-
-  <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script>
-    window.__ponyfillReadyPromise = new Promise(function (resolve) {
-      window.__resolvePonyfillReady = resolve;
-    });
-  </script>
-  <script type="module">
     try {
-      if (window.BarcodeDetector && typeof window.BarcodeDetector.getSupportedFormats === "function") {
-        await window.BarcodeDetector.getSupportedFormats();
-      } else {
-        const module = await import("https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js");
-        window.BarcodeDetector = module.BarcodeDetectorPolyfill;
+      let DetectorClass = getPonyfillDetectorClass();
+      if (!DetectorClass && window.__ponyfillReadyPromise) {
+        try {
+          await window.__ponyfillReadyPromise;
+        } catch {
+          // Surface a null detector below if the lazy bootstrap failed.
+        }
+        DetectorClass = getPonyfillDetectorClass();
+      }
+      if (!DetectorClass) {
+        return null;
+      }
+
+      let formats = CONFIG.detectorFormats.slice();
+      if (typeof DetectorClass.getSupportedFormats === "function") {
+        const supportedFormats = await DetectorClass.getSupportedFormats();
+        if (Array.isArray(supportedFormats) && supportedFormats.length > 0) {
+          const filteredFormats = CONFIG.detectorFormats.filter((format) => supportedFormats.includes(format));
+          formats = filteredFormats.length > 0 ? filteredFormats : supportedFormats.filter(Boolean);
+        }
+      }
+
+      state.detector = formats.length
+        ? new DetectorClass({ formats: formats })
+        : new DetectorClass();
+      return state.detector;
+    } catch {
+      return null;
+    }
+  }
+
+  function cacheResultFieldElements() {
+    state.fieldEls = {};
+    for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
+      const key = CONFIG.resultFields[index];
+      state.fieldEls[key] = document.getElementById(`field_${key}`);
+    }
+  }
+
+  function setStatus(message) {
+    const nextMessage = String(message || "");
+    if (state.lastStatusMessage === nextMessage) {
+      return;
+    }
+    state.lastStatusMessage = nextMessage;
+    state.els.statusText.textContent = nextMessage;
+  }
+
+  function showToast(message) {
+    const text = String(message || "").trim();
+    if (!text || !state.els.toast) {
+      return;
+    }
+
+    state.els.toast.textContent = text;
+    state.els.toast.classList.add("is-visible");
+    if (state.toastTimer) {
+      window.clearTimeout(state.toastTimer);
+    }
+    state.toastTimer = window.setTimeout(function () {
+      state.els.toast.classList.remove("is-visible");
+      state.toastTimer = 0;
+    }, 2200);
+  }
+
+  function playCaptureSound() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        return;
+      }
+
+      if (!state.audioContext) {
+        state.audioContext = new AudioContextClass();
+      }
+
+      const context = state.audioContext;
+      if (context.state === "suspended") {
+        context.resume().catch(() => {
+          // Ignore resume errors triggered by browser policies.
+        });
+      }
+
+      const now = context.currentTime;
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(880, now);
+      oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
+
+      gainNode.gain.setValueAtTime(0.0001, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.16);
+    } catch {
+      // Audio is optional.
+    }
+  }
+
+  function readSavedSettings() {
+    try {
+      const raw = localStorage.getItem(CONFIG.settingsStorageKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return {
+        shopKey: parsed?.shopKey || "",
+        login: parsed?.login || "",
+        password: parsed?.password || "",
+        compactMode: Boolean(parsed?.compactMode)
+      };
+    } catch {
+      return { shopKey: "", login: "", password: "", compactMode: false };
+    }
+  }
+
+  function saveSettings(values, options) {
+    const normalizedValues = {
+      shopKey: values?.shopKey || "",
+      login: values?.login || "",
+      password: values?.password || "",
+      compactMode: Boolean(values?.compactMode)
+    };
+    localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(normalizedValues));
+    if (options?.silent) {
+      return;
+    }
+    state.els.settingsSaveNote.textContent = "Saved successfully on this device.";
+    setStatus("Settings saved");
+  }
+
+  function fillSettingsForm(values) {
+    state.els.shopKeyInput.value = values.shopKey || "";
+    state.els.loginInput.value = values.login || "";
+    state.els.passwordInput.value = values.password || "";
+  }
+
+  function updateCompactToggleButton() {
+    if (!state.els.compactToggleBtn) {
+      return;
+    }
+    state.els.compactToggleBtn.textContent = state.isCompactMode ? "+" : "-";
+    state.els.compactToggleBtn.setAttribute(
+      "aria-label",
+      state.isCompactMode ? "Expand app sections" : "Compact app sections"
+    );
+    state.els.compactToggleBtn.title = state.isCompactMode ? "Show hidden sections" : "Hide optional sections";
+  }
+
+  function applyCompactMode(isCompact) {
+    state.isCompactMode = Boolean(isCompact);
+    document.body.classList.toggle("is-compact", state.isCompactMode);
+    updateCompactToggleButton();
+  }
+
+  function openSettingsDialog() {
+    fillSettingsForm(readSavedSettings());
+    state.els.settingsSaveNote.textContent = "";
+    state.els.settingsDialog.classList.add("is-open");
+    state.els.settingsDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closeSettingsDialog() {
+    state.els.settingsDialog.classList.remove("is-open");
+    state.els.settingsDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function lockPageScroll() {
+    if (document.body.classList.contains("is-dialog-open")) {
+      return;
+    }
+
+    state.lockedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.classList.add("is-dialog-open");
+    document.body.style.top = `-${state.lockedScrollY}px`;
+  }
+
+  function unlockPageScroll() {
+    if (!document.body.classList.contains("is-dialog-open")) {
+      return;
+    }
+
+    document.body.classList.remove("is-dialog-open");
+    document.body.style.top = "";
+    const restoreY = state.lockedScrollY || 0;
+    state.lockedScrollY = 0;
+    window.scrollTo(0, restoreY);
+  }
+
+  function renderCookieState() {
+    // Cookie state is kept in storage and surfaced through the top status text only.
+  }
+
+  function readSavedCameraId() {
+    return localStorage.getItem(CONFIG.cameraStorageKey) || "";
+  }
+
+  function saveCameraId(deviceId) {
+    if (!deviceId) return;
+    localStorage.setItem(CONFIG.cameraStorageKey, deviceId);
+  }
+
+  function loadCookieState() {
+    state.authCookie = localStorage.getItem(CONFIG.cookieStorageKey) || "";
+    state.authStatus = localStorage.getItem(CONFIG.cookieStatusStorageKey) || "No cookie saved yet.";
+  }
+
+  function saveCookieState(cookie, status) {
+    state.authCookie = cookie || "";
+    state.authStatus = status || "";
+    localStorage.setItem(CONFIG.cookieStorageKey, state.authCookie);
+    localStorage.setItem(CONFIG.cookieStatusStorageKey, state.authStatus);
+    renderCookieState();
+  }
+
+  function renderHistory() {
+    state.els.clearAllBtn.disabled = state.history.length === 0;
+    state.els.sendTxtBtn.disabled = state.history.length === 0;
+    state.els.printBtn.disabled = state.history.length === 0;
+    if (state.history.length === 0) {
+      state.selectedHistoryIndex = -1;
+      state.els.clearSelectedBtn.disabled = true;
+      state.els.historyList.replaceChildren(state.els.historyEmpty);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (let index = 0; index < state.history.length; index += 1) {
+      const item = state.history[index];
+      const article = document.createElement("article");
+      article.className = "history-item";
+      if (index === state.selectedHistoryIndex) {
+        article.classList.add("is-selected");
+      }
+      const primary = document.createElement("div");
+      primary.className = "history-primary";
+      primary.innerHTML = `<span class="history-code">${escapeHtml(item.barcode || "")}</span><span class="history-qty">Qty ${escapeHtml(String(item.comparison_qty || 1))}</span>`;
+
+      const name = document.createElement("div");
+      name.className = "history-name";
+      name.textContent = item.italian_name || "No name loaded";
+
+      const meta = document.createElement("div");
+      meta.className = "history-meta";
+      meta.innerHTML = `<span>Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>Price: ${escapeHtml(getHistoryDisplayPrice(item))}</span>`;
+
+      const footer = document.createElement("div");
+      footer.className = "history-footer";
+      footer.appendChild(meta);
+
+      const detailButton = document.createElement("button");
+      detailButton.className = "btn btn-muted history-detail-btn";
+      detailButton.type = "button";
+      detailButton.textContent = "Detail";
+      detailButton.dataset.action = "detail";
+      detailButton.dataset.index = String(index);
+      footer.appendChild(detailButton);
+
+      article.appendChild(primary);
+      article.appendChild(name);
+      article.appendChild(footer);
+      article.dataset.index = String(index);
+      article.setAttribute("tabindex", "0");
+      fragment.appendChild(article);
+    }
+
+    state.els.clearSelectedBtn.disabled = state.selectedHistoryIndex < 0;
+    state.els.historyList.replaceChildren(fragment);
+  }
+
+  function saveHistoryState() {
+    localStorage.setItem(CONFIG.historyStorageKey, JSON.stringify(state.history));
+  }
+
+  function loadHistoryState() {
+    try {
+      const raw = localStorage.getItem(CONFIG.historyStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      state.history = Array.isArray(parsed)
+        ? parsed
+            .map(normalizeHistoryItem)
+            .filter((item) => item.barcode)
+        : [];
+    } catch {
+      state.history = [];
+    }
+  }
+
+  function normalizeHistoryItem(item) {
+    if (typeof item === "string") {
+      return {
+        id: `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+        goods_id: "",
+        barcode: item.trim(),
+        italian_name: "",
+        comparison_qty: 1,
+        p_price: "",
+        s_price: "",
+        s_discount: "",
+        discount_price: "",
+        has_discount: false
+      };
+    }
+
+    const barcode = String(item?.barcode || "").trim();
+    return {
+      id: String(item?.id || `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`),
+      goods_id: String(item?.goods_id || item?.id_value || ""),
+      barcode: barcode,
+      italian_name: String(item?.italian_name || ""),
+      comparison_qty: Math.max(1, Number(item?.comparison_qty || 1) || 1),
+      p_price: String(item?.p_price || ""),
+      s_price: String(item?.s_price || ""),
+      s_discount: String(item?.s_discount || ""),
+      discount_price: String(item?.discount_price || ""),
+      has_discount: Boolean(item?.has_discount)
+    };
+  }
+
+  function createHistoryEntry(barcode) {
+    return normalizeHistoryItem({
+      id: `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+      barcode: barcode
+    });
+  }
+
+  function addHistoryItem(barcode) {
+    const entry = createHistoryEntry(barcode);
+    if (!entry.barcode) return null;
+    state.history.unshift(entry);
+    state.selectedHistoryIndex = 0;
+    saveHistoryState();
+    renderHistory();
+    return entry.id;
+  }
+
+  function updateHistoryItem(entryId, updates) {
+    const index = state.history.findIndex((item) => item.id === entryId);
+    if (index < 0) return;
+    state.history[index] = normalizeHistoryItem({
+      ...state.history[index],
+      ...updates
+    });
+    saveHistoryState();
+    renderHistory();
+  }
+
+  function updateHistoryItemsByBarcode(barcode, updates) {
+    const normalizedBarcode = String(barcode || "").trim();
+    if (!normalizedBarcode) return;
+
+    let didChange = false;
+    state.history = state.history.map(function (item) {
+      if (String(item.barcode || "").trim() !== normalizedBarcode) {
+        return item;
+      }
+      const nextItem = normalizeHistoryItem({
+        ...item,
+        ...updates,
+        barcode: normalizedBarcode
+      });
+      const changed =
+        nextItem.goods_id !== item.goods_id ||
+        nextItem.barcode !== item.barcode ||
+        nextItem.italian_name !== item.italian_name ||
+        nextItem.comparison_qty !== item.comparison_qty ||
+        nextItem.p_price !== item.p_price ||
+        nextItem.s_price !== item.s_price ||
+        nextItem.s_discount !== item.s_discount ||
+        nextItem.discount_price !== item.discount_price ||
+        nextItem.has_discount !== item.has_discount;
+      if (changed) {
+        didChange = true;
+        return nextItem;
+      }
+      return item;
+    });
+
+    if (!didChange) return;
+    saveHistoryState();
+    renderHistory();
+  }
+
+  function buildSharedHistoryFields(item) {
+    const normalized = normalizeHistoryItem(item);
+    return {
+      goods_id: normalized.goods_id,
+      barcode: normalized.barcode,
+      italian_name: normalized.italian_name,
+      p_price: normalized.p_price,
+      s_price: normalized.s_price,
+      s_discount: normalized.s_discount,
+      discount_price: normalized.discount_price,
+      has_discount: normalized.has_discount
+    };
+  }
+
+  function syncHistoryRowsWithRecord(record, fallbackBarcode) {
+    const sharedFields = buildSharedHistoryFields(record);
+    const barcodes = [
+      String(fallbackBarcode || "").trim(),
+      String(sharedFields.barcode || "").trim()
+    ].filter(Boolean);
+    const uniqueBarcodes = [...new Set(barcodes)];
+
+    for (let index = 0; index < uniqueBarcodes.length; index += 1) {
+      updateHistoryItemsByBarcode(uniqueBarcodes[index], sharedFields);
+    }
+  }
+
+  function buildHistoryItemFromLookupData(productPayload, discountPayload, fallbackBarcode, comparisonQty) {
+    const normalizedProduct = normalizeProductData(productPayload?.product || productPayload);
+    const discountFields = getDiscountFields({
+      product: productPayload?.product || productPayload,
+      sale: discountPayload
+    }, normalizedProduct);
+    const sPrice = numberFromValue(normalizedProduct.s_price);
+    const discountPrice = numberFromValue(discountFields.discountPrice);
+    const hasVisibleDiscount = Boolean(discountPrice) && Boolean(sPrice) && discountPrice < sPrice;
+
+    return normalizeHistoryItem({
+      goods_id: String(normalizedProduct.id || ""),
+      barcode: String(normalizedProduct.goods_code || fallbackBarcode || "").trim(),
+      italian_name: String(normalizedProduct.italian_name || ""),
+      p_price: String(normalizedProduct.p_price || ""),
+      s_price: String(normalizedProduct.s_price || ""),
+      s_discount: String(normalizedProduct.s_discount || ""),
+      discount_price: hasVisibleDiscount ? String(discountFields.discountPrice || "") : "",
+      has_discount: hasVisibleDiscount,
+      comparison_qty: comparisonQty || 1
+    });
+  }
+
+  async function fetchProductInfoThroughProxy(code, cookie) {
+    const response = await fetch(CONFIG.infoProxyEndpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        barcode: code,
+        cookie: cookie
+      }),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Info proxy request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
+  async function fetchDiscountInfoThroughProxy(code, cookie) {
+    const response = await fetch(CONFIG.discountProxyEndpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        barcode: code,
+        cookie: cookie
+      }),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Discount proxy request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
+  async function fetchUpdateItemThroughProxy(payload, cookie) {
+    const response = await fetch(CONFIG.updateProxyEndpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        id: payload.id,
+        italian_name: payload.italian_name,
+        p_price: payload.p_price,
+        s_price: payload.s_price,
+        s_discount: payload.s_discount,
+        cookie: cookie
+      }),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Update proxy request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
+  async function fetchAddProductThroughProxy(payload, cookie) {
+    const response = await fetch(CONFIG.addProductProxyEndpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        barcode: payload.barcode,
+        italian_name: payload.italian_name,
+        p_price: payload.p_price,
+        s_price: payload.s_price,
+        s_discount: payload.s_discount,
+        cookie: cookie
+      }),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Add product proxy request failed with status ${response.status}`);
+    }
+
+    return response.text();
+  }
+
+  async function getCookieForRequests() {
+    let cookie = state.authCookie;
+    if (!cookie) {
+      cookie = await loginAndRefreshCookie();
+    }
+    return cookie;
+  }
+
+  async function loadProductInfoResponse(barcode) {
+    const code = String(barcode || "").trim();
+    if (!code) {
+      throw new Error("Barcode is empty");
+    }
+
+    const cookie = await getCookieForRequests();
+    const responseText = await fetchProductInfoThroughProxy(code, cookie);
+
+    let parsedProduct;
+    try {
+      parsedProduct = JSON.parse(responseText);
+    } catch {
+      throw new Error("Product info response was not valid JSON.");
+    }
+
+    return {
+      cookie: cookie,
+      raw: parsedProduct,
+      normalized: normalizeProductData(parsedProduct?.product || parsedProduct)
+    };
+  }
+
+  async function loadProductAndDiscountResponse(barcode) {
+    const code = String(barcode || "").trim();
+    if (!code) {
+      throw new Error("Barcode is empty");
+    }
+
+    const cookie = await getCookieForRequests();
+    const [productResponseText, discountResponseText] = await Promise.all([
+      fetchProductInfoThroughProxy(code, cookie),
+      fetchDiscountInfoThroughProxy(code, cookie)
+    ]);
+
+    let parsedProduct;
+    let parsedDiscount = null;
+    try {
+      parsedProduct = JSON.parse(productResponseText);
+    } catch {
+      throw new Error("Product info response was not valid JSON.");
+    }
+
+    try {
+      parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
+    } catch {
+      parsedDiscount = null;
+    }
+
+    const normalizedProduct = normalizeProductData(parsedProduct?.product || parsedProduct);
+    const discountFields = getDiscountFields({
+      product: parsedProduct?.product || parsedProduct,
+      sale: parsedDiscount
+    }, normalizedProduct);
+    const sPrice = numberFromValue(normalizedProduct.s_price);
+    const discountPrice = numberFromValue(discountFields.discountPrice);
+    const hasVisibleDiscount = Boolean(discountPrice) && Boolean(sPrice) && discountPrice < sPrice;
+
+    return {
+      cookie: cookie,
+      product: normalizedProduct,
+      sale: parsedDiscount,
+      discountPrice: hasVisibleDiscount ? discountFields.discountPrice : "",
+      hasDiscount: hasVisibleDiscount
+    };
+  }
+
+  function hasProductInDatabase(normalizedProduct, barcode) {
+    const normalizedBarcode = String(barcode || "").trim();
+    if (!normalizedProduct || typeof normalizedProduct !== "object") {
+      return false;
+    }
+
+    const goodsCode = String(normalizedProduct.goods_code || "").trim();
+    const id = String(normalizedProduct.id || "").trim();
+    const italianName = String(normalizedProduct.italian_name || "").trim();
+
+    if (goodsCode && normalizedBarcode) {
+      return goodsCode === normalizedBarcode;
+    }
+
+    return Boolean(id || italianName);
+  }
+
+  function selectHistoryItem(index) {
+    if (index < 0 || index >= state.history.length) return;
+    state.selectedHistoryIndex = index;
+    renderHistory();
+  }
+
+  function clearSelectedHistory() {
+    if (state.selectedHistoryIndex < 0 || !state.history[state.selectedHistoryIndex]) return;
+    state.history.splice(state.selectedHistoryIndex, 1);
+    if (state.history.length === 0) {
+      state.selectedHistoryIndex = -1;
+    } else if (state.selectedHistoryIndex >= state.history.length) {
+      state.selectedHistoryIndex = state.history.length - 1;
+    }
+    saveHistoryState();
+    renderHistory();
+    setStatus("Selected barcode removed");
+  }
+
+  function clearAllHistory() {
+    state.history = [];
+    state.selectedHistoryIndex = -1;
+    saveHistoryState();
+    renderHistory();
+    setStatus("Barcode list cleared");
+  }
+
+  function openConfirmDialog(message, onConfirm) {
+    state.pendingConfirmAction = typeof onConfirm === "function" ? onConfirm : null;
+    state.els.confirmDialogText.textContent = message;
+    state.els.confirmDialog.classList.add("is-open");
+    state.els.confirmDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closeConfirmDialog() {
+    state.pendingConfirmAction = null;
+    state.els.confirmDialog.classList.remove("is-open");
+    state.els.confirmDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function openPrintDialog() {
+    state.els.printDialog.classList.add("is-open");
+    state.els.printDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closePrintDialog() {
+    state.els.printDialog.classList.remove("is-open");
+    state.els.printDialog.setAttribute("aria-hidden", "true");
+  }
+
+  function fillHistoryEditForm(item) {
+    const entry = normalizeHistoryItem(item);
+    state.els.historyEditIdInput.value = entry.goods_id || "";
+    state.els.historyEditBarcodeInput.value = entry.barcode || "";
+    state.els.historyEditItalianNameInput.value = entry.italian_name || "";
+    state.els.historyEditPPriceInput.value = entry.p_price || "";
+    state.els.historyEditSPriceInput.value = entry.s_price || "";
+    state.els.historyEditSDiscountInput.value = entry.s_discount || "";
+    state.els.historyEditQtyInput.value = String(entry.comparison_qty || 1);
+    refreshHistoryEditDiscountPrice();
+  }
+
+  function openHistoryEditDialog(item) {
+    fillHistoryEditForm(item);
+    state.els.historyEditSaveNote.textContent = "";
+    lockPageScroll();
+    state.els.historyEditDialog.classList.add("is-open");
+    state.els.historyEditDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closeHistoryEditDialog() {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && state.els.historyEditDialog.contains(activeElement)) {
+      activeElement.blur();
+    }
+    state.editingHistoryId = "";
+    state.els.historyEditSaveNote.textContent = "";
+    state.els.historyEditDialog.classList.remove("is-open");
+    state.els.historyEditDialog.setAttribute("aria-hidden", "true");
+    window.setTimeout(function () {
+      unlockPageScroll();
+    }, 60);
+  }
+
+  function selectEntireInputValue(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement)) {
+      return;
+    }
+
+    window.setTimeout(function () {
+      try {
+        target.focus({ preventScroll: true });
+      } catch {
+        target.focus();
+      }
+      try {
+        target.setSelectionRange(0, target.value.length);
+      } catch {
+        target.select();
+      }
+    }, 0);
+  }
+
+  function moveFocusToInput(input) {
+    if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLTextAreaElement)) {
+      return;
+    }
+
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      input.focus();
+    }
+  }
+
+  function formatTimestamp() {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const MM = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    return `${yy}${MM}${dd}${hh}${mm}${ss}`;
+  }
+
+  function formatSessionId() {
+    return `session_${formatTimestamp()}`;
+  }
+
+  function buildHistoryPayloadItem(item) {
+    const entry = normalizeHistoryItem(item);
+    const sPrice = numberFromValue(entry.s_price);
+    const discountPrice = numberFromValue(entry.discount_price);
+    const hasDiscountPrice = entry.has_discount && discountPrice > 0 && (!sPrice || discountPrice < sPrice);
+    const selectedPrice = hasDiscountPrice ? discountPrice : sPrice;
+
+    return {
+      barcode: entry.barcode,
+      italian_name: entry.italian_name || "",
+      comparison_qty: entry.comparison_qty || 1,
+      s_price: formatPrice(selectedPrice)
+    };
+  }
+
+  async function sendTxtList() {
+    if (state.history.length === 0) {
+      setStatus("Barcode list is empty");
+      return;
+    }
+
+    const payload = {
+      session_id: formatSessionId(),
+      session_cost: "$0.00",
+      data: [
+        {
+          stack: "full_tickets",
+          items: state.history.map(buildHistoryPayloadItem)
+        }
+      ]
+    };
+
+    setStatus("Sending TXT...");
+    const response = await fetch(CONFIG.sendTxtEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Send TXT failed with status ${response.status}`);
+    }
+
+    state.history = [];
+    state.selectedHistoryIndex = -1;
+    saveHistoryState();
+    renderHistory();
+    setStatus("TXT sent successfully");
+  }
+
+  async function printHistoryList(printType) {
+    if (state.history.length === 0) {
+      setStatus("Barcode list is empty");
+      return;
+    }
+
+    const normalizedType = printType === "40*25" ? "40*25" : "60*38";
+    const payload = {
+      session_id: `directPrint_${normalizedType}_${formatTimestamp()}`,
+      session_cost: "$1.00",
+      print_type: normalizedType,
+      data: [
+        {
+          stack: normalizedType === "40*25" ? "sticker_tickets" : "big_tickets",
+          items: state.history.map(buildHistoryPayloadItem)
+        }
+      ]
+    };
+
+    setStatus(`Sending print ${normalizedType}...`);
+    const response = await fetch(CONFIG.sendTxtEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Print failed with status ${response.status}`);
+    }
+
+    state.history = [];
+    state.selectedHistoryIndex = -1;
+    saveHistoryState();
+    renderHistory();
+    setStatus(`Print ${normalizedType} sent successfully`);
+  }
+
+  function extractCookieFromResponse(payload) {
+    if (!payload) return "";
+
+    let rawCookie = "";
+
+    if (typeof payload === "object" && payload !== null) {
+      rawCookie =
+        payload.fullCookie ||
+        payload.data?.fullCookie ||
+        payload.cookieString ||
+        payload.data?.cookieString ||
+        payload.cookie ||
+        payload.data?.cookie ||
+        "";
+
+      if (!rawCookie) {
+        const queue = [payload];
+        while (queue.length > 0 && !rawCookie) {
+          const item = queue.shift();
+          if (!item || typeof item !== "object") {
+            continue;
+          }
+
+          const values = Object.values(item);
+          for (let index = 0; index < values.length; index += 1) {
+            const value = values[index];
+            if (typeof value === "string" && /SESSION=|rememberMe=/i.test(value)) {
+              rawCookie = value;
+              break;
+            }
+            if (value && typeof value === "object") {
+              queue.push(value);
+            }
+          }
+        }
+      }
+    } else {
+      rawCookie = String(payload);
+    }
+
+    if (!rawCookie) return "";
+
+    const sessionMatch = rawCookie.match(/SESSION=([^;,\r\n]+)/i);
+    const rememberMatches = [...rawCookie.matchAll(/rememberMe=([^;,\r\n]+)/gi)];
+    let rememberValue = "";
+
+    for (let index = 0; index < rememberMatches.length; index += 1) {
+      const candidate = rememberMatches[index]?.[1] || "";
+      if (candidate && candidate !== "deleteMe") {
+        rememberValue = candidate;
+      }
+    }
+
+    const cookieParts = [];
+    if (sessionMatch?.[1]) {
+      cookieParts.push(`SESSION=${sessionMatch[1]}`);
+    }
+    if (rememberValue) {
+      cookieParts.push(`rememberMe=${rememberValue}`);
+    }
+
+    return cookieParts.join("; ");
+  }
+
+  async function loginAndRefreshCookie(settingsOverride) {
+    const settings = settingsOverride || readSavedSettings();
+    const shopKey = (settings.shopKey || "").trim();
+    const login = (settings.login || "").trim();
+    const password = settings.password || "";
+    const targetSite = "lgerp.cc";
+
+    if (!shopKey || !login || !password) {
+      const message = "Fill shop key, login, and password first.";
+      state.els.settingsSaveNote.textContent = message;
+      saveCookieState(state.authCookie, message);
+      setStatus(message);
+      return "";
+    }
+
+    const params = new URLSearchParams();
+    params.set("shopkey", shopKey);
+    params.set("login_name", login);
+    params.set("password", password);
+
+    state.els.settingsSaveNote.textContent = `Sending login request for ${login} on ${targetSite}...`;
+    saveCookieState(state.authCookie, `Refreshing cookie for ${login} on ${targetSite}...`);
+    setStatus("Requesting new cookie...");
+
+    const response = await fetch(CONFIG.cookieProxyEndpoint, {
+      method: "POST",
+      body: params.toString(),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Proxy request failed with status ${response.status}`);
+    }
+
+    const responseText = await response.text();
+    let parsed = responseText;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      // Keep plain text fallback.
+    }
+
+    const cookie = extractCookieFromResponse(parsed);
+    if (!cookie) {
+      throw new Error("Proxy answered, but no usable cookie was returned.");
+    }
+
+    saveCookieState(cookie, `Cookie refreshed successfully for ${login} on ${targetSite}.`);
+    state.els.settingsSaveNote.textContent = "Login completed and cookie saved.";
+    setStatus("Cookie refreshed");
+    return cookie;
+  }
+
+  function clearResultFields() {
+    for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
+      const key = CONFIG.resultFields[index];
+      const element = state.fieldEls[key];
+      if (element) {
+        element.textContent = "";
+      }
+    }
+    const compactSupplierField = document.getElementById("field_supplier_name_compact");
+    if (compactSupplierField) {
+      compactSupplierField.textContent = "";
+    }
+    state.currentProductRecord = null;
+    setDiscountVisibility(false);
+  }
+
+  function setResultField(key, value) {
+    const normalizedValue = value === undefined || value === null ? "" : String(value);
+    const element = state.fieldEls[key];
+    if (element) {
+      element.textContent = normalizedValue;
+    }
+    if (key === "supplier_name") {
+      const compactSupplierField = document.getElementById("field_supplier_name_compact");
+      if (compactSupplierField) {
+        compactSupplierField.textContent = normalizedValue;
+      }
+    }
+  }
+
+  function setDiscountVisibility(visible) {
+    const priceCard = document.getElementById("field_discount_price_card");
+    const percentCard = document.getElementById("field_discount_percent_card");
+    if (priceCard) {
+      priceCard.hidden = !visible;
+    }
+    if (percentCard) {
+      percentCard.hidden = !visible;
+    }
+  }
+
+  function normalizeProductData(rawData) {
+    const queue = [rawData?.product || rawData];
+    while (queue.length > 0) {
+      const item = queue.shift();
+      if (!item || typeof item !== "object") continue;
+
+      if (item.goods_code || item.italian_name || item.real_inventory) {
+        return item;
+      }
+
+      const values = Object.values(item);
+      for (let index = 0; index < values.length; index += 1) {
+        if (values[index] && typeof values[index] === "object") {
+          queue.push(values[index]);
+        }
+      }
+    }
+    return rawData || {};
+  }
+
+  function normalizeSaleData(rawData) {
+    const saleSource = rawData?.sale || rawData?.discount;
+    if (!saleSource) {
+      return null;
+    }
+
+    if (Array.isArray(saleSource)) {
+      return saleSource.length > 0 ? saleSource[0] : null;
+    }
+
+    if (typeof saleSource === "object") {
+      const values = Object.values(saleSource);
+      for (let index = 0; index < values.length; index += 1) {
+        const value = values[index];
+        if (Array.isArray(value) && value.length > 0) {
+          return value[0];
+        }
+      }
+      return Object.keys(saleSource).length > 0 ? saleSource : null;
+    }
+
+    return null;
+  }
+
+  function numberFromValue(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : 0;
+  }
+
+  function formatPercent(value) {
+    const numeric = numberFromValue(value);
+    if (!numeric) return "";
+    const percent = numeric <= 1 ? numeric * 100 : numeric;
+    return `${percent.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}%`;
+  }
+
+  function formatPrice(value) {
+    const numeric = numberFromValue(value);
+    if (!numeric) return "";
+    return numeric.toFixed(2).replace(/\.00$/, "");
+  }
+
+  function escapeHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, function (char) {
+      return {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char];
+    });
+  }
+
+  function sanitizeItalianName(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .replace(/[^\p{L}\p{N}\s.,()&-]+/gu, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function normalizeDecimalInput(value) {
+    return String(value || "")
+      .trim()
+      .replace(/,/g, ".");
+  }
+
+  function getHistoryDisplayPrice(item) {
+    const entry = normalizeHistoryItem(item);
+    const sPrice = numberFromValue(entry.s_price);
+    const discountPrice = numberFromValue(entry.discount_price);
+    const showDiscountPrice = entry.has_discount && discountPrice > 0 && (!sPrice || discountPrice < sPrice);
+    const value = showDiscountPrice ? discountPrice : sPrice;
+    return value ? `EUR ${formatPrice(value)}` : "EUR -";
+  }
+
+  function calculateDiscountPrice(sPriceValue, sDiscountValue) {
+    const sPrice = numberFromValue(sPriceValue);
+    const sDiscount = numberFromValue(sDiscountValue);
+    if (!sPrice || !sDiscount) return "";
+    return formatPrice(sPrice * (1 - (sDiscount / 100)));
+  }
+
+  function refreshHistoryEditDiscountPrice() {
+    const discountPrice = calculateDiscountPrice(
+      state.els.historyEditSPriceInput.value,
+      state.els.historyEditSDiscountInput.value
+    );
+    state.els.historyEditDiscountPriceInput.value = discountPrice;
+  }
+
+  function getDiscountFields(rawData, productData) {
+    const saleData = normalizeSaleData(rawData);
+
+    if (
+      saleData &&
+      saleData !== "" &&
+      (!Array.isArray(saleData) || saleData.length > 0) &&
+      (saleData.discountPrice !== undefined || saleData.sdiscount !== undefined)
+    ) {
+      return {
+        discountPrice: formatPrice(saleData.discountPrice),
+        discountPercent: formatPercent(saleData.sdiscount)
+      };
+    }
+
+    const sPrice = numberFromValue(productData.s_price);
+    const sDiscount = numberFromValue(productData.s_discount);
+    const normalizedDiscount = sDiscount / 100;
+
+    return {
+      discountPrice: formatPrice(sPrice * (1 - normalizedDiscount)),
+      discountPercent: formatPercent(normalizedDiscount)
+    };
+  }
+
+  function renderProductData(data) {
+    const normalized = normalizeProductData(data);
+    for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
+      const key = CONFIG.resultFields[index];
+      setResultField(key, normalized[key]);
+    }
+
+    const discountFields = getDiscountFields(data, normalized);
+    const sPrice = numberFromValue(normalized.s_price);
+    const discountPrice = numberFromValue(discountFields.discountPrice);
+    const hasVisibleDiscount = Boolean(discountPrice) && Boolean(sPrice) && discountPrice < sPrice;
+
+    setDiscountVisibility(hasVisibleDiscount);
+    setResultField("discount_price", hasVisibleDiscount ? discountFields.discountPrice : "");
+    setResultField("discount_percent", hasVisibleDiscount ? discountFields.discountPercent : "");
+
+    state.currentProductRecord = {
+      goods_id: String(normalized.id || ""),
+      barcode: String(normalized.goods_code || state.els.barcodeInput.value || "").trim(),
+      italian_name: String(normalized.italian_name || ""),
+      p_price: String(normalized.p_price || ""),
+      s_price: String(normalized.s_price || ""),
+      s_discount: String(normalized.s_discount || ""),
+      discount_price: hasVisibleDiscount ? String(discountFields.discountPrice || "") : "",
+      has_discount: hasVisibleDiscount,
+      comparison_qty: 1
+    };
+  }
+
+  async function fetchProductInfo(barcode) {
+    const code = String(barcode || "").trim();
+    if (!code) {
+      setStatus("Type or scan a barcode first");
+      return;
+    }
+
+    state.els.barcodeInput.value = code;
+    clearResultFields();
+    const lookupSequence = state.lookupSequence + 1;
+    state.lookupSequence = lookupSequence;
+
+    addHistoryItem(code);
+    setStatus("Requesting product info...");
+
+    const cookie = await getCookieForRequests();
+
+    const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
+
+    let parsedProduct;
+    try {
+      parsedProduct = JSON.parse(productResponseText);
+    } catch {
+      throw new Error("Product info response was not valid JSON.");
+    }
+
+    renderProductData({
+      product: parsedProduct?.product || parsedProduct,
+      sale: null
+    });
+    if (state.currentProductRecord) {
+      syncHistoryRowsWithRecord(state.currentProductRecord, code);
+    }
+    setStatus("Product info loaded");
+
+    fetchDiscountInfoThroughProxy(code, cookie)
+      .then(function (discountResponseText) {
+        let parsedDiscount = null;
+        try {
+          parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
+        } catch {
+          parsedDiscount = null;
+        }
+
+        const updatedRecord = buildHistoryItemFromLookupData(
+          parsedProduct?.product || parsedProduct,
+          parsedDiscount,
+          code,
+          state.currentProductRecord?.comparison_qty || 1
+        );
+        syncHistoryRowsWithRecord(updatedRecord, code);
+
+        if (lookupSequence === state.lookupSequence && String(state.els.barcodeInput.value || "").trim() === code) {
+          renderProductData({
+            product: parsedProduct?.product || parsedProduct,
+            sale: parsedDiscount
+          });
+        }
+      })
+      .catch(function () {
+        // Temporary discount lookups are background-only for scan speed.
+      });
+  }
+
+  async function openHistoryEditor(index) {
+    if (index < 0 || index >= state.history.length) return;
+
+    const item = state.history[index];
+    state.editingHistoryId = item.id;
+    selectHistoryItem(index);
+    openHistoryEditDialog(item);
+    state.els.historyEditSaveNote.textContent = "Loading latest info...";
+
+    try {
+      const { product, discountPrice, hasDiscount } = await loadProductAndDiscountResponse(item.barcode);
+      const updatedItem = normalizeHistoryItem({
+        ...item,
+        goods_id: product.id || item.goods_id,
+        barcode: product.goods_code || item.barcode,
+        italian_name: product.italian_name || item.italian_name,
+        p_price: product.p_price || item.p_price,
+        s_price: product.s_price || item.s_price,
+        s_discount: product.s_discount || item.s_discount,
+        discount_price: discountPrice || calculateDiscountPrice(product.s_price || item.s_price, product.s_discount || item.s_discount),
+        has_discount: hasDiscount || Boolean(numberFromValue(product.s_discount || item.s_discount))
+      });
+      syncHistoryRowsWithRecord(updatedItem, item.barcode);
+      const refreshedSelectedItem =
+        state.history.find((historyItem) => historyItem.id === item.id) || updatedItem;
+      fillHistoryEditForm(refreshedSelectedItem);
+      state.els.historyEditSaveNote.textContent = "";
+      setStatus(`Latest info loaded for ${updatedItem.barcode}`);
+    } catch (error) {
+      state.els.historyEditSaveNote.textContent = error.message || "Could not refresh item info.";
+    }
+  }
+
+  async function saveHistoryEditorChanges() {
+    if (!state.editingHistoryId) {
+      throw new Error("No barcode row selected");
+    }
+
+    const index = state.history.findIndex((item) => item.id === state.editingHistoryId);
+    if (index < 0) {
+      throw new Error("Selected barcode row was not found");
+    }
+
+    const currentItem = state.history[index];
+    const rawPPrice = normalizeDecimalInput(state.els.historyEditPPriceInput.value);
+    const normalizedSPrice = normalizeDecimalInput(state.els.historyEditSPriceInput.value);
+    const normalizedSDiscount = normalizeDecimalInput(state.els.historyEditSDiscountInput.value);
+    const payload = {
+      id: state.els.historyEditIdInput.value.trim(),
+      barcode: state.els.historyEditBarcodeInput.value.trim(),
+      italian_name: sanitizeItalianName(state.els.historyEditItalianNameInput.value),
+      p_price: rawPPrice || "0",
+      s_price: normalizedSPrice,
+      s_discount: normalizedSDiscount
+    };
+    const comparisonQty = Math.max(1, Number(state.els.historyEditQtyInput.value || 1) || 1);
+    const originalItalianName = state.els.historyEditItalianNameInput.value.trim();
+    state.els.historyEditItalianNameInput.value = payload.italian_name;
+    state.els.historyEditPPriceInput.value = rawPPrice;
+    state.els.historyEditSPriceInput.value = normalizedSPrice;
+    state.els.historyEditSDiscountInput.value = normalizedSDiscount;
+    if (originalItalianName !== payload.italian_name) {
+      showToast("Unsupported symbols removed from name");
+    }
+
+    const currentPPrice = String(currentItem.p_price || "").trim();
+    const hasSameCostValue = rawPPrice === ""
+      ? currentPPrice === "" || currentPPrice === "0"
+      : payload.p_price === currentPPrice;
+
+    const onlyComparisonQtyChanged =
+      payload.id === String(currentItem.goods_id || "").trim() &&
+      payload.barcode === String(currentItem.barcode || "").trim() &&
+      payload.italian_name === String(currentItem.italian_name || "").trim() &&
+      hasSameCostValue &&
+      payload.s_price === String(currentItem.s_price || "").trim() &&
+      payload.s_discount === String(currentItem.s_discount || "").trim() &&
+      comparisonQty !== Number(currentItem.comparison_qty || 1);
+
+    if (onlyComparisonQtyChanged) {
+      updateHistoryItem(currentItem.id, {
+        comparison_qty: comparisonQty
+      });
+      setStatus(`Saved quantity for ${currentItem.barcode}`);
+      closeHistoryEditDialog();
+      return;
+    }
+
+    const cookie = await getCookieForRequests();
+    state.els.historyEditSaveNote.textContent = originalItalianName !== payload.italian_name
+      ? "Italian name cleaned before save."
+      : "Checking product...";
+    let updatedItem;
+    let existingProduct = null;
+
+    try {
+      const latestInfo = await loadProductInfoResponse(payload.barcode);
+      if (hasProductInDatabase(latestInfo.normalized, payload.barcode)) {
+        existingProduct = latestInfo.normalized;
       }
     } catch {
-      // Leave BarcodeDetector unset if the external library cannot be loaded.
+      existingProduct = null;
     }
 
-    window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
-    window.BarcodeDetectionAPI.BarcodeDetector = window.BarcodeDetector;
-    if (window.__resolvePonyfillReady) {
-      window.__resolvePonyfillReady();
+    const shouldAddNewProduct = !existingProduct;
+
+    if (shouldAddNewProduct) {
+      if (!payload.italian_name || !payload.s_price) {
+        throw new Error("Italian name and price are required for a new barcode.");
+      }
+    } else {
+      payload.id = String(existingProduct.id || payload.id || currentItem.goods_id || "").trim();
+      if (!payload.id) {
+        throw new Error("ID is missing");
+      }
     }
-  </script>
-  <script src="app.js?v=55" defer></script>
-</body>
-</html>
+
+    if (shouldAddNewProduct) {
+      state.els.historyEditSaveNote.textContent = "Adding new product...";
+      try {
+        const addResponseText = await fetchAddProductThroughProxy(payload, cookie);
+        let addResponse = null;
+        try {
+          addResponse = addResponseText ? JSON.parse(addResponseText) : null;
+        } catch {
+          addResponse = null;
+        }
+
+        const addedProduct = normalizeProductData(addResponse?.product || addResponse);
+        updatedItem = normalizeHistoryItem({
+          ...currentItem,
+          goods_id: String(addedProduct.id || currentItem.goods_id || ""),
+          barcode: String(addedProduct.goods_code || payload.barcode || currentItem.barcode || ""),
+          italian_name: String(addedProduct.italian_name || payload.italian_name),
+          p_price: String(addedProduct.p_price || payload.p_price),
+          s_price: String(addedProduct.s_price || payload.s_price),
+          s_discount: String(addedProduct.s_discount || payload.s_discount),
+          discount_price: calculateDiscountPrice(addedProduct.s_price || payload.s_price, addedProduct.s_discount || payload.s_discount),
+          has_discount: Boolean(numberFromValue(addedProduct.s_discount || payload.s_discount)),
+          comparison_qty: comparisonQty
+        });
+        showToast("Product added successfully");
+      } catch (error) {
+        showToast("Add product failed");
+        error.toastShown = true;
+        throw error;
+      }
+    } else {
+      state.els.historyEditSaveNote.textContent = "Saving changes...";
+      await fetchUpdateItemThroughProxy(payload, cookie);
+      updatedItem = normalizeHistoryItem({
+        ...currentItem,
+        goods_id: payload.id,
+        barcode: payload.barcode || currentItem.barcode,
+        italian_name: payload.italian_name,
+        p_price: payload.p_price,
+        s_price: payload.s_price,
+        s_discount: payload.s_discount,
+        discount_price: calculateDiscountPrice(payload.s_price, payload.s_discount),
+        has_discount: Boolean(numberFromValue(payload.s_discount)),
+        comparison_qty: comparisonQty
+      });
+    }
+
+    try {
+      const latestItemData = await loadProductAndDiscountResponse(updatedItem.barcode);
+      updatedItem = normalizeHistoryItem({
+        ...updatedItem,
+        goods_id: String(latestItemData.product.id || updatedItem.goods_id || ""),
+        barcode: String(latestItemData.product.goods_code || updatedItem.barcode || ""),
+        italian_name: String(latestItemData.product.italian_name || updatedItem.italian_name || ""),
+        p_price: String(latestItemData.product.p_price || updatedItem.p_price || ""),
+        s_price: String(latestItemData.product.s_price || updatedItem.s_price || ""),
+        s_discount: String(latestItemData.product.s_discount || updatedItem.s_discount || ""),
+        discount_price: latestItemData.discountPrice || calculateDiscountPrice(
+          latestItemData.product.s_price || updatedItem.s_price,
+          latestItemData.product.s_discount || updatedItem.s_discount
+        ),
+        has_discount: latestItemData.hasDiscount || Boolean(numberFromValue(latestItemData.product.s_discount || updatedItem.s_discount)),
+        comparison_qty: comparisonQty
+      });
+    } catch {
+      // Keep the saved values if the refresh-after-save request fails.
+    }
+
+    updateHistoryItemsByBarcode(updatedItem.barcode, {
+      goods_id: updatedItem.goods_id,
+      barcode: updatedItem.barcode,
+      italian_name: updatedItem.italian_name,
+      p_price: updatedItem.p_price,
+      s_price: updatedItem.s_price,
+      s_discount: updatedItem.s_discount,
+      discount_price: updatedItem.discount_price,
+      has_discount: updatedItem.has_discount
+    });
+    updateHistoryItem(currentItem.id, {
+      goods_id: updatedItem.goods_id,
+      barcode: updatedItem.barcode,
+      italian_name: updatedItem.italian_name,
+      p_price: updatedItem.p_price,
+      s_price: updatedItem.s_price,
+      s_discount: updatedItem.s_discount,
+      discount_price: updatedItem.discount_price,
+      has_discount: updatedItem.has_discount,
+      comparison_qty: updatedItem.comparison_qty
+    });
+    if (state.currentProductRecord?.barcode === updatedItem.barcode) {
+      state.currentProductRecord = {
+        ...state.currentProductRecord,
+        goods_id: updatedItem.goods_id,
+        italian_name: updatedItem.italian_name,
+        p_price: updatedItem.p_price,
+        s_price: updatedItem.s_price,
+        s_discount: updatedItem.s_discount,
+        discount_price: updatedItem.discount_price,
+        has_discount: updatedItem.has_discount,
+        comparison_qty: updatedItem.comparison_qty
+      };
+      setResultField("id", updatedItem.goods_id);
+      setResultField("italian_name", updatedItem.italian_name);
+      setResultField("p_price", updatedItem.p_price);
+      setResultField("s_price", updatedItem.s_price);
+      setResultField("discount_price", updatedItem.discount_price);
+      setResultField("discount_percent", updatedItem.s_discount ? formatPercent(updatedItem.s_discount) : "");
+      setDiscountVisibility(Boolean(numberFromValue(updatedItem.discount_price)) && numberFromValue(updatedItem.discount_price) < numberFromValue(updatedItem.s_price));
+    }
+
+    setStatus(`Saved ${updatedItem.barcode}`);
+    closeHistoryEditDialog();
+  }
+
+  function supportsConfiguredScannerEngine() {
+    return Boolean(getPonyfillDetectorClass() || window.__ponyfillReadyPromise);
+  }
+
+  function getCameraSupportIssue() {
+    if (!window.isSecureContext) {
+      return 'Camera access needs a secure page, like "https://" or "http://localhost".';
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return "This browser does not support camera access.";
+    }
+    if (!supportsConfiguredScannerEngine()) {
+      return isIOSDevice()
+        ? "The iPhone barcode scanner library did not load."
+        : "The Android barcode scanner library did not load.";
+    }
+    return "";
+  }
+
+  function setPreviewActive(active) {
+    state.els.previewPlaceholder.hidden = active;
+    state.els.cameraBadge.textContent = active ? "Live preview" : "Preview off";
+  }
+
+  function updateScanButton() {
+    if (!state.isCameraRunning) {
+      state.els.scanBtn.textContent = "Start Scanning";
+      state.els.scanBtn.dataset.mode = "start";
+      return;
+    }
+    if (state.isScanning) {
+      state.els.scanBtn.textContent = "Stop Scanning";
+      state.els.scanBtn.dataset.mode = "stop";
+      return;
+    }
+    state.els.scanBtn.textContent = "Start Scanning";
+    state.els.scanBtn.dataset.mode = "start";
+  }
+
+  function updateModePill() {
+    state.els.previewFrame.classList.toggle("is-scanning", state.isScanning);
+  }
+
+  function cleanupScanTimer() {
+    if (state.scanTimer) {
+      window.clearTimeout(state.scanTimer);
+      state.scanTimer = 0;
+    }
+    state.isScanLoopScheduled = false;
+    state.isScanInFlight = false;
+  }
+
+  function clearFocusRefreshTimers() {
+    if (!Array.isArray(state.focusRefreshTimers)) {
+      state.focusRefreshTimers = [];
+      return;
+    }
+    for (let index = 0; index < state.focusRefreshTimers.length; index += 1) {
+      window.clearTimeout(state.focusRefreshTimers[index]);
+    }
+    state.focusRefreshTimers = [];
+  }
+
+  function stopPreviewWatchdog() {
+    if (state.previewWatchdogTimer) {
+      window.clearInterval(state.previewWatchdogTimer);
+      state.previewWatchdogTimer = 0;
+    }
+    state.stalledPreviewChecks = 0;
+    state.lastPreviewTime = 0;
+  }
+
+  async function recoverPreviewFromFreeze() {
+    if (state.isRecoveringPreview || !state.isCameraRunning) {
+      return;
+    }
+
+    state.isRecoveringPreview = true;
+    const shouldResumeScanning = state.isScanning;
+    const selectedDeviceId = state.activeDeviceId || state.els.cameraSelect.value;
+    stopScanning(true);
+    setStatus("Camera preview paused, reconnecting...");
+
+    try {
+      await startCamera(selectedDeviceId);
+      if (shouldResumeScanning) {
+        await startScanning();
+      } else {
+        setStatus("Camera preview restored");
+      }
+    } catch (error) {
+      setStatus(error.message || "Camera preview recovery failed");
+    } finally {
+      state.isRecoveringPreview = false;
+    }
+  }
+
+  function startPreviewWatchdog() {
+    stopPreviewWatchdog();
+    if (!state.isCameraRunning) {
+      return;
+    }
+
+    state.lastPreviewTime = Number(getPreviewVideoElement()?.currentTime || 0);
+    state.previewWatchdogTimer = window.setInterval(function () {
+      if (!state.isCameraRunning || state.isRecoveringPreview || document.hidden) {
+        return;
+      }
+
+      const video = getPreviewVideoElement();
+      if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        return;
+      }
+
+      const currentTime = Number(video.currentTime || 0);
+      if (Math.abs(currentTime - state.lastPreviewTime) < 0.01) {
+        state.stalledPreviewChecks += 1;
+      } else {
+        state.lastPreviewTime = currentTime;
+        state.stalledPreviewChecks = 0;
+      }
+
+      if (state.stalledPreviewChecks >= CONFIG.previewStallThreshold) {
+        state.stalledPreviewChecks = 0;
+        recoverPreviewFromFreeze().catch(() => {
+          // Ignore watchdog recovery noise.
+        });
+      }
+    }, CONFIG.previewWatchIntervalMs);
+  }
+
+  async function stopTracks() {
+    stopPreviewWatchdog();
+    clearFocusRefreshTimers();
+    state.isCameraRunning = false;
+    state.torchOn = false;
+    updateTorchUi(false, false);
+
+    const scanner = state.scanner;
+    const currentStream = state.stream;
+    state.scanner = null;
+    state.scannerEngine = "";
+
+    state.stream = null;
+    state.track = null;
+    state.detector = null;
+    setActivePreviewEngine("");
+
+    if (scanner?.stream?.getTracks) {
+      const scannerTracks = scanner.stream.getTracks();
+      for (let index = 0; index < scannerTracks.length; index += 1) {
+        try {
+          scannerTracks[index].stop();
+        } catch {
+          // Ignore cleanup issues from stale tracks.
+        }
+      }
+    }
+
+    if (currentStream?.getTracks) {
+      const tracks = currentStream.getTracks();
+      for (let index = 0; index < tracks.length; index += 1) {
+        try {
+          tracks[index].stop();
+        } catch {
+          // Ignore stream teardown issues.
+        }
+      }
+    }
+
+    if (state.els.cameraPreview instanceof HTMLVideoElement) {
+      try {
+        state.els.cameraPreview.pause();
+      } catch {
+        // Ignore pause issues on detached previews.
+      }
+      try {
+        state.els.cameraPreview.srcObject = null;
+      } catch {
+        // Ignore srcObject cleanup issues.
+      }
+      state.els.cameraPreview.removeAttribute("src");
+      try {
+        state.els.cameraPreview.load();
+      } catch {
+        // Ignore load reset issues.
+      }
+    }
+
+    if (state.els.cameraPreviewQuagga) {
+      state.els.cameraPreviewQuagga.innerHTML = "";
+    }
+  }
+
+  function updateResolutionBadge() {
+    const liveTrack = state.track || getActiveStreamTrackFromPreview();
+    if (!liveTrack?.getSettings) {
+      state.els.resolutionBadge.textContent = "0 x 0";
+      return;
+    }
+
+    const settings = liveTrack.getSettings();
+    const video = getPreviewVideoElement();
+    const width = settings.width || video?.videoWidth || 0;
+    const height = settings.height || video?.videoHeight || 0;
+    state.els.resolutionBadge.textContent = `${width} x ${height}`;
+  }
+
+  function buildDeviceLabel(device, index) {
+    return device.label || `Camera ${index + 1}`;
+  }
+
+  function isLikelyProblematicIOSCameraLabel(label) {
+    return /tele|triple|long.?focus|0\.5x|2x|3x|continuity|desk|front|true.?depth|facetime|前置|长焦|三镜头/i.test(label || "");
+  }
+
+  function scoreVideoDevice(device, index) {
+    const label = String(device?.label || "");
+    let score = 0;
+
+    if (isIOSDevice()) {
+      if (/超广角|ultra.?wide/i.test(label)) {
+        score += 260;
+      }
+      if (/双广角|dual.?wide/i.test(label)) {
+        score += 220;
+      }
+      if (/后置相机|back camera|rear camera/i.test(label)) {
+        score += 180;
+      }
+      if (/后置双镜头|dual camera/i.test(label)) {
+        score += 120;
+      }
+      if (/三镜头|triple/i.test(label)) {
+        score -= 140;
+      }
+      if (/长焦|tele/i.test(label)) {
+        score -= 220;
+      }
+      if (/前置|front|user|true.?depth|facetime/i.test(label)) {
+        score -= 260;
+      }
+      if (!label && index === 0) {
+        score -= 30;
+      }
+      return score;
+    }
+
+    if (/back camera|rear camera/i.test(label)) {
+      score += 140;
+    }
+    if (/back|rear|environment/i.test(label)) {
+      score += 90;
+    }
+    if (/\bwide\b|main|1x/i.test(label)) {
+      score += 40;
+    }
+    if (/front|user|true.?depth|facetime/i.test(label)) {
+      score -= 140;
+    }
+    if (/ultra|tele|macro|0\.5x|2x|3x|continuity|desk/i.test(label)) {
+      score -= 80;
+    }
+    if (!label && index === 0) {
+      score += 5;
+    }
+    if (isIOSDevice() && !label) {
+      score += Math.max(0, 10 - index);
+    }
+
+    return score;
+  }
+
+  function chooseBestDefaultDevice(devices) {
+    if (!devices || devices.length === 0) return "";
+
+    const rankedDevices = devices
+      .map(function (device, index) {
+        return {
+          device: device,
+          score: scoreVideoDevice(device, index),
+          index: index
+        };
+      })
+      .sort(function (left, right) {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+        return left.index - right.index;
+      });
+
+    return rankedDevices[0]?.device?.deviceId || devices[0].deviceId;
+  }
+
+  function resolvePreferredDeviceId(devices, preferredDeviceId) {
+    if (!devices || devices.length === 0) {
+      return "";
+    }
+
+    const preferredDevice = devices.find(function (device) {
+      return device.deviceId === preferredDeviceId;
+    });
+
+    if (
+      isIOSDevice() &&
+      preferredDevice &&
+      isLikelyProblematicIOSCameraLabel(preferredDevice.label)
+    ) {
+      return chooseBestDefaultDevice(devices);
+    }
+
+    return preferredDevice?.deviceId || chooseBestDefaultDevice(devices);
+  }
+
+  async function refreshDevices(preferredDeviceId) {
+    const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+    const devices = mediaDevices.filter((device) => device.kind === "videoinput");
+
+    state.devices = devices;
+    const savedCameraId = readSavedCameraId();
+    const requestedId = preferredDeviceId || state.activeDeviceId || savedCameraId || "";
+    const fallbackId = resolvePreferredDeviceId(state.devices, requestedId);
+    const hasMatch = state.devices.some((device) => device.deviceId === fallbackId);
+    const currentId = hasMatch ? fallbackId : chooseBestDefaultDevice(state.devices);
+    state.activeDeviceId = currentId;
+    state.els.cameraSelect.innerHTML = "";
+
+    for (let index = 0; index < state.devices.length; index += 1) {
+      const device = state.devices[index];
+      const option = document.createElement("option");
+      option.value = device.deviceId;
+      option.textContent = buildDeviceLabel(device, index);
+      option.selected = device.deviceId === currentId;
+      state.els.cameraSelect.appendChild(option);
+    }
+
+    state.els.cameraSelect.disabled = state.devices.length === 0;
+    if (currentId) {
+      saveCameraId(currentId);
+    }
+  }
+
+  async function handleDetectedCode(detectedText) {
+    const code = String(detectedText || "").trim();
+    if (!state.isScanning || !code) {
+      return;
+    }
+
+    state.els.barcodeInput.value = code;
+    playCaptureSound();
+    stopScanning(true);
+
+    try {
+      await fetchProductInfo(code);
+    } catch (error) {
+      setStatus(error.message || "Barcode was captured, but info request failed");
+    }
+  }
+
+  function getSquareCropSize(video) {
+    const preferredSquareSize = state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize;
+    const width = video.videoWidth || preferredSquareSize;
+    const height = video.videoHeight || preferredSquareSize;
+    return Math.max(1, Math.min(width, height));
+  }
+
+  function drawDetectionFrame(mode) {
+    const video = state.els.cameraPreview;
+    const canvas = state.els.captureCanvas;
+    const context = canvas.getContext("2d", { alpha: false });
+    const videoWidth = video.videoWidth || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
+    const videoHeight = video.videoHeight || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
+    let sx = 0;
+    let sy = 0;
+    let sw = videoWidth;
+    let sh = videoHeight;
+
+    if (mode === "wide") {
+      sw = Math.max(1, Math.floor(videoWidth * 0.94));
+      sh = Math.max(1, Math.floor(videoHeight * 0.38));
+      sx = Math.max(0, Math.floor((videoWidth - sw) / 2));
+      sy = Math.max(0, Math.floor((videoHeight - sh) / 2));
+    } else if (mode === "square") {
+      const squareSize = getSquareCropSize(video);
+      sw = squareSize;
+      sh = squareSize;
+      sx = Math.max(0, Math.floor((videoWidth - squareSize) / 2));
+      sy = Math.max(0, Math.floor((videoHeight - squareSize) / 2));
+    }
+
+    const maxOutputSize = state.isMobileUi ? 720 : 960;
+    const scale = Math.min(1, maxOutputSize / Math.max(sw, sh));
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
+    context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+
+  function normalizeDetectedText(result) {
+    return String(
+      result?.rawValue ||
+      result?.rawValueString ||
+      result?.codeResult?.code ||
+      result?.value ||
+      ""
+    ).trim();
+  }
+
+  async function detectBarcodeInFrame() {
+    const detector = await createDetector();
+    if (!detector) {
+      return "";
+    }
+
+    const sources = CONFIG.detectionCropModes.map(function (mode) {
+      return {
+        mode: mode,
+        source: mode === "full" ? state.els.cameraPreview : drawDetectionFrame(mode)
+      };
+    });
+
+    for (let index = 0; index < sources.length; index += 1) {
+      const currentSource = sources[index];
+      try {
+        const results = await detector.detect(currentSource.source);
+        const detectedText = normalizeDetectedText(results?.[0]);
+        if (detectedText) {
+          return detectedText;
+        }
+      } catch {
+        // Ignore a single failed crop and continue with the next one.
+      }
+    }
+
+    return "";
+  }
+
+  async function captureAttempt() {
+    if (!state.isCameraRunning || !state.track || state.els.cameraPreview.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return false;
+    }
+
+    const detectedText = await detectBarcodeInFrame();
+
+    if (!detectedText) {
+      setStatus("Scanning... point the barcode inside the square");
+      return false;
+    }
+
+    state.els.barcodeInput.value = detectedText;
+    playCaptureSound();
+    stopScanning(true);
+
+    try {
+      await fetchProductInfo(detectedText);
+      return true;
+    } catch (error) {
+      setStatus(error.message || "Barcode was captured, but info request failed");
+      return true;
+    }
+  }
+
+  async function runScanLoop() {
+    if (!state.isScanning || state.isScanLoopScheduled) {
+      return;
+    }
+
+    state.isScanLoopScheduled = true;
+    state.scanTimer = window.setTimeout(async function () {
+      state.isScanLoopScheduled = false;
+      if (!state.isScanning || state.isScanInFlight) {
+        if (state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+        return;
+      }
+
+      state.isScanInFlight = true;
+      try {
+        const detected = await captureAttempt();
+        if (!detected && state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+      } catch {
+        setStatus("Scanning had a temporary read error");
+        if (state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+      } finally {
+        state.isScanInFlight = false;
+      }
+    }, CONFIG.scanIntervalMs);
+  }
+
+  async function startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig) {
+    setActivePreviewEngine("ponyfill");
+
+    const constraints = {
+      audio: false,
+      video: {}
+    };
+    const requestedVideo = activeVideoConfig?.video || {};
+
+    if (requestedVideo.width) {
+      constraints.video.width = {
+        ideal: requestedVideo.width.ideal,
+        max: requestedVideo.width.max
+      };
+    }
+    if (requestedVideo.height) {
+      constraints.video.height = {
+        ideal: requestedVideo.height.ideal,
+        max: requestedVideo.height.max
+      };
+    }
+    if (requestedVideo.aspectRatio) {
+      constraints.video.aspectRatio = { ideal: requestedVideo.aspectRatio.ideal };
+    }
+    if (requestedVideo.frameRate) {
+      constraints.video.frameRate = {
+        ideal: requestedVideo.frameRate.ideal,
+        max: requestedVideo.frameRate.max
+      };
+    }
+    if (requestedVideo.resizeMode) {
+      constraints.video.resizeMode = requestedVideo.resizeMode;
+    }
+
+    if (preferredCameraId) {
+      constraints.video.deviceId = { exact: preferredCameraId };
+    } else {
+      constraints.video.facingMode = { ideal: requestedVideo?.facingMode?.ideal || "environment" };
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    const track = stream.getVideoTracks()[0] || null;
+
+    state.stream = stream;
+    state.track = track;
+    state.scanner = { stream: stream };
+    state.scannerEngine = "ponyfill";
+    state.activeDeviceId = track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
+    saveCameraId(state.activeDeviceId);
+
+    state.els.cameraPreview.srcObject = stream;
+    await waitForVideoReadiness(state.els.cameraPreview);
+    await state.els.cameraPreview.play();
+    await applyTrackEnhancements(track, activeVideoConfig);
+    scheduleFocusRefresh(track);
+    await refreshDevices(state.activeDeviceId);
+    await syncTorchSupport();
+  }
+
+  function waitForVideoReadiness(video) {
+    if (!video) {
+      return Promise.resolve();
+    }
+
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      return Promise.resolve();
+    }
+
+    return new Promise(function (resolve) {
+      let settled = false;
+      function finish() {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        video.removeEventListener("loadedmetadata", finish);
+        video.removeEventListener("loadeddata", finish);
+        resolve();
+      }
+
+      video.addEventListener("loadedmetadata", finish, { once: true });
+      video.addEventListener("loadeddata", finish, { once: true });
+      window.setTimeout(finish, 400);
+    });
+  }
+
+  async function requestFocusRefresh(track) {
+    if (!track?.getCapabilities || !track.applyConstraints || track.readyState === "ended") {
+      return;
+    }
+
+    const capabilities = track.getCapabilities();
+    const advanced = [];
+    const settings = track.getSettings ? track.getSettings() : null;
+
+    if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
+      advanced.push({ focusMode: "continuous" });
+    } else if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("single-shot")) {
+      advanced.push({ focusMode: "single-shot" });
+    }
+
+    if (
+      isIOSDevice() &&
+      typeof capabilities.zoom?.max === "number" &&
+      typeof capabilities.zoom?.min === "number" &&
+      capabilities.zoom.max > capabilities.zoom.min
+    ) {
+      const currentZoom = typeof settings?.zoom === "number" ? settings.zoom : capabilities.zoom.min;
+      const desiredZoom = Math.max(CONFIG.iosPreferredZoom, capabilities.zoom.min);
+      const safeZoom = Math.min(desiredZoom, capabilities.zoom.max);
+      if (Math.abs(currentZoom - safeZoom) > 0.01) {
+        advanced.push({ zoom: safeZoom });
+      }
+    }
+
+    if (!isIOSDevice() && capabilities.zoom && typeof capabilities.zoom.max === "number") {
+      const minZoom = typeof capabilities.zoom.min === "number" ? capabilities.zoom.min : 1;
+      const desiredZoom = capabilities.zoom.max >= 1.4 ? Math.max(minZoom, 1.1) : minZoom;
+      if (desiredZoom > minZoom) {
+        advanced.push({ zoom: desiredZoom });
+      }
+    }
+
+    if (advanced.length === 0) {
+      return;
+    }
+
+    try {
+      await track.applyConstraints({ advanced: advanced });
+    } catch {
+      // Device-specific camera focus controls can fail transiently.
+    }
+  }
+
+  function scheduleFocusRefresh(track) {
+    clearFocusRefreshTimers();
+    const delays = isIOSDevice() ? [150, 700, 1600] : [120, 500, 1200];
+    for (let index = 0; index < delays.length; index += 1) {
+      const timerId = window.setTimeout(function () {
+        requestFocusRefresh(track).catch(() => {
+          // Ignore autofocus refresh noise.
+        });
+      }, delays[index]);
+      state.focusRefreshTimers.push(timerId);
+    }
+  }
+
+  async function applyTrackEnhancements(track, activeVideoConfig) {
+    if (!track?.getCapabilities || !track.applyConstraints) return;
+    if (isIOSDevice()) {
+      await requestFocusRefresh(track);
+      return;
+    }
+
+    const baseVideoConfig = activeVideoConfig?.video || getActiveVideoConfig().video;
+    const baseConstraints = {};
+
+    if (baseVideoConfig?.width) {
+      baseConstraints.width = baseVideoConfig.width;
+    }
+    if (baseVideoConfig?.height) {
+      baseConstraints.height = baseVideoConfig.height;
+    }
+    if (baseVideoConfig?.aspectRatio) {
+      baseConstraints.aspectRatio = baseVideoConfig.aspectRatio;
+    }
+    if (baseVideoConfig?.frameRate) {
+      baseConstraints.frameRate = baseVideoConfig.frameRate;
+    }
+    if (baseVideoConfig?.resizeMode) {
+      baseConstraints.resizeMode = baseVideoConfig.resizeMode;
+    }
+
+    if (Object.keys(baseConstraints).length > 0) {
+      try {
+        await track.applyConstraints(baseConstraints);
+      } catch {
+        // Ignore base resolution requests that are not supported by this device.
+      }
+    }
+
+    const capabilities = track.getCapabilities();
+    if (!capabilities) return;
+    await requestFocusRefresh(track);
+  }
+
+  function updateTorchUi(supported, enabled) {
+    state.els.torchBtn.disabled = !supported || !state.isCameraRunning;
+    state.els.torchBtn.textContent = enabled ? "Torch On" : "Torch Off";
+  }
+
+  async function syncTorchSupport() {
+    if (!state.track?.getCapabilities) {
+      updateTorchUi(false, false);
+      return;
+    }
+
+    const capabilities = state.track.getCapabilities();
+    const supported = !!capabilities.torch;
+    if (!supported) {
+      state.torchOn = false;
+    }
+    updateTorchUi(supported, state.torchOn);
+  }
+
+  async function toggleTorch() {
+    if (!state.track?.applyConstraints || !state.track.getCapabilities) return;
+
+    const capabilities = state.track.getCapabilities();
+    if (!capabilities.torch) {
+      updateTorchUi(false, false);
+      setStatus("Torch is not supported on this camera");
+      return;
+    }
+
+    state.torchOn = !state.torchOn;
+    try {
+      await state.track.applyConstraints({ advanced: [{ torch: state.torchOn }] });
+      updateTorchUi(true, state.torchOn);
+      setStatus(state.torchOn ? "Torch enabled" : "Torch disabled");
+    } catch {
+      state.torchOn = false;
+      updateTorchUi(true, false);
+      setStatus("Torch control failed on this device");
+    }
+  }
+
+  async function startCamera(deviceId) {
+    if (state.cameraStartPromise) {
+      await state.cameraStartPromise;
+      if (state.isCameraRunning && (!deviceId || deviceId === state.activeDeviceId)) {
+        return;
+      }
+    }
+
+    const startPromise = (async function () {
+      const supportIssue = getCameraSupportIssue();
+      if (supportIssue) throw new Error(supportIssue);
+
+      cleanupScanTimer();
+      await stopTracks();
+
+      const activeVideoConfig = getActiveVideoConfig();
+      await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
+      const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
+      await startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig);
+
+      if (isIOSDevice() && !state.iosWarmRestartDone) {
+        state.iosWarmRestartDone = true;
+        const restartDeviceId = state.activeDeviceId || preferredCameraId;
+        await new Promise(function (resolve) {
+          window.setTimeout(resolve, 220);
+        });
+        await stopTracks();
+        await startCameraWithPonyfillDetector(restartDeviceId, activeVideoConfig);
+      }
+
+      state.isCameraRunning = true;
+      state.isScanning = false;
+      setPreviewActive(true);
+      updateResolutionBadge();
+      updateScanButton();
+      updateModePill();
+      startPreviewWatchdog();
+      setStatus("Camera ready");
+    }());
+
+    state.cameraStartPromise = startPromise;
+    try {
+      await startPromise;
+    } finally {
+      if (state.cameraStartPromise === startPromise) {
+        state.cameraStartPromise = null;
+      }
+    }
+  }
+
+  function schedulePreviewWarmStart() {
+    window.setTimeout(function () {
+      startCamera(state.activeDeviceId).catch((error) => {
+        setStatus(error.message || "Camera preview could not start automatically");
+      });
+    }, 0);
+  }
+
+  async function startScanning() {
+    if (!state.isCameraRunning) {
+      await startCamera(state.activeDeviceId);
+    }
+
+    if (state.isScanning) return;
+
+    scheduleFocusRefresh(state.track);
+    state.isScanning = true;
+    updateScanButton();
+    updateModePill();
+    setStatus("Scanning started");
+    if (await captureAttempt()) {
+      return;
+    }
+    cleanupScanTimer();
+    await runScanLoop();
+  }
+
+  function stopScanning(keepStatusMessage) {
+    cleanupScanTimer();
+    state.isScanning = false;
+    updateScanButton();
+    updateModePill();
+    if (!keepStatusMessage) {
+      setStatus(state.isCameraRunning ? "Scanning stopped, preview still live" : "Camera stopped");
+    }
+  }
+
+  async function handleMainButton() {
+    if (!state.isCameraRunning) {
+      await startCamera(state.activeDeviceId);
+    }
+
+    if (state.isScanning) {
+      stopScanning();
+      return;
+    }
+
+    await startScanning();
+  }
+
+  async function handleSelectChange() {
+    const selectedId = state.els.cameraSelect.value;
+    if (!selectedId || selectedId === state.activeDeviceId) return;
+
+    const shouldResumeScanning = state.isScanning;
+    saveCameraId(selectedId);
+    stopScanning(true);
+    await startCamera(selectedId);
+    if (shouldResumeScanning) {
+      await startScanning();
+    }
+  }
+
+  async function handleBarcodeLookup() {
+    try {
+      await fetchProductInfo(state.els.barcodeInput.value);
+    } catch (error) {
+      setStatus(error.message || "Could not load product info");
+    }
+  }
+
+  function bindEvents() {
+    state.els.scanBtn.addEventListener("click", async function () {
+      state.els.scanBtn.disabled = true;
+      try {
+        await handleMainButton();
+      } catch (error) {
+        setStatus(error.message || "Could not start the camera");
+      } finally {
+        state.els.scanBtn.disabled = false;
+      }
+    });
+
+    state.els.clearBarcodeBtn.addEventListener("click", function () {
+      state.els.barcodeInput.value = "";
+      setStatus("Barcode field cleared");
+    });
+
+    state.els.searchBarcodeBtn.addEventListener("click", async function () {
+      state.els.searchBarcodeBtn.disabled = true;
+      try {
+        await handleBarcodeLookup();
+      } finally {
+        state.els.searchBarcodeBtn.disabled = false;
+      }
+    });
+
+    state.els.clearSelectedBtn.addEventListener("click", function () {
+      if (state.selectedHistoryIndex < 0) {
+        return;
+      }
+      openConfirmDialog("Delete the selected barcode from the list?", clearSelectedHistory);
+    });
+    state.els.clearAllBtn.addEventListener("click", function () {
+      if (state.history.length === 0) {
+        return;
+      }
+      openConfirmDialog("Delete all barcodes from the list?", clearAllHistory);
+    });
+    state.els.sendTxtBtn.addEventListener("click", async function () {
+      state.els.sendTxtBtn.disabled = true;
+      try {
+        await sendTxtList();
+      } catch (error) {
+        setStatus(error.message || "Send TXT failed");
+      } finally {
+        state.els.sendTxtBtn.disabled = false;
+      }
+    });
+
+    state.els.printBtn.addEventListener("click", function () {
+      if (state.history.length === 0) {
+        setStatus("Barcode list is empty");
+        return;
+      }
+      openPrintDialog();
+    });
+
+    state.els.printBigBtn.addEventListener("click", async function () {
+      state.els.printBigBtn.disabled = true;
+      state.els.printStickerBtn.disabled = true;
+      try {
+        await printHistoryList("60*38");
+        closePrintDialog();
+      } catch (error) {
+        setStatus(error.message || "Print failed");
+      } finally {
+        state.els.printBigBtn.disabled = false;
+        state.els.printStickerBtn.disabled = false;
+      }
+    });
+
+    state.els.printStickerBtn.addEventListener("click", async function () {
+      state.els.printBigBtn.disabled = true;
+      state.els.printStickerBtn.disabled = true;
+      try {
+        await printHistoryList("40*25");
+        closePrintDialog();
+      } catch (error) {
+        setStatus(error.message || "Print failed");
+      } finally {
+        state.els.printBigBtn.disabled = false;
+        state.els.printStickerBtn.disabled = false;
+      }
+    });
+
+    state.els.printBackBtn.addEventListener("click", closePrintDialog);
+
+    state.els.historyList.addEventListener("click", function (event) {
+      const detailButton = event.target.closest('[data-action="detail"]');
+      if (detailButton) {
+        const detailIndex = Number(detailButton.dataset.index);
+        if (!Number.isNaN(detailIndex)) {
+          openHistoryEditor(detailIndex).catch((error) => {
+            setStatus(error.message || "Could not open barcode row");
+          });
+        }
+        return;
+      }
+
+      const record = event.target.closest(".history-item");
+      if (!record) return;
+      const index = Number(record.dataset.index);
+      if (!Number.isNaN(index)) {
+        selectHistoryItem(index);
+      }
+    });
+
+    state.els.historyList.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const record = event.target.closest(".history-item");
+      if (!record) return;
+      event.preventDefault();
+      const index = Number(record.dataset.index);
+      if (!Number.isNaN(index)) {
+        selectHistoryItem(index);
+      }
+    });
+
+    state.els.barcodeInput.addEventListener("keydown", async function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      await handleBarcodeLookup();
+    });
+
+    state.els.cameraSelect.addEventListener("change", async function () {
+      state.els.cameraSelect.disabled = true;
+      try {
+        await handleSelectChange();
+      } catch (error) {
+        setStatus(error.message || "Could not change camera");
+      } finally {
+        state.els.cameraSelect.disabled = state.devices.length === 0;
+      }
+    });
+
+    state.els.torchBtn.addEventListener("click", async function () {
+      state.els.torchBtn.disabled = true;
+      try {
+        await toggleTorch();
+      } finally {
+        await syncTorchSupport();
+      }
+    });
+
+    state.els.settingsBtn.addEventListener("click", openSettingsDialog);
+    state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
+    state.els.compactToggleBtn.addEventListener("click", function () {
+      const nextCompactMode = !state.isCompactMode;
+      applyCompactMode(nextCompactMode);
+      saveSettings({
+        ...readSavedSettings(),
+        compactMode: nextCompactMode
+      }, { silent: true });
+    });
+
+    state.els.loginSettingsBtn.addEventListener("click", async function () {
+      const values = {
+        shopKey: state.els.shopKeyInput.value.trim(),
+        login: state.els.loginInput.value.trim(),
+        password: state.els.passwordInput.value,
+        compactMode: state.isCompactMode
+      };
+
+      saveSettings(values);
+      try {
+        await loginAndRefreshCookie(values);
+      } catch (error) {
+        const message = error.message || "Login request failed.";
+        saveCookieState("", `Login failed: ${message}`);
+        state.els.settingsSaveNote.textContent = message;
+        setStatus("Login failed");
+      }
+    });
+
+    state.els.refreshCookieBtn.addEventListener("click", async function () {
+      state.els.refreshCookieBtn.disabled = true;
+      try {
+        await loginAndRefreshCookie();
+      } catch (error) {
+        const message = error.message || "Cookie refresh failed.";
+        saveCookieState("", `Cookie refresh failed: ${message}`);
+        setStatus("Cookie refresh failed");
+      } finally {
+        state.els.refreshCookieBtn.disabled = false;
+      }
+    });
+
+    state.els.settingsDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.settingsDialog) {
+        closeSettingsDialog();
+      }
+    });
+
+    state.els.confirmDialogOkBtn.addEventListener("click", function () {
+      const action = state.pendingConfirmAction;
+      closeConfirmDialog();
+      if (action) {
+        action();
+      }
+    });
+
+    state.els.confirmDialogCancelBtn.addEventListener("click", closeConfirmDialog);
+
+    state.els.confirmDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.confirmDialog) {
+        closeConfirmDialog();
+      }
+    });
+
+    state.els.printDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.printDialog) {
+        closePrintDialog();
+      }
+    });
+
+    state.els.historyEditSaveBtn.addEventListener("click", async function () {
+      state.els.historyEditSaveBtn.disabled = true;
+      try {
+        await saveHistoryEditorChanges();
+      } catch (error) {
+        state.els.historyEditSaveNote.textContent = error.message || "Save failed.";
+        if (!error?.toastShown) {
+          showToast("Save failed");
+        }
+      } finally {
+        state.els.historyEditSaveBtn.disabled = false;
+      }
+    });
+
+    state.els.historyEditBackBtn.addEventListener("click", closeHistoryEditDialog);
+
+    state.els.historyEditSPriceInput.addEventListener("input", refreshHistoryEditDiscountPrice);
+    state.els.historyEditSDiscountInput.addEventListener("input", refreshHistoryEditDiscountPrice);
+    state.els.historyEditQtyInput.addEventListener("focus", selectEntireInputValue);
+    state.els.historyEditQtyInput.addEventListener("click", selectEntireInputValue);
+    state.els.historyEditQtyInput.addEventListener("pointerup", function (event) {
+      event.preventDefault();
+      selectEntireInputValue(event);
+    });
+
+    state.els.historyEditItalianNameInput.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      moveFocusToInput(state.els.historyEditPPriceInput);
+    });
+
+    state.els.historyEditPPriceInput.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      moveFocusToInput(state.els.historyEditSPriceInput);
+    });
+
+    state.els.historyEditDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.historyEditDialog) {
+        closeHistoryEditDialog();
+      }
+    });
+
+    window.addEventListener("beforeunload", function () {
+      stopScanning(true);
+      stopTracks();
+    });
+
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) {
+        state.lastPreviewTime = Number(getPreviewVideoElement()?.currentTime || 0);
+        state.stalledPreviewChecks = 0;
+      }
+    });
+
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener("devicechange", function () {
+        refreshDevices(state.activeDeviceId).catch(() => {
+          // Ignore transient device change errors.
+        });
+      });
+    }
+  }
+
+  async function init() {
+    await waitForPonyfillReady(2200);
+
+    state.els = queryElements();
+    requireElements(state.els);
+    state.isMobileUi = detectMobileUi();
+    cacheResultFieldElements();
+
+    const savedSettings = readSavedSettings();
+    loadCookieState();
+    loadHistoryState();
+    fillSettingsForm(savedSettings);
+    applyCompactMode(savedSettings.compactMode);
+    clearResultFields();
+    renderHistory();
+    bindEvents();
+
+    const supportIssue = getCameraSupportIssue();
+    if (supportIssue) {
+      setStatus(supportIssue);
+      state.els.scanBtn.disabled = true;
+      state.els.cameraSelect.disabled = true;
+      state.els.torchBtn.disabled = true;
+      return;
+    }
+
+    setStatus("Opening camera preview...");
+    refreshDevices(readSavedCameraId()).catch(() => {
+      // Ignore early device enumeration issues before permission is granted.
+    });
+    schedulePreviewWarmStart();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () {
+      init().catch((error) => {
+        if (state.els?.statusText) {
+          setStatus(error.message || "The app could not start");
+        }
+      });
+    });
+  } else {
+    init().catch((error) => {
+      if (state.els?.statusText) {
+        setStatus(error.message || "The app could not start");
+      }
+    });
+  }
+}());
