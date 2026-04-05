@@ -64,6 +64,14 @@
         resizeMode: "crop-and-scale"
       }
     },
+    iosVideoConstraints: {
+      audio: false,
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 960, max: 1440 }
+      }
+    },
     androidVideoConstraints: {
       audio: false,
       video: {
@@ -187,6 +195,9 @@
   }
 
   function getActiveVideoConfig() {
+    if (isIOSDevice()) {
+      return CONFIG.iosVideoConstraints;
+    }
     if (isAndroidDevice()) {
       return CONFIG.androidVideoConstraints;
     }
@@ -2124,19 +2135,39 @@
 
     const constraints = {
       audio: false,
-      video: {
-        width: { ideal: activeVideoConfig.video.width.ideal, max: activeVideoConfig.video.width.max },
-        height: { ideal: activeVideoConfig.video.height.ideal, max: activeVideoConfig.video.height.max },
-        aspectRatio: { ideal: activeVideoConfig.video.aspectRatio.ideal },
-        frameRate: { ideal: activeVideoConfig.video.frameRate.ideal, max: activeVideoConfig.video.frameRate.max },
-        resizeMode: activeVideoConfig.video.resizeMode
-      }
+      video: {}
     };
+    const requestedVideo = activeVideoConfig?.video || {};
+
+    if (requestedVideo.width) {
+      constraints.video.width = {
+        ideal: requestedVideo.width.ideal,
+        max: requestedVideo.width.max
+      };
+    }
+    if (requestedVideo.height) {
+      constraints.video.height = {
+        ideal: requestedVideo.height.ideal,
+        max: requestedVideo.height.max
+      };
+    }
+    if (requestedVideo.aspectRatio) {
+      constraints.video.aspectRatio = { ideal: requestedVideo.aspectRatio.ideal };
+    }
+    if (requestedVideo.frameRate) {
+      constraints.video.frameRate = {
+        ideal: requestedVideo.frameRate.ideal,
+        max: requestedVideo.frameRate.max
+      };
+    }
+    if (requestedVideo.resizeMode) {
+      constraints.video.resizeMode = requestedVideo.resizeMode;
+    }
 
     if (preferredCameraId) {
       constraints.video.deviceId = { exact: preferredCameraId };
     } else {
-      constraints.video.facingMode = { ideal: activeVideoConfig.video.facingMode.ideal };
+      constraints.video.facingMode = { ideal: requestedVideo?.facingMode?.ideal || "environment" };
     }
 
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -2150,11 +2181,39 @@
     saveCameraId(state.activeDeviceId);
 
     state.els.cameraPreview.srcObject = stream;
+    await waitForVideoReadiness(state.els.cameraPreview);
     await state.els.cameraPreview.play();
     await applyTrackEnhancements(track, activeVideoConfig);
     scheduleFocusRefresh(track);
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
+  }
+
+  function waitForVideoReadiness(video) {
+    if (!video) {
+      return Promise.resolve();
+    }
+
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      return Promise.resolve();
+    }
+
+    return new Promise(function (resolve) {
+      let settled = false;
+      function finish() {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        video.removeEventListener("loadedmetadata", finish);
+        video.removeEventListener("loadeddata", finish);
+        resolve();
+      }
+
+      video.addEventListener("loadedmetadata", finish, { once: true });
+      video.addEventListener("loadeddata", finish, { once: true });
+      window.setTimeout(finish, 400);
+    });
   }
 
   async function requestFocusRefresh(track) {
@@ -2164,11 +2223,25 @@
 
     const capabilities = track.getCapabilities();
     const advanced = [];
+    const settings = track.getSettings ? track.getSettings() : null;
 
     if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
       advanced.push({ focusMode: "continuous" });
     } else if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("single-shot")) {
       advanced.push({ focusMode: "single-shot" });
+    }
+
+    if (
+      isIOSDevice() &&
+      typeof capabilities.zoom?.max === "number" &&
+      typeof capabilities.zoom?.min === "number" &&
+      capabilities.zoom.max > capabilities.zoom.min
+    ) {
+      const currentZoom = typeof settings?.zoom === "number" ? settings.zoom : capabilities.zoom.min;
+      const safeZoom = Math.min(Math.max(1, capabilities.zoom.min), capabilities.zoom.max);
+      if (Math.abs(currentZoom - safeZoom) > 0.01) {
+        advanced.push({ zoom: safeZoom });
+      }
     }
 
     if (!isIOSDevice() && capabilities.zoom && typeof capabilities.zoom.max === "number") {
@@ -2205,6 +2278,10 @@
 
   async function applyTrackEnhancements(track, activeVideoConfig) {
     if (!track?.getCapabilities || !track.applyConstraints) return;
+    if (isIOSDevice()) {
+      await requestFocusRefresh(track);
+      return;
+    }
 
     const baseVideoConfig = activeVideoConfig?.video || getActiveVideoConfig().video;
     const baseConstraints = {};
