@@ -128,7 +128,6 @@
     return {
       barcodeInput: document.getElementById("barcodeInput"),
       cameraBadge: document.getElementById("cameraBadge"),
-      cameraDebug: document.getElementById("cameraDebug"),
       cameraPreview: document.getElementById("cameraPreview"),
       cameraPreviewQuagga: document.getElementById("cameraPreviewQuagga"),
       cameraSelect: document.getElementById("cameraSelect"),
@@ -309,97 +308,6 @@
     }
     state.lastStatusMessage = nextMessage;
     state.els.statusText.textContent = nextMessage;
-  }
-
-  function formatDebugValue(value) {
-    if (value == null || value === "") {
-      return "n/a";
-    }
-    if (Array.isArray(value)) {
-      return value.length ? value.join(", ") : "[]";
-    }
-    if (typeof value === "object") {
-      try {
-        return JSON.stringify(value);
-      } catch {
-        return "[object]";
-      }
-    }
-    return String(value);
-  }
-
-  function maskOpaqueId(value) {
-    const text = String(value || "");
-    if (!text) {
-      return "n/a";
-    }
-    if (text.length <= 8) {
-      return text;
-    }
-    return `${text.slice(0, 4)}...${text.slice(-4)}`;
-  }
-
-  function getSelectedDeviceLabel() {
-    const activeId = state.activeDeviceId || state.els?.cameraSelect?.value || "";
-    const activeDevice = state.devices.find(function (device) {
-      return device.deviceId === activeId;
-    });
-    return activeDevice?.label || "n/a";
-  }
-
-  function renderCameraDebug() {
-    const debugEl = state.els?.cameraDebug;
-    if (!debugEl) {
-      return;
-    }
-
-    const shouldShow = isIOSDevice();
-    debugEl.classList.toggle("is-visible", shouldShow);
-    debugEl.hidden = !shouldShow;
-    if (!shouldShow) {
-      debugEl.textContent = "";
-      return;
-    }
-
-    const track = state.track || getActiveStreamTrackFromPreview();
-    const settings = track?.getSettings ? track.getSettings() : null;
-    const capabilities = track?.getCapabilities ? track.getCapabilities() : null;
-    const constraints = track?.getConstraints ? track.getConstraints() : null;
-    const deviceLines = state.devices.length
-      ? state.devices.map(function (device, index) {
-          const selectedMark = device.deviceId === state.activeDeviceId ? "*" : "-";
-          return `${selectedMark} [${index}] ${device.label || `Camera ${index + 1}`} (${maskOpaqueId(device.deviceId)})`;
-        })
-      : ["n/a"];
-
-    const lines = [
-      "iPhone Camera Debug",
-      `Selected label: ${getSelectedDeviceLabel()}`,
-      `Active deviceId: ${maskOpaqueId(settings?.deviceId || state.activeDeviceId)}`,
-      `Resolution badge: ${state.els.resolutionBadge?.textContent || "n/a"}`,
-      `Track readyState: ${formatDebugValue(track?.readyState)}`,
-      `Track muted: ${formatDebugValue(track?.muted)}`,
-      `Settings facingMode: ${formatDebugValue(settings?.facingMode)}`,
-      `Settings width x height: ${formatDebugValue(settings?.width)} x ${formatDebugValue(settings?.height)}`,
-      `Settings frameRate: ${formatDebugValue(settings?.frameRate)}`,
-      `Settings resizeMode: ${formatDebugValue(settings?.resizeMode)}`,
-      `Settings focusDistance: ${formatDebugValue(settings?.focusDistance)}`,
-      `Settings zoom: ${formatDebugValue(settings?.zoom)}`,
-      `Capabilities focusMode: ${formatDebugValue(capabilities?.focusMode)}`,
-      `Capabilities focusDistance: ${formatDebugValue(capabilities?.focusDistance)}`,
-      `Capabilities zoom: ${formatDebugValue(capabilities?.zoom)}`,
-      `Capabilities torch: ${formatDebugValue(capabilities?.torch)}`,
-      `Capabilities pointsOfInterest: ${formatDebugValue(capabilities?.pointsOfInterest)}`,
-      `Constraints facingMode: ${formatDebugValue(constraints?.facingMode)}`,
-      `Constraints width: ${formatDebugValue(constraints?.width)}`,
-      `Constraints height: ${formatDebugValue(constraints?.height)}`,
-      `Constraints aspectRatio: ${formatDebugValue(constraints?.aspectRatio)}`,
-      `Constraints frameRate: ${formatDebugValue(constraints?.frameRate)}`,
-      "Available cameras:",
-      ...deviceLines
-    ];
-
-    debugEl.textContent = lines.join("\n");
   }
 
   function showToast(message) {
@@ -2012,7 +1920,6 @@
     const liveTrack = state.track || getActiveStreamTrackFromPreview();
     if (!liveTrack?.getSettings) {
       state.els.resolutionBadge.textContent = "0 x 0";
-      renderCameraDebug();
       return;
     }
 
@@ -2021,7 +1928,6 @@
     const width = settings.width || video?.videoWidth || 0;
     const height = settings.height || video?.videoHeight || 0;
     state.els.resolutionBadge.textContent = `${width} x ${height}`;
-    renderCameraDebug();
   }
 
   function buildDeviceLabel(device, index) {
@@ -2156,7 +2062,6 @@
     if (currentId) {
       saveCameraId(currentId);
     }
-    renderCameraDebug();
   }
 
   async function handleDetectedCode(detectedText) {
@@ -2580,7 +2485,6 @@
       updateScanButton();
       updateModePill();
       startPreviewWatchdog();
-      renderCameraDebug();
       setStatus("Camera ready");
     }());
 
@@ -2947,7 +2851,6 @@
     clearResultFields();
     renderHistory();
     bindEvents();
-    renderCameraDebug();
 
     const supportIssue = getCameraSupportIssue();
     if (supportIssue) {
