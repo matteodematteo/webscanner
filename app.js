@@ -19,6 +19,7 @@
     previewStallThreshold: 2,
     preferredSquareSize: 960,
     mobilePreferredSquareSize: 640,
+    iosPreferredZoom: 2,
     detectorFormats: [
       "ean_13",
       "ean_8",
@@ -2330,7 +2331,8 @@
       capabilities.zoom.max > capabilities.zoom.min
     ) {
       const currentZoom = typeof settings?.zoom === "number" ? settings.zoom : capabilities.zoom.min;
-      const safeZoom = Math.min(Math.max(1, capabilities.zoom.min), capabilities.zoom.max);
+      const desiredZoom = Math.max(CONFIG.iosPreferredZoom, capabilities.zoom.min);
+      const safeZoom = Math.min(desiredZoom, capabilities.zoom.max);
       if (Math.abs(currentZoom - safeZoom) > 0.01) {
         advanced.push({ zoom: safeZoom });
       }
