@@ -177,18 +177,10 @@
       background: linear-gradient(90deg, transparent, rgba(255, 175, 141, 0.96), transparent);
       box-shadow: 0 0 18px rgba(255, 146, 92, 0.95);
       opacity: 0;
-      transform: translateY(0);
     }
 
     .preview-frame.is-scanning .scan-line {
-      opacity: 1;
-      animation: scanMove 1.8s linear infinite;
-    }
-
-    @keyframes scanMove {
-      0% { transform: translateY(0); }
-      50% { transform: translateY(56vw); }
-      100% { transform: translateY(0); }
+      opacity: 0;
     }
 
     .preview-placeholder {
@@ -258,25 +250,6 @@
       margin-top: 8px;
     }
 
-    .camera-debug {
-      display: none;
-      margin-top: 10px;
-      padding: 10px 12px;
-      border-radius: var(--radius-md);
-      border: 1px solid rgba(20, 28, 36, 0.1);
-      background: rgba(20, 28, 36, 0.04);
-      color: var(--text);
-      font-family: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
-      font-size: 0.7rem;
-      line-height: 1.45;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .camera-debug.is-visible {
-      display: block;
-    }
-
     .compact-toggle-btn {
       min-width: 44px;
       padding: 0;
@@ -308,14 +281,12 @@
       cursor: pointer;
       padding: 0 10px;
       font-weight: 700;
-      transition: transform 150ms ease, opacity 150ms ease;
       font-size: 0.82rem;
     }
 
-    .btn:hover { transform: translateY(-1px); }
     .btn:disabled,
     .input:disabled,
-    .select:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .select:disabled { opacity: 0.55; cursor: not-allowed; }
 
     .btn-primary {
       color: #fff7f2;
@@ -329,6 +300,7 @@
     }
 
     .btn-muted,
+    .input,
     .select {
       color: var(--text);
       background: rgba(20, 28, 36, 0.06);
@@ -336,12 +308,13 @@
     }
 
     .input,
+    .select,
     .textarea {
       padding: 9px 10px;
       border-color: rgba(20, 28, 36, 0.12);
       background: rgba(255, 255, 255, 0.96);
       color: var(--text);
-      font-size: 0.84rem;
+      font-size: 16px;
     }
 
     .textarea {
@@ -433,7 +406,6 @@
       line-height: 1.35;
       word-break: break-word;
       cursor: pointer;
-      transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
     }
 
     .history-primary {
@@ -498,11 +470,6 @@
       flex: 0 0 auto;
     }
 
-    .history-item:hover {
-      transform: translateY(-1px);
-      background: rgba(255, 255, 255, 0.92);
-    }
-
     .history-item.is-selected {
       border-color: rgba(191, 90, 49, 0.44);
       background: rgba(191, 90, 49, 0.1);
@@ -540,7 +507,7 @@
       position: fixed;
       left: 50%;
       bottom: max(78px, calc(env(safe-area-inset-bottom) + 78px));
-      transform: translateX(-50%) translateY(16px);
+      transform: translateX(-50%);
       padding: 10px 14px;
       border-radius: 999px;
       background: rgba(24, 33, 42, 0.94);
@@ -549,13 +516,12 @@
       font-weight: 700;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 180ms ease, transform 180ms ease;
       z-index: 30;
     }
 
     .toast.is-visible {
       opacity: 1;
-      transform: translateX(-50%) translateY(0);
+      transform: translateX(-50%);
     }
 
     body.is-compact .top-tools,
@@ -945,7 +911,6 @@
         <button class="btn btn-muted" id="refreshCookieBtn" type="button">Refresh Cookie</button>
         <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
       </div>
-      <pre class="camera-debug" id="cameraDebug" aria-live="polite"></pre>
     </section>
 
     <section class="card section-card">
