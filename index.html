@@ -113,6 +113,7 @@
       width: min(100%, 34vh);
       aspect-ratio: 1 / 1;
       overflow: hidden;
+      touch-action: manipulation;
       border-radius: var(--radius-lg);
       background:
         linear-gradient(180deg, rgba(6, 10, 14, 0.12), rgba(6, 10, 14, 0.45)),
@@ -178,6 +179,48 @@
       box-shadow: 0 0 18px rgba(255, 146, 92, 0.95);
       opacity: 0;
       transform: translateY(0);
+    }
+
+    .focus-indicator {
+      position: absolute;
+      width: 66px;
+      height: 66px;
+      margin-left: -33px;
+      margin-top: -33px;
+      border: 2px solid rgba(255, 255, 255, 0.96);
+      border-radius: 18px;
+      box-shadow: 0 0 0 999px rgba(255, 255, 255, 0);
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(1.2);
+      transition: opacity 180ms ease, transform 220ms ease;
+      z-index: 3;
+    }
+
+    .focus-indicator::before,
+    .focus-indicator::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      background: rgba(255, 255, 255, 0.96);
+      transform: translate(-50%, -50%);
+      border-radius: 999px;
+    }
+
+    .focus-indicator::before {
+      width: 24px;
+      height: 2px;
+    }
+
+    .focus-indicator::after {
+      width: 2px;
+      height: 24px;
+    }
+
+    .focus-indicator.is-visible {
+      opacity: 1;
+      transform: scale(1);
     }
 
     .preview-frame.is-scanning .scan-line {
@@ -903,6 +946,7 @@
         <div class="preview-grid" aria-hidden="true"></div>
         <div class="scan-window" aria-hidden="true"></div>
         <div class="scan-line" aria-hidden="true"></div>
+        <div class="focus-indicator" id="focusIndicator" aria-hidden="true"></div>
 
         <div class="preview-meta">
           <div class="badge" id="cameraBadge">Preview off</div>
