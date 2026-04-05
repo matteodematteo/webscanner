@@ -169,6 +169,7 @@
       refreshCookieBtn: document.getElementById("refreshCookieBtn"),
       resolutionBadge: document.getElementById("resolutionBadge"),
       scanBtn: document.getElementById("scanBtn"),
+      searchBarcodeBtn: document.getElementById("searchBarcodeBtn"),
       sendTxtBtn: document.getElementById("sendTxtBtn"),
       settingsBtn: document.getElementById("settingsBtn"),
       settingsDialog: document.getElementById("settingsDialog"),
@@ -2563,6 +2564,14 @@
     }
   }
 
+  async function handleBarcodeLookup() {
+    try {
+      await fetchProductInfo(state.els.barcodeInput.value);
+    } catch (error) {
+      setStatus(error.message || "Could not load product info");
+    }
+  }
+
   function bindEvents() {
     state.els.scanBtn.addEventListener("click", async function () {
       state.els.scanBtn.disabled = true;
@@ -2578,6 +2587,15 @@
     state.els.clearBarcodeBtn.addEventListener("click", function () {
       state.els.barcodeInput.value = "";
       setStatus("Barcode field cleared");
+    });
+
+    state.els.searchBarcodeBtn.addEventListener("click", async function () {
+      state.els.searchBarcodeBtn.disabled = true;
+      try {
+        await handleBarcodeLookup();
+      } finally {
+        state.els.searchBarcodeBtn.disabled = false;
+      }
     });
 
     state.els.clearSelectedBtn.addEventListener("click", function () {
@@ -2675,11 +2693,7 @@
     state.els.barcodeInput.addEventListener("keydown", async function (event) {
       if (event.key !== "Enter") return;
       event.preventDefault();
-      try {
-        await fetchProductInfo(state.els.barcodeInput.value);
-      } catch (error) {
-        setStatus(error.message || "Could not load product info");
-      }
+      await handleBarcodeLookup();
     });
 
     state.els.cameraSelect.addEventListener("change", async function () {
