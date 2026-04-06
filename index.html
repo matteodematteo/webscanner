@@ -482,6 +482,61 @@
       padding-right: 2px;
     }
 
+    .debug-card {
+      gap: 10px;
+    }
+
+    .debug-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .debug-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .debug-btn {
+      width: auto;
+      min-width: 88px;
+      padding: 0 12px;
+    }
+
+    .debug-note {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.4;
+    }
+
+    .debug-box {
+      margin: 0;
+      padding: 10px;
+      border-radius: var(--radius-md);
+      background: rgba(12, 18, 24, 0.94);
+      color: #eef4fb;
+      font-family: Consolas, "SFMono-Regular", Menlo, monospace;
+      font-size: 0.66rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow: auto;
+    }
+
+    .debug-summary {
+      min-height: 190px;
+      max-height: 34vh;
+    }
+
+    .debug-log {
+      min-height: 180px;
+      max-height: 42vh;
+    }
+
     .fab {
       position: fixed;
       right: max(16px, env(safe-area-inset-right));
@@ -945,6 +1000,19 @@
         <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
       </div>
     </section>
+
+    <section class="card section-card debug-card">
+      <div class="debug-head">
+        <h2 id="debugTitle">iPhone Debug</h2>
+        <div class="debug-actions">
+          <button class="btn btn-muted debug-btn" id="debugCopyBtn" type="button">Copy Debug</button>
+          <button class="btn btn-muted debug-btn" id="debugClearBtn" type="button">Clear Log</button>
+        </div>
+      </div>
+      <p class="debug-note">Use this on iPhone while trying to scan. It records detector load state, chosen camera, video readiness, zoom or focus constraints, crop attempts, and the result of every detect call.</p>
+      <pre class="debug-box debug-summary" id="debugSummary" aria-live="polite">Waiting for debug data...</pre>
+      <pre class="debug-box debug-log" id="debugLog" aria-live="polite">Debug log is empty.</pre>
+    </section>
   </main>
 
   <div class="toast" id="toast" aria-live="polite"></div>
@@ -1057,6 +1125,12 @@
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script>
+    window.__scannerBootstrapDebug = {
+      createdAt: new Date().toISOString(),
+      loadPath: "pending",
+      detectorSource: "pending",
+      error: ""
+    };
     window.__ponyfillReadyPromise = new Promise(function (resolve) {
       window.__resolvePonyfillReady = resolve;
     });
@@ -1065,16 +1139,25 @@
     try {
       if (window.BarcodeDetector && typeof window.BarcodeDetector.getSupportedFormats === "function") {
         await window.BarcodeDetector.getSupportedFormats();
+        window.__scannerBootstrapDebug.loadPath = "native";
+        window.__scannerBootstrapDebug.detectorSource = "native";
       } else {
         const module = await import("https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js");
         window.BarcodeDetector = module.BarcodeDetectorPolyfill;
+        window.__scannerBootstrapDebug.loadPath = "polyfill";
+        window.__scannerBootstrapDebug.detectorSource = "polyfill";
       }
     } catch {
       // Leave BarcodeDetector unset if the external library cannot be loaded.
+      window.__scannerBootstrapDebug.loadPath = "failed";
+      window.__scannerBootstrapDebug.detectorSource = "none";
+      window.__scannerBootstrapDebug.error = "Barcode detector bootstrap failed.";
     }
 
     window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
     window.BarcodeDetectionAPI.BarcodeDetector = window.BarcodeDetector;
+    window.__scannerBootstrapDebug.completedAt = new Date().toISOString();
+    window.__scannerBootstrapDebug.available = Boolean(window.BarcodeDetector);
     if (window.__resolvePonyfillReady) {
       window.__resolvePonyfillReady();
     }
