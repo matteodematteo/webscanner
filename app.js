@@ -2090,6 +2090,23 @@
     return Math.max(1, Math.min(width, height));
   }
 
+  function getDetectionCropModes() {
+    if (isIOSDevice()) {
+      return ["full", "square", "wide"];
+    }
+    return CONFIG.detectionCropModes;
+  }
+
+  function getScanLoopIntervalMs() {
+    if (isIOSDevice()) {
+      return 450;
+    }
+    if (state.isMobileUi) {
+      return 750;
+    }
+    return CONFIG.scanIntervalMs;
+  }
+
   function drawDetectionFrame(mode) {
     const video = state.els.cameraPreview;
     const canvas = state.els.captureCanvas;
@@ -2100,18 +2117,24 @@
     let sy = 0;
     let sw = videoWidth;
     let sh = videoHeight;
+    const isiOS = isIOSDevice();
 
     if (mode === "wide") {
-      sw = Math.max(1, Math.floor(videoWidth * 0.94));
-      sh = Math.max(1, Math.floor(videoHeight * 0.38));
+      sw = Math.max(1, Math.floor(videoWidth * (isiOS ? 0.98 : 0.94)));
+      sh = Math.max(1, Math.floor(videoHeight * (isiOS ? 0.52 : 0.38)));
       sx = Math.max(0, Math.floor((videoWidth - sw) / 2));
       sy = Math.max(0, Math.floor((videoHeight - sh) / 2));
     } else if (mode === "square") {
       const squareSize = getSquareCropSize(video);
-      sw = squareSize;
-      sh = squareSize;
+      const cropScale = isiOS ? 0.92 : 1;
+      sw = Math.max(1, Math.floor(squareSize * cropScale));
+      sh = Math.max(1, Math.floor(squareSize * cropScale));
       sx = Math.max(0, Math.floor((videoWidth - squareSize) / 2));
       sy = Math.max(0, Math.floor((videoHeight - squareSize) / 2));
+      if (cropScale !== 1) {
+        sx = Math.max(0, Math.floor((videoWidth - sw) / 2));
+        sy = Math.max(0, Math.floor((videoHeight - sh) / 2));
+      }
     }
 
     const maxOutputSize = state.isMobileUi ? 720 : 960;
@@ -2138,7 +2161,7 @@
       return "";
     }
 
-    const sources = CONFIG.detectionCropModes.map(function (mode) {
+    const sources = getDetectionCropModes().map(function (mode) {
       return {
         mode: mode,
         source: mode === "full" ? state.els.cameraPreview : drawDetectionFrame(mode)
@@ -2160,11 +2183,44 @@
     return "";
   }
 
+  function waitForFreshVideoFrame(video) {
+    if (!video) {
+      return Promise.resolve();
+    }
+
+    if (typeof video.requestVideoFrameCallback === "function") {
+      return new Promise(function (resolve) {
+        let settled = false;
+        const timerId = window.setTimeout(function () {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve();
+        }, isIOSDevice() ? 140 : 90);
+
+        video.requestVideoFrameCallback(function () {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          window.clearTimeout(timerId);
+          resolve();
+        });
+      });
+    }
+
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, isIOSDevice() ? 70 : 35);
+    });
+  }
+
   async function captureAttempt() {
     if (!state.isCameraRunning || !state.track || state.els.cameraPreview.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       return false;
     }
 
+    await waitForFreshVideoFrame(state.els.cameraPreview);
     const detectedText = await detectBarcodeInFrame();
 
     if (!detectedText) {
@@ -2220,7 +2276,7 @@
       } finally {
         state.isScanInFlight = false;
       }
-    }, CONFIG.scanIntervalMs);
+    }, getScanLoopIntervalMs());
   }
 
   async function startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig) {
@@ -2305,7 +2361,7 @@
 
       video.addEventListener("loadedmetadata", finish, { once: true });
       video.addEventListener("loadeddata", finish, { once: true });
-      window.setTimeout(finish, 400);
+      window.setTimeout(finish, isIOSDevice() ? 900 : 400);
     });
   }
 
@@ -2316,26 +2372,11 @@
 
     const capabilities = track.getCapabilities();
     const advanced = [];
-    const settings = track.getSettings ? track.getSettings() : null;
 
     if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
       advanced.push({ focusMode: "continuous" });
     } else if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("single-shot")) {
       advanced.push({ focusMode: "single-shot" });
-    }
-
-    if (
-      isIOSDevice() &&
-      typeof capabilities.zoom?.max === "number" &&
-      typeof capabilities.zoom?.min === "number" &&
-      capabilities.zoom.max > capabilities.zoom.min
-    ) {
-      const currentZoom = typeof settings?.zoom === "number" ? settings.zoom : capabilities.zoom.min;
-      const desiredZoom = Math.max(CONFIG.iosPreferredZoom, capabilities.zoom.min);
-      const safeZoom = Math.min(desiredZoom, capabilities.zoom.max);
-      if (Math.abs(currentZoom - safeZoom) > 0.01) {
-        advanced.push({ zoom: safeZoom });
-      }
     }
 
     if (!isIOSDevice() && capabilities.zoom && typeof capabilities.zoom.max === "number") {
