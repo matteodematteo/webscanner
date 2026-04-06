@@ -117,6 +117,12 @@
     lastPreviewTime: 0,
     stalledPreviewChecks: 0,
     isRecoveringPreview: false,
+    debugEntries: [],
+    detectAttemptCount: 0,
+    lastDetectionSummary: null,
+    lastFocusSummary: null,
+    lastDeviceSummary: null,
+    lastCameraSummary: null,
     lookupSequence: 0,
     isCompactMode: false,
     lockedScrollY: 0,
@@ -142,6 +148,10 @@
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
       compactToggleBtn: document.getElementById("compactToggleBtn"),
+      debugClearBtn: document.getElementById("debugClearBtn"),
+      debugCopyBtn: document.getElementById("debugCopyBtn"),
+      debugLog: document.getElementById("debugLog"),
+      debugSummary: document.getElementById("debugSummary"),
       historyEmpty: document.getElementById("historyEmpty"),
       historyEditBackBtn: document.getElementById("historyEditBackBtn"),
       historyEditBarcodeInput: document.getElementById("historyEditBarcodeInput"),
@@ -265,6 +275,10 @@
 
     try {
       let DetectorClass = getPonyfillDetectorClass();
+      appendDebugLog("detector:create:start", {
+        detectorPresentBeforeWait: Boolean(DetectorClass),
+        bootstrap: window.__scannerBootstrapDebug || null
+      });
       if (!DetectorClass && window.__ponyfillReadyPromise) {
         try {
           await window.__ponyfillReadyPromise;
@@ -274,6 +288,9 @@
         DetectorClass = getPonyfillDetectorClass();
       }
       if (!DetectorClass) {
+        appendDebugLog("detector:create:missing", {
+          bootstrap: window.__scannerBootstrapDebug || null
+        });
         return null;
       }
 
@@ -286,11 +303,18 @@
         }
       }
 
+      appendDebugLog("detector:create:ready", {
+        className: DetectorClass.name || "",
+        formats: formats
+      });
       state.detector = formats.length
         ? new DetectorClass({ formats: formats })
         : new DetectorClass();
       return state.detector;
-    } catch {
+    } catch (error) {
+      appendDebugLog("detector:create:error", {
+        message: error?.message || "unknown detector error"
+      });
       return null;
     }
   }
@@ -310,6 +334,161 @@
     }
     state.lastStatusMessage = nextMessage;
     state.els.statusText.textContent = nextMessage;
+    appendDebugLog("status", { message: nextMessage });
+  }
+
+  function limitTextLength(value, maxLength) {
+    const text = String(value == null ? "" : value);
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return `${text.slice(0, maxLength - 3)}...`;
+  }
+
+  function makeJsonSafe(value, depth) {
+    const nextDepth = typeof depth === "number" ? depth : 0;
+    if (nextDepth > 4) {
+      return "[depth-limit]";
+    }
+    if (value == null || typeof value === "number" || typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      return limitTextLength(value, 320);
+    }
+    if (Array.isArray(value)) {
+      return value.slice(0, 12).map(function (item) {
+        return makeJsonSafe(item, nextDepth + 1);
+      });
+    }
+    if (typeof value === "object") {
+      const output = {};
+      const keys = Object.keys(value).slice(0, 24);
+      for (let index = 0; index < keys.length; index += 1) {
+        const key = keys[index];
+        try {
+          output[key] = makeJsonSafe(value[key], nextDepth + 1);
+        } catch {
+          output[key] = "[unreadable]";
+        }
+      }
+      return output;
+    }
+    return String(value);
+  }
+
+  function serializeDebugValue(value) {
+    if (value == null) {
+      return "";
+    }
+    if (typeof value === "string") {
+      return value;
+    }
+    try {
+      return JSON.stringify(makeJsonSafe(value), null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+
+  function getDebugTrackSettings() {
+    try {
+      return makeJsonSafe(state.track?.getSettings?.() || null);
+    } catch {
+      return "[track-settings-unavailable]";
+    }
+  }
+
+  function getDebugTrackCapabilities() {
+    try {
+      const caps = state.track?.getCapabilities?.() || null;
+      if (!caps) {
+        return null;
+      }
+      return makeJsonSafe({
+        width: caps.width,
+        height: caps.height,
+        frameRate: caps.frameRate,
+        aspectRatio: caps.aspectRatio,
+        focusMode: caps.focusMode,
+        torch: caps.torch,
+        zoom: caps.zoom
+      });
+    } catch {
+      return "[track-capabilities-unavailable]";
+    }
+  }
+
+  function getDetectorDebugState() {
+    const detectorClass = getPonyfillDetectorClass();
+    return makeJsonSafe({
+      available: Boolean(detectorClass),
+      className: detectorClass?.name || "",
+      bootstrap: window.__scannerBootstrapDebug || null,
+      detectorFormats: CONFIG.detectorFormats,
+      detectorReadyPromise: Boolean(window.__ponyfillReadyPromise)
+    });
+  }
+
+  function renderDebugPanel() {
+    if (!state.els?.debugSummary || !state.els?.debugLog) {
+      return;
+    }
+
+    const video = state.els.cameraPreview;
+    const summary = {
+      now: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      platform: navigator.platform || "",
+      isIOS: isIOSDevice(),
+      isMobileUi: state.isMobileUi,
+      secureContext: window.isSecureContext,
+      visibility: document.visibilityState,
+      scannerEngine: state.scannerEngine || "none",
+      isCameraRunning: state.isCameraRunning,
+      isScanning: state.isScanning,
+      activeDeviceId: state.activeDeviceId || "",
+      devices: state.lastDeviceSummary,
+      lastCameraSummary: state.lastCameraSummary,
+      video: {
+        readyState: video?.readyState ?? null,
+        currentTime: Number(video?.currentTime || 0),
+        videoWidth: video?.videoWidth || 0,
+        videoHeight: video?.videoHeight || 0,
+        paused: Boolean(video?.paused),
+        muted: Boolean(video?.muted)
+      },
+      detector: getDetectorDebugState(),
+      trackSettings: getDebugTrackSettings(),
+      trackCapabilities: getDebugTrackCapabilities(),
+      detectAttemptCount: state.detectAttemptCount,
+      lastDetectionSummary: state.lastDetectionSummary,
+      lastFocusSummary: state.lastFocusSummary,
+      stalledPreviewChecks: state.stalledPreviewChecks,
+      lastPreviewTime: state.lastPreviewTime,
+      lastStatus: state.lastStatusMessage
+    };
+
+    state.els.debugSummary.textContent = serializeDebugValue(summary);
+    state.els.debugLog.textContent = state.debugEntries.length
+      ? state.debugEntries.map(function (entry) {
+          const body = serializeDebugValue(entry.details);
+          return `[${entry.time}] ${entry.event}${body ? `\n${body}` : ""}`;
+        }).join("\n\n")
+      : "Debug log is empty.";
+  }
+
+  function appendDebugLog(eventName, details) {
+    const entry = {
+      time: new Date().toISOString(),
+      event: eventName,
+      details: makeJsonSafe(details)
+    };
+    state.debugEntries.push(entry);
+    if (state.debugEntries.length > 160) {
+      state.debugEntries.splice(0, state.debugEntries.length - 160);
+    }
+    renderDebugPanel();
   }
 
   function showToast(message) {
@@ -1806,6 +1985,10 @@
     const selectedDeviceId = state.activeDeviceId || state.els.cameraSelect.value;
     stopScanning(true);
     setStatus("Camera preview paused, reconnecting...");
+    appendDebugLog("preview:recover:start", {
+      selectedDeviceId: selectedDeviceId || "",
+      shouldResumeScanning: shouldResumeScanning
+    });
 
     try {
       await startCamera(selectedDeviceId);
@@ -1816,6 +1999,9 @@
       }
     } catch (error) {
       setStatus(error.message || "Camera preview recovery failed");
+      appendDebugLog("preview:recover:error", {
+        message: error?.message || "preview recovery failed"
+      });
     } finally {
       state.isRecoveringPreview = false;
     }
@@ -1848,6 +2034,10 @@
 
       if (state.stalledPreviewChecks >= CONFIG.previewStallThreshold) {
         state.stalledPreviewChecks = 0;
+        appendDebugLog("preview:stall-detected", {
+          currentTime: currentTime,
+          lastPreviewTime: state.lastPreviewTime
+        });
         recoverPreviewFromFreeze().catch(() => {
           // Ignore watchdog recovery noise.
         });
@@ -2064,6 +2254,20 @@
     if (currentId) {
       saveCameraId(currentId);
     }
+    state.lastDeviceSummary = state.devices.map(function (device, index) {
+      return {
+        index: index,
+        label: buildDeviceLabel(device, index),
+        deviceId: device.deviceId,
+        selected: device.deviceId === currentId,
+        score: scoreVideoDevice(device, index)
+      };
+    });
+    appendDebugLog("devices:refresh", {
+      preferredDeviceId: preferredDeviceId || "",
+      currentId: currentId,
+      devices: state.lastDeviceSummary
+    });
   }
 
   async function handleDetectedCode(detectedText) {
@@ -2119,6 +2323,20 @@
     canvas.width = Math.max(1, Math.round(sw * scale));
     canvas.height = Math.max(1, Math.round(sh * scale));
     context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    state.lastDetectionSummary = {
+      ...(state.lastDetectionSummary || {}),
+      lastCrop: {
+        mode: mode,
+        sourceWidth: videoWidth,
+        sourceHeight: videoHeight,
+        sx: sx,
+        sy: sy,
+        sw: sw,
+        sh: sh,
+        outWidth: canvas.width,
+        outHeight: canvas.height
+      }
+    };
     return canvas;
   }
 
@@ -2135,8 +2353,23 @@
   async function detectBarcodeInFrame() {
     const detector = await createDetector();
     if (!detector) {
+      state.lastDetectionSummary = {
+        attempt: state.detectAttemptCount,
+        detectorAvailable: false
+      };
+      appendDebugLog("detect:skipped:no-detector", state.lastDetectionSummary);
       return "";
     }
+
+    const detectionSummary = {
+      attempt: state.detectAttemptCount,
+      detectorAvailable: true,
+      videoReadyState: state.els.cameraPreview.readyState,
+      videoWidth: state.els.cameraPreview.videoWidth || 0,
+      videoHeight: state.els.cameraPreview.videoHeight || 0,
+      videoCurrentTime: Number(state.els.cameraPreview.currentTime || 0),
+      modes: []
+    };
 
     const sources = CONFIG.detectionCropModes.map(function (mode) {
       return {
@@ -2148,21 +2381,50 @@
     for (let index = 0; index < sources.length; index += 1) {
       const currentSource = sources[index];
       try {
+        const startedAt = performance.now();
         const results = await detector.detect(currentSource.source);
+        const elapsedMs = Math.round((performance.now() - startedAt) * 100) / 100;
         const detectedText = normalizeDetectedText(results?.[0]);
+        detectionSummary.modes.push({
+          mode: currentSource.mode,
+          resultCount: Array.isArray(results) ? results.length : 0,
+          detectedText: detectedText,
+          elapsedMs: elapsedMs,
+          crop: currentSource.mode === "full" ? {
+            outWidth: state.els.cameraPreview.videoWidth || 0,
+            outHeight: state.els.cameraPreview.videoHeight || 0
+          } : state.lastDetectionSummary?.lastCrop || null
+        });
         if (detectedText) {
+          state.lastDetectionSummary = detectionSummary;
+          appendDebugLog("detect:success", detectionSummary);
           return detectedText;
         }
-      } catch {
+      } catch (error) {
+        detectionSummary.modes.push({
+          mode: currentSource.mode,
+          error: error?.message || "detect failed"
+        });
         // Ignore a single failed crop and continue with the next one.
       }
     }
 
+    state.lastDetectionSummary = detectionSummary;
+    appendDebugLog("detect:no-result", detectionSummary);
     return "";
   }
 
   async function captureAttempt() {
+    state.detectAttemptCount += 1;
     if (!state.isCameraRunning || !state.track || state.els.cameraPreview.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      state.lastDetectionSummary = {
+        attempt: state.detectAttemptCount,
+        skipped: true,
+        isCameraRunning: state.isCameraRunning,
+        hasTrack: Boolean(state.track),
+        readyState: state.els.cameraPreview.readyState
+      };
+      appendDebugLog("capture:skipped:not-ready", state.lastDetectionSummary);
       return false;
     }
 
@@ -2170,12 +2432,20 @@
 
     if (!detectedText) {
       setStatus("Scanning... point the barcode inside the square");
+      appendDebugLog("capture:no-match", {
+        attempt: state.detectAttemptCount,
+        detection: state.lastDetectionSummary
+      });
       return false;
     }
 
     state.els.barcodeInput.value = detectedText;
     playCaptureSound();
     stopScanning(true);
+    appendDebugLog("capture:matched", {
+      attempt: state.detectAttemptCount,
+      detectedText: detectedText
+    });
 
     try {
       await fetchProductInfo(detectedText);
@@ -2264,6 +2534,11 @@
       constraints.video.facingMode = { ideal: requestedVideo?.facingMode?.ideal || "environment" };
     }
 
+    appendDebugLog("camera:start:request", {
+      preferredCameraId: preferredCameraId || "",
+      constraints: constraints
+    });
+
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     const track = stream.getVideoTracks()[0] || null;
 
@@ -2281,6 +2556,15 @@
     scheduleFocusRefresh(track);
     await refreshDevices(state.activeDeviceId);
     await syncTorchSupport();
+    state.lastCameraSummary = {
+      activeDeviceId: state.activeDeviceId || "",
+      requestedCameraId: preferredCameraId || "",
+      videoReadyState: state.els.cameraPreview.readyState,
+      videoWidth: state.els.cameraPreview.videoWidth || 0,
+      videoHeight: state.els.cameraPreview.videoHeight || 0,
+      trackSettings: getDebugTrackSettings()
+    };
+    appendDebugLog("camera:start:ready", state.lastCameraSummary);
   }
 
   function waitForVideoReadiness(video) {
@@ -2312,6 +2596,11 @@
 
   async function requestFocusRefresh(track) {
     if (!track?.getCapabilities || !track.applyConstraints || track.readyState === "ended") {
+      state.lastFocusSummary = {
+        skipped: true,
+        hasTrack: Boolean(track),
+        readyState: track?.readyState || ""
+      };
       return;
     }
 
@@ -2348,13 +2637,34 @@
     }
 
     if (advanced.length === 0) {
+      state.lastFocusSummary = {
+        skipped: true,
+        reason: "no-supported-advanced-constraints",
+        capabilities: {
+          focusMode: capabilities.focusMode,
+          zoom: capabilities.zoom
+        }
+      };
+      appendDebugLog("focus:skip", state.lastFocusSummary);
       return;
     }
 
     try {
       await track.applyConstraints({ advanced: advanced });
-    } catch {
+      state.lastFocusSummary = {
+        applied: true,
+        advanced: advanced,
+        settingsAfter: getDebugTrackSettings()
+      };
+      appendDebugLog("focus:applied", state.lastFocusSummary);
+    } catch (error) {
       // Device-specific camera focus controls can fail transiently.
+      state.lastFocusSummary = {
+        applied: false,
+        advanced: advanced,
+        message: error?.message || "applyConstraints failed"
+      };
+      appendDebugLog("focus:error", state.lastFocusSummary);
     }
   }
 
@@ -2462,6 +2772,10 @@
     const startPromise = (async function () {
       const supportIssue = getCameraSupportIssue();
       if (supportIssue) throw new Error(supportIssue);
+      appendDebugLog("camera:start", {
+        requestedDeviceId: deviceId || "",
+        isIOS: isIOSDevice()
+      });
 
       cleanupScanTimer();
       await stopTracks();
@@ -2474,6 +2788,9 @@
       if (isIOSDevice() && !state.iosWarmRestartDone) {
         state.iosWarmRestartDone = true;
         const restartDeviceId = state.activeDeviceId || preferredCameraId;
+        appendDebugLog("camera:warm-restart", {
+          restartDeviceId: restartDeviceId || ""
+        });
         await new Promise(function (resolve) {
           window.setTimeout(resolve, 220);
         });
@@ -2503,6 +2820,9 @@
 
   function schedulePreviewWarmStart() {
     window.setTimeout(function () {
+      appendDebugLog("camera:warm-start:scheduled", {
+        activeDeviceId: state.activeDeviceId || ""
+      });
       startCamera(state.activeDeviceId).catch((error) => {
         setStatus(error.message || "Camera preview could not start automatically");
       });
@@ -2521,6 +2841,10 @@
     updateScanButton();
     updateModePill();
     setStatus("Scanning started");
+    appendDebugLog("scan:start", {
+      activeDeviceId: state.activeDeviceId || "",
+      trackSettings: getDebugTrackSettings()
+    });
     if (await captureAttempt()) {
       return;
     }
@@ -2533,6 +2857,9 @@
     state.isScanning = false;
     updateScanButton();
     updateModePill();
+    appendDebugLog("scan:stop", {
+      keepStatusMessage: Boolean(keepStatusMessage)
+    });
     if (!keepStatusMessage) {
       setStatus(state.isCameraRunning ? "Scanning stopped, preview still live" : "Camera stopped");
     }
@@ -2716,6 +3043,41 @@
       }
     });
 
+    if (state.els.debugClearBtn) {
+      state.els.debugClearBtn.addEventListener("click", function () {
+        state.debugEntries = [];
+        state.detectAttemptCount = 0;
+        state.lastDetectionSummary = null;
+        appendDebugLog("debug:cleared", {
+          reason: "manual"
+        });
+      });
+    }
+
+    if (state.els.debugCopyBtn) {
+      state.els.debugCopyBtn.addEventListener("click", async function () {
+        const payload = [
+          "=== SUMMARY ===",
+          state.els.debugSummary?.textContent || "",
+          "",
+          "=== LOG ===",
+          state.els.debugLog?.textContent || ""
+        ].join("\n");
+        try {
+          await navigator.clipboard.writeText(payload);
+          showToast("Debug copied");
+          appendDebugLog("debug:copied", {
+            length: payload.length
+          });
+        } catch (error) {
+          showToast("Copy failed");
+          appendDebugLog("debug:copy-error", {
+            message: error?.message || "clipboard write failed"
+          });
+        }
+      });
+    }
+
     state.els.settingsBtn.addEventListener("click", openSettingsDialog);
     state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
     state.els.compactToggleBtn.addEventListener("click", function () {
@@ -2836,6 +3198,9 @@
     });
 
     document.addEventListener("visibilitychange", function () {
+      appendDebugLog("document:visibility", {
+        state: document.visibilityState
+      });
       if (!document.hidden) {
         state.lastPreviewTime = Number(getPreviewVideoElement()?.currentTime || 0);
         state.stalledPreviewChecks = 0;
@@ -2858,6 +3223,11 @@
     requireElements(state.els);
     state.isMobileUi = detectMobileUi();
     cacheResultFieldElements();
+    appendDebugLog("init", {
+      isIOS: isIOSDevice(),
+      userAgent: navigator.userAgent,
+      bootstrap: window.__scannerBootstrapDebug || null
+    });
 
     const savedSettings = readSavedSettings();
     loadCookieState();
@@ -2867,6 +3237,7 @@
     clearResultFields();
     renderHistory();
     bindEvents();
+    renderDebugPanel();
 
     const supportIssue = getCameraSupportIssue();
     if (supportIssue) {
