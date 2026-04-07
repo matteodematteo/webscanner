@@ -389,6 +389,19 @@
       margin-bottom: 8px;
     }
 
+    .history-count-pill {
+      min-height: 42px;
+      display: grid;
+      place-items: center;
+      padding: 0 10px;
+      border-radius: var(--radius-md);
+      background: rgba(20, 28, 36, 0.06);
+      border: 1px solid rgba(20, 28, 36, 0.08);
+      color: var(--text);
+      font-size: 0.96rem;
+      font-weight: 800;
+    }
+
     .history-empty {
       margin: 0;
       padding: 14px;
@@ -1037,7 +1050,7 @@
       <div class="history-actions">
         <button class="btn btn-muted" id="clearSelectedBtn" type="button" disabled>Clean Selected</button>
         <button class="btn btn-muted" id="clearAllBtn" type="button">Clean All</button>
-        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
+        <div class="history-count-pill" id="historyCountBadge" aria-label="Barcode count">0</div>
         <button class="btn btn-primary" id="printBtn" type="button">Print</button>
       </div>
       <div class="history-list" id="historyList" aria-live="polite">
@@ -1100,6 +1113,7 @@
       <div class="dialog-actions">
         <button class="btn btn-primary" id="printBigBtn" type="button">[BIG] 60*38</button>
         <button class="btn btn-primary" id="printStickerBtn" type="button">[STICKER] 40*25</button>
+        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
         <button class="btn btn-muted" id="printBackBtn" type="button">Back</button>
       </div>
     </div>
