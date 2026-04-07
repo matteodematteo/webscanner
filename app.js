@@ -14,10 +14,7 @@
     cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
     historyStorageKey: "web_barcode_scanner_history",
     cameraStorageKey: "web_barcode_scanner_camera",
-    scanIntervalMs: 650,
-    mobileScanIntervalMs: 420,
-    iosScanIntervalMs: 320,
-    duplicateScanCooldownMs: 1500,
+    scanIntervalMs: 1200,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
     preferredSquareSize: 960,
@@ -72,8 +69,8 @@
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1280, max: 1440 },
-        height: { ideal: 960, max: 1080 }
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 960, max: 1440 }
       }
     },
     androidVideoConstraints: {
@@ -125,12 +122,7 @@
     lockedScrollY: 0,
     cameraStartPromise: null,
     focusRefreshTimers: [],
-    iosWarmRestartDone: false,
-    isIOS: false,
-    captureContext: null,
-    lastDetectedBarcode: "",
-    lastDetectedAt: 0,
-    scanAnimationFrame: 0
+    iosWarmRestartDone: false
   };
 
   function queryElements() {
@@ -1780,10 +1772,6 @@
       window.clearTimeout(state.scanTimer);
       state.scanTimer = 0;
     }
-    if (state.scanAnimationFrame && typeof window.cancelAnimationFrame === "function") {
-      window.cancelAnimationFrame(state.scanAnimationFrame);
-      state.scanAnimationFrame = 0;
-    }
     state.isScanLoopScheduled = false;
     state.isScanInFlight = false;
   }
@@ -2084,17 +2072,13 @@
       return;
     }
 
-    if (state.els.barcodeInput.value !== code) {
-      state.els.barcodeInput.value = code;
-    }
+    state.els.barcodeInput.value = code;
     playCaptureSound();
     stopScanning(true);
 
     try {
       await fetchProductInfo(code);
     } catch (error) {
-      state.lastDetectedBarcode = "";
-      state.lastDetectedAt = 0;
       setStatus(error.message || "Barcode was captured, but info request failed");
     }
   }
@@ -2107,18 +2091,18 @@
   }
 
   function getDetectionCropModes() {
-    if (state.isIOS) {
+    if (isIOSDevice()) {
       return ["full", "square", "wide"];
     }
     return CONFIG.detectionCropModes;
   }
 
   function getScanLoopIntervalMs() {
-    if (state.isIOS) {
-      return CONFIG.iosScanIntervalMs;
+    if (isIOSDevice()) {
+      return 450;
     }
     if (state.isMobileUi) {
-      return CONFIG.mobileScanIntervalMs;
+      return 750;
     }
     return CONFIG.scanIntervalMs;
   }
@@ -2126,14 +2110,14 @@
   function drawDetectionFrame(mode) {
     const video = state.els.cameraPreview;
     const canvas = state.els.captureCanvas;
-    const context = state.captureContext || canvas.getContext("2d", { alpha: false });
+    const context = canvas.getContext("2d", { alpha: false });
     const videoWidth = video.videoWidth || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
     const videoHeight = video.videoHeight || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
     let sx = 0;
     let sy = 0;
     let sw = videoWidth;
     let sh = videoHeight;
-    const isiOS = state.isIOS;
+    const isiOS = isIOSDevice();
 
     if (mode === "wide") {
       sw = Math.max(1, Math.floor(videoWidth * (isiOS ? 0.98 : 0.94)));
@@ -2155,16 +2139,8 @@
 
     const maxOutputSize = state.isMobileUi ? 720 : 960;
     const scale = Math.min(1, maxOutputSize / Math.max(sw, sh));
-    const outputWidth = Math.max(1, Math.round(sw * scale));
-    const outputHeight = Math.max(1, Math.round(sh * scale));
-
-    if (canvas.width !== outputWidth) {
-      canvas.width = outputWidth;
-    }
-    if (canvas.height !== outputHeight) {
-      canvas.height = outputHeight;
-    }
-
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
     context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
@@ -2185,12 +2161,17 @@
       return "";
     }
 
-    const detectionCropModes = getDetectionCropModes();
-    for (let index = 0; index < detectionCropModes.length; index += 1) {
-      const mode = detectionCropModes[index];
-      const source = mode === "full" ? state.els.cameraPreview : drawDetectionFrame(mode);
+    const sources = getDetectionCropModes().map(function (mode) {
+      return {
+        mode: mode,
+        source: mode === "full" ? state.els.cameraPreview : drawDetectionFrame(mode)
+      };
+    });
+
+    for (let index = 0; index < sources.length; index += 1) {
+      const currentSource = sources[index];
       try {
-        const results = await detector.detect(source);
+        const results = await detector.detect(currentSource.source);
         const detectedText = normalizeDetectedText(results?.[0]);
         if (detectedText) {
           return detectedText;
@@ -2216,7 +2197,7 @@
           }
           settled = true;
           resolve();
-        }, state.isIOS ? 140 : 90);
+        }, isIOSDevice() ? 140 : 90);
 
         video.requestVideoFrameCallback(function () {
           if (settled) {
@@ -2230,33 +2211,16 @@
     }
 
     return new Promise(function (resolve) {
-      window.setTimeout(resolve, state.isIOS ? 70 : 35);
+      window.setTimeout(resolve, isIOSDevice() ? 70 : 35);
     });
   }
 
-  function wasRecentlyDetected(detectedText) {
-    const code = String(detectedText || "").trim();
-    if (!code) {
-      return false;
-    }
-
-    const now = Date.now();
-    if (state.lastDetectedBarcode === code && (now - state.lastDetectedAt) < CONFIG.duplicateScanCooldownMs) {
-      return true;
-    }
-
-    state.lastDetectedBarcode = code;
-    state.lastDetectedAt = now;
-    return false;
-  }
-
   async function captureAttempt() {
-    const video = state.els.cameraPreview;
-    if (!state.isCameraRunning || !state.track || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    if (!state.isCameraRunning || !state.track || state.els.cameraPreview.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       return false;
     }
 
-    await waitForFreshVideoFrame(video);
+    await waitForFreshVideoFrame(state.els.cameraPreview);
     const detectedText = await detectBarcodeInFrame();
 
     if (!detectedText) {
@@ -2264,27 +2228,17 @@
       return false;
     }
 
-    if (wasRecentlyDetected(detectedText)) {
-      return false;
+    state.els.barcodeInput.value = detectedText;
+    playCaptureSound();
+    stopScanning(true);
+
+    try {
+      await fetchProductInfo(detectedText);
+      return true;
+    } catch (error) {
+      setStatus(error.message || "Barcode was captured, but info request failed");
+      return true;
     }
-
-    await handleDetectedCode(detectedText);
-    return true;
-  }
-
-  function scheduleScanCallback(callback, delayMs) {
-    state.scanTimer = window.setTimeout(function () {
-      state.scanTimer = 0;
-      if (typeof window.requestAnimationFrame === "function") {
-        state.scanAnimationFrame = window.requestAnimationFrame(function () {
-          state.scanAnimationFrame = 0;
-          callback();
-        });
-        return;
-      }
-
-      callback();
-    }, delayMs);
   }
 
   async function runScanLoop() {
@@ -2293,7 +2247,7 @@
     }
 
     state.isScanLoopScheduled = true;
-    scheduleScanCallback(function () {
+    state.scanTimer = window.setTimeout(async function () {
       state.isScanLoopScheduled = false;
       if (!state.isScanning || state.isScanInFlight) {
         if (state.isScanning) {
@@ -2304,28 +2258,24 @@
         return;
       }
 
-      (async function () {
-        state.isScanInFlight = true;
-        try {
-          const detected = await captureAttempt();
-          if (!detected && state.isScanning) {
-            runScanLoop().catch(() => {
-              // Ignore transient reschedule issues.
-            });
-          }
-        } catch {
-          setStatus("Scanning had a temporary read error");
-          if (state.isScanning) {
-            runScanLoop().catch(() => {
-              // Ignore transient reschedule issues.
-            });
-          }
-        } finally {
-          state.isScanInFlight = false;
+      state.isScanInFlight = true;
+      try {
+        const detected = await captureAttempt();
+        if (!detected && state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
         }
-      }()).catch(() => {
-        // Ignore transient async scan loop issues.
-      });
+      } catch {
+        setStatus("Scanning had a temporary read error");
+        if (state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+      } finally {
+        state.isScanInFlight = false;
+      }
     }, getScanLoopIntervalMs());
   }
 
@@ -2946,9 +2896,7 @@
 
     state.els = queryElements();
     requireElements(state.els);
-    state.isIOS = isIOSDevice();
     state.isMobileUi = detectMobileUi();
-    state.captureContext = state.els.captureCanvas?.getContext("2d", { alpha: false }) || null;
     cacheResultFieldElements();
 
     const savedSettings = readSavedSettings();
