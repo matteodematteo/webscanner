@@ -5,6 +5,7 @@
     cookieProxyEndpoint: "https://lgkiller.mattoteo96.workers.dev/",
     infoEndpoint: "https://lgerp.cc/goods/ongoodsCode",
     infoProxyEndpoint: "https://lgkillergetinfo.mattoteo96.workers.dev/",
+    closestSearchProxyEndpoint: "https://lgkillerclosestsearch.mattoteo96.workers.dev/",
     discountProxyEndpoint: "https://lgkillerdiscountinfo.mattoteo96.workers.dev/",
     updateProxyEndpoint: "https://lgkillerupdate.mattoteo96.workers.dev/",
     addProductProxyEndpoint: "https://lgkilleraddproduct.mattoteo96.workers.dev/",
@@ -130,7 +131,10 @@
     captureContext: null,
     lastDetectedBarcode: "",
     lastDetectedAt: 0,
-    scanAnimationFrame: 0
+    scanAnimationFrame: 0,
+    closestSearchResults: [],
+    closestSearchCode: "",
+    isClosestSearchLoading: false
   };
 
   function queryElements() {
@@ -142,6 +146,11 @@
       cameraSelect: document.getElementById("cameraSelect"),
       clearAllBtn: document.getElementById("clearAllBtn"),
       clearBarcodeBtn: document.getElementById("clearBarcodeBtn"),
+      closestSearchBackBtn: document.getElementById("closestSearchBackBtn"),
+      closestSearchDialog: document.getElementById("closestSearchDialog"),
+      closestSearchList: document.getElementById("closestSearchList"),
+      closestSearchStatus: document.getElementById("closestSearchStatus"),
+      closestSearchTitle: document.getElementById("closestSearchTitle"),
       clearSelectedBtn: document.getElementById("clearSelectedBtn"),
       confirmDialog: document.getElementById("confirmDialog"),
       confirmDialogCancelBtn: document.getElementById("confirmDialogCancelBtn"),
@@ -611,6 +620,22 @@
     return entry.id;
   }
 
+  function addHistoryRecord(record, fallbackBarcode) {
+    const entry = normalizeHistoryItem({
+      ...record,
+      barcode: String(record?.barcode || fallbackBarcode || "").trim()
+    });
+    if (!entry.barcode) {
+      return "";
+    }
+
+    state.history.unshift(entry);
+    state.selectedHistoryIndex = 0;
+    saveHistoryState();
+    renderHistory();
+    return entry.id;
+  }
+
   function updateHistoryItem(entryId, updates) {
     const index = state.history.findIndex((item) => item.id === entryId);
     if (index < 0) return;
@@ -869,6 +894,248 @@
       discountPrice: hasVisibleDiscount ? discountFields.discountPrice : "",
       hasDiscount: hasVisibleDiscount
     };
+  }
+
+  async function fetchClosestSearchResults(barcode) {
+    const code = String(barcode || "").trim();
+    if (!code) {
+      throw new Error("Barcode is empty");
+    }
+
+    const cookie = await getCookieForRequests();
+    const response = await fetch(CONFIG.closestSearchProxyEndpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        supplierId: -1,
+        symbol: "combination",
+        contain: "bh",
+        content: code,
+        page: 1,
+        rows: 5,
+        cookie: cookie
+      }),
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Closest search request failed with status ${response.status}`);
+    }
+
+    const responseText = await response.text();
+    let parsedResponse;
+    try {
+      parsedResponse = JSON.parse(responseText);
+    } catch {
+      throw new Error("Closest search response was not valid JSON.");
+    }
+
+    const results = collectClosestSearchResults(parsedResponse);
+    if (results.length === 0) {
+      throw new Error("No similar products found");
+    }
+
+    return results;
+  }
+
+  function normalizeClosestSearchResult(item) {
+    if (!item || typeof item !== "object") {
+      return null;
+    }
+
+    const barcode = String(
+      item.goods_code ||
+      item.goodsCode ||
+      item.barcode ||
+      item.code ||
+      item.content ||
+      ""
+    ).trim();
+    const italianName = String(
+      item.italian_name ||
+      item.italianName ||
+      item.goods_name ||
+      item.name ||
+      ""
+    ).trim();
+    const goodsId = String(item.id || item.goods_id || item.goodsId || "").trim();
+    const pPrice = String(item.p_price || item.pPrice || item.purchase_price || item.buying_price || item.cost || "").trim();
+    const sPrice = String(item.s_price || item.sPrice || item.sale_price || item.price || "").trim();
+
+    if (!barcode || (!italianName && !pPrice && !sPrice && !goodsId)) {
+      return null;
+    }
+
+    return {
+      goods_id: goodsId,
+      barcode: barcode,
+      italian_name: italianName,
+      p_price: pPrice,
+      s_price: sPrice
+    };
+  }
+
+  function collectClosestSearchResults(rawData) {
+    const queue = [rawData];
+    const results = [];
+    const seen = new Set();
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) {
+        continue;
+      }
+
+      if (Array.isArray(current)) {
+        for (let index = 0; index < current.length; index += 1) {
+          queue.push(current[index]);
+        }
+        continue;
+      }
+
+      if (typeof current !== "object") {
+        continue;
+      }
+
+      const normalizedResult = normalizeClosestSearchResult(current);
+      if (normalizedResult) {
+        const key = `${normalizedResult.barcode}|${normalizedResult.goods_id}|${normalizedResult.italian_name}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push(normalizedResult);
+        }
+      }
+
+      const values = Object.values(current);
+      for (let index = 0; index < values.length; index += 1) {
+        const value = values[index];
+        if (value && typeof value === "object") {
+          queue.push(value);
+        }
+      }
+    }
+
+    return results.slice(0, 25);
+  }
+
+  function renderClosestSearchResults() {
+    if (!state.els.closestSearchList) {
+      return;
+    }
+
+    if (state.closestSearchResults.length === 0) {
+      const emptyMessage = document.createElement("p");
+      emptyMessage.className = "history-empty";
+      emptyMessage.textContent = "No similar products found.";
+      state.els.closestSearchList.replaceChildren(emptyMessage);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (let index = 0; index < state.closestSearchResults.length; index += 1) {
+      const item = state.closestSearchResults[index];
+      const article = document.createElement("article");
+      article.className = "closest-search-item";
+
+      const nameLine = document.createElement("div");
+      nameLine.className = "closest-search-name";
+      nameLine.textContent = item.italian_name || "Unnamed product";
+      nameLine.title = item.italian_name || "";
+
+      const footer = document.createElement("div");
+      footer.className = "closest-search-footer";
+
+      const metaLine = document.createElement("div");
+      metaLine.className = "closest-search-meta";
+      metaLine.innerHTML =
+        `<span>${escapeHtml(item.barcode)}</span>` +
+        `<span>Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span>` +
+        `<span>Price: ${escapeHtml(formatPrice(item.s_price) || "-")}</span>`;
+
+      const selectButton = document.createElement("button");
+      selectButton.className = "btn btn-muted history-detail-btn closest-search-select-btn";
+      selectButton.type = "button";
+      selectButton.textContent = "Select";
+      selectButton.dataset.action = "select-closest";
+      selectButton.dataset.index = String(index);
+      selectButton.disabled = state.isClosestSearchLoading;
+
+      footer.appendChild(metaLine);
+      footer.appendChild(selectButton);
+      article.appendChild(nameLine);
+      article.appendChild(footer);
+      fragment.appendChild(article);
+    }
+
+    state.els.closestSearchList.replaceChildren(fragment);
+  }
+
+  function openClosestSearchDialog(barcode, results) {
+    state.closestSearchCode = String(barcode || "").trim();
+    state.closestSearchResults = Array.isArray(results) ? results.slice() : [];
+    state.isClosestSearchLoading = false;
+    state.els.closestSearchBackBtn.disabled = false;
+    state.els.closestSearchTitle.textContent = `Closest Matches`;
+    state.els.closestSearchStatus.textContent = state.closestSearchCode
+      ? `No exact match found for ${state.closestSearchCode}. Select one product below.`
+      : "Select one product below.";
+    renderClosestSearchResults();
+    lockPageScroll();
+    state.els.closestSearchDialog.classList.add("is-open");
+    state.els.closestSearchDialog.setAttribute("aria-hidden", "false");
+  }
+
+  function closeClosestSearchDialog() {
+    state.closestSearchResults = [];
+    state.closestSearchCode = "";
+    state.isClosestSearchLoading = false;
+    state.els.closestSearchBackBtn.disabled = false;
+    state.els.closestSearchStatus.textContent = "";
+    state.els.closestSearchDialog.classList.remove("is-open");
+    state.els.closestSearchDialog.setAttribute("aria-hidden", "true");
+    window.setTimeout(function () {
+      unlockPageScroll();
+    }, 60);
+  }
+
+  async function handleClosestSearchSelection(index) {
+    if (index < 0 || index >= state.closestSearchResults.length || state.isClosestSearchLoading) {
+      return;
+    }
+
+    const selectedItem = state.closestSearchResults[index];
+    const barcode = String(selectedItem?.barcode || "").trim();
+    if (!barcode) {
+      return;
+    }
+
+    state.isClosestSearchLoading = true;
+    state.els.closestSearchBackBtn.disabled = true;
+    state.els.closestSearchStatus.textContent = `Loading ${barcode}...`;
+    renderClosestSearchResults();
+
+    try {
+      const selectedData = await loadProductAndDiscountResponse(barcode);
+      state.els.barcodeInput.value = barcode;
+      clearResultFields();
+      renderProductData({
+        product: selectedData.product,
+        sale: selectedData.sale
+      });
+      if (state.currentProductRecord) {
+        addHistoryRecord(state.currentProductRecord, barcode);
+      }
+      closeClosestSearchDialog();
+      setStatus(`Selected ${barcode}`);
+    } catch (error) {
+      state.els.closestSearchStatus.textContent = error.message || "Could not load selected product.";
+      state.isClosestSearchLoading = false;
+      state.els.closestSearchBackBtn.disabled = false;
+      renderClosestSearchResults();
+      throw error;
+    }
   }
 
   function hasProductInDatabase(normalizedProduct, barcode) {
@@ -1449,56 +1716,74 @@
     const lookupSequence = state.lookupSequence + 1;
     state.lookupSequence = lookupSequence;
 
-    addHistoryItem(code);
     setStatus("Requesting product info...");
-
-    const cookie = await getCookieForRequests();
-
-    const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
-
-    let parsedProduct;
     try {
-      parsedProduct = JSON.parse(productResponseText);
-    } catch {
-      throw new Error("Product info response was not valid JSON.");
-    }
+      const cookie = await getCookieForRequests();
+      const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
 
-    renderProductData({
-      product: parsedProduct?.product || parsedProduct,
-      sale: null
-    });
-    if (state.currentProductRecord) {
-      syncHistoryRowsWithRecord(state.currentProductRecord, code);
-    }
-    setStatus("Product info loaded");
+      let parsedProduct;
+      try {
+        parsedProduct = JSON.parse(productResponseText);
+      } catch {
+        throw new Error("Product info response was not valid JSON.");
+      }
 
-    fetchDiscountInfoThroughProxy(code, cookie)
-      .then(function (discountResponseText) {
-        let parsedDiscount = null;
-        try {
-          parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
-        } catch {
-          parsedDiscount = null;
-        }
+      const normalizedProduct = normalizeProductData(parsedProduct?.product || parsedProduct);
+      if (!hasProductInDatabase(normalizedProduct, code)) {
+        throw new Error("No exact product match found.");
+      }
 
-        const updatedRecord = buildHistoryItemFromLookupData(
-          parsedProduct?.product || parsedProduct,
-          parsedDiscount,
-          code,
-          state.currentProductRecord?.comparison_qty || 1
-        );
-        syncHistoryRowsWithRecord(updatedRecord, code);
-
-        if (lookupSequence === state.lookupSequence && String(state.els.barcodeInput.value || "").trim() === code) {
-          renderProductData({
-            product: parsedProduct?.product || parsedProduct,
-            sale: parsedDiscount
-          });
-        }
-      })
-      .catch(function () {
-        // Temporary discount lookups are background-only for scan speed.
+      renderProductData({
+        product: parsedProduct?.product || parsedProduct,
+        sale: null
       });
+      const createdHistoryId = state.currentProductRecord
+        ? addHistoryRecord(state.currentProductRecord, code)
+        : "";
+      setStatus("Product info loaded");
+
+      fetchDiscountInfoThroughProxy(code, cookie)
+        .then(function (discountResponseText) {
+          let parsedDiscount = null;
+          try {
+            parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
+          } catch {
+            parsedDiscount = null;
+          }
+
+          const updatedRecord = buildHistoryItemFromLookupData(
+            parsedProduct?.product || parsedProduct,
+            parsedDiscount,
+            code,
+            state.currentProductRecord?.comparison_qty || 1
+          );
+
+          if (createdHistoryId) {
+            updateHistoryItem(createdHistoryId, updatedRecord);
+          }
+
+          if (lookupSequence === state.lookupSequence && String(state.els.barcodeInput.value || "").trim() === code) {
+            renderProductData({
+              product: parsedProduct?.product || parsedProduct,
+              sale: parsedDiscount
+            });
+          }
+        })
+        .catch(function () {
+          // Temporary discount lookups are background-only for scan speed.
+        });
+    } catch (error) {
+      try {
+        const closestMatches = await fetchClosestSearchResults(code);
+        openClosestSearchDialog(code, closestMatches);
+        setStatus("Exact barcode not found. Select one of the closest matches.");
+        return;
+      } catch (closestError) {
+        const message = closestError.message || error.message || "Could not load product info";
+        setStatus(message);
+        throw new Error(message);
+      }
+    }
   }
 
   async function openHistoryEditor(index) {
@@ -2748,6 +3033,11 @@
     });
 
     state.els.printBackBtn.addEventListener("click", closePrintDialog);
+    state.els.closestSearchBackBtn.addEventListener("click", function () {
+      if (!state.isClosestSearchLoading) {
+        closeClosestSearchDialog();
+      }
+    });
 
     state.els.historyList.addEventListener("click", function (event) {
       const detailButton = event.target.closest('[data-action="detail"]');
@@ -2766,6 +3056,24 @@
       const index = Number(record.dataset.index);
       if (!Number.isNaN(index)) {
         selectHistoryItem(index);
+      }
+    });
+
+    state.els.closestSearchList.addEventListener("click", async function (event) {
+      const selectButton = event.target.closest('[data-action="select-closest"]');
+      if (!selectButton) {
+        return;
+      }
+
+      const matchIndex = Number(selectButton.dataset.index);
+      if (Number.isNaN(matchIndex)) {
+        return;
+      }
+
+      try {
+        await handleClosestSearchSelection(matchIndex);
+      } catch (error) {
+        setStatus(error.message || "Could not load selected product");
       }
     });
 
@@ -2874,6 +3182,12 @@
     state.els.printDialog.addEventListener("click", function (event) {
       if (event.target === state.els.printDialog) {
         closePrintDialog();
+      }
+    });
+
+    state.els.closestSearchDialog.addEventListener("click", function (event) {
+      if (event.target === state.els.closestSearchDialog && !state.isClosestSearchLoading) {
+        closeClosestSearchDialog();
       }
     });
 
