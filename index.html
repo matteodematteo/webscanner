@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Web Scanner" />
-  <link rel="manifest" href="manifest.webmanifest?v=3" />
+  <link rel="manifest" href="manifest.webmanifest?v=2" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
@@ -389,19 +389,6 @@
       margin-bottom: 8px;
     }
 
-    .history-count-pill {
-      min-height: 42px;
-      display: grid;
-      place-items: center;
-      padding: 0 10px;
-      border-radius: var(--radius-md);
-      background: rgba(20, 28, 36, 0.06);
-      border: 1px solid rgba(20, 28, 36, 0.08);
-      color: var(--text);
-      font-size: 0.96rem;
-      font-weight: 800;
-    }
-
     .history-empty {
       margin: 0;
       padding: 14px;
@@ -655,74 +642,6 @@
       margin-top: 4px;
     }
 
-    #closestSearchDialog .dialog-card {
-      width: min(100%, 420px);
-      height: min(50dvh, 430px);
-      max-height: min(50dvh, 430px);
-      padding: 10px 12px 12px;
-      display: grid;
-      grid-template-rows: auto auto minmax(0, 1fr) auto;
-      gap: 8px;
-    }
-
-    .closest-search-list {
-      display: grid;
-      gap: 8px;
-      min-height: 0;
-      overflow: auto;
-      padding-right: 2px;
-    }
-
-    .closest-search-item {
-      padding: 9px 10px;
-      border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.72);
-      border: 1px solid rgba(20, 28, 36, 0.08);
-      min-width: 0;
-    }
-
-    .closest-search-name {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: 0.84rem;
-      font-weight: 700;
-      line-height: 1.3;
-    }
-
-    .closest-search-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-top: 6px;
-    }
-
-    .closest-search-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      min-width: 0;
-      color: var(--muted);
-      font-size: 0.68rem;
-      font-weight: 700;
-      line-height: 1.3;
-    }
-
-    .closest-search-meta span {
-      white-space: nowrap;
-    }
-
-    .closest-search-select-btn {
-      margin-right: 0;
-    }
-
-    #closestSearchStatus {
-      min-height: 2.4em;
-      color: var(--muted);
-    }
-
     .dialog-card p {
       margin: 10px 0 0;
       color: var(--muted);
@@ -773,11 +692,6 @@
         height: min(50dvh, 400px);
         max-height: min(50dvh, 400px);
       }
-
-      #closestSearchDialog .dialog-card {
-        height: min(50dvh, 400px);
-        max-height: min(50dvh, 400px);
-      }
     }
 
     @media (max-width: 430px) {
@@ -805,11 +719,6 @@
         gap: 4px;
       }
 
-      #closestSearchDialog .dialog-card {
-        width: min(100%, 100%);
-        padding: 8px 10px 10px;
-      }
-
       .history-edit-grid,
       .history-edit-row {
         gap: 4px;
@@ -826,15 +735,6 @@
 
       .history-edit-actions {
         margin-top: 2px;
-      }
-
-      .closest-search-name {
-        font-size: 0.78rem;
-      }
-
-      .closest-search-meta,
-      .closest-search-select-btn {
-        font-size: 0.66rem;
       }
     }
 
@@ -941,12 +841,6 @@
         gap: 4px;
       }
 
-      #closestSearchDialog .dialog-card {
-        height: min(50dvh, 360px);
-        max-height: min(50dvh, 360px);
-        padding: 8px 10px 10px;
-      }
-
       #historyEditDialog .input {
         min-height: 32px;
         padding: 6px 8px;
@@ -964,10 +858,6 @@
 
       .history-edit-actions {
         margin-top: 2px;
-      }
-
-      .closest-search-footer {
-        margin-top: 5px;
       }
     }
 
@@ -1050,8 +940,8 @@
       <div class="history-actions">
         <button class="btn btn-muted" id="clearSelectedBtn" type="button" disabled>Clean Selected</button>
         <button class="btn btn-muted" id="clearAllBtn" type="button">Clean All</button>
+        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
         <button class="btn btn-primary" id="printBtn" type="button">Print</button>
-        <div class="history-count-pill" id="historyCountBadge" aria-label="Barcode count">0</div>
       </div>
       <div class="history-list" id="historyList" aria-live="polite">
         <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
@@ -1113,19 +1003,7 @@
       <div class="dialog-actions">
         <button class="btn btn-primary" id="printBigBtn" type="button">[BIG] 60*38</button>
         <button class="btn btn-primary" id="printStickerBtn" type="button">[STICKER] 40*25</button>
-        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
         <button class="btn btn-muted" id="printBackBtn" type="button">Back</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="dialog-backdrop" id="closestSearchDialog" aria-hidden="true">
-    <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="closestSearchTitle">
-      <h2 id="closestSearchTitle">Closest Matches</h2>
-      <div class="save-note" id="closestSearchStatus" aria-live="polite"></div>
-      <div class="closest-search-list" id="closestSearchList"></div>
-      <div class="dialog-actions">
-        <button class="btn btn-muted" id="closestSearchBackBtn" type="button">Back</button>
       </div>
     </div>
   </div>
@@ -1204,6 +1082,6 @@
       window.__resolvePonyfillReady();
     }
   </script>
-  <script src="app.js?v=57" defer></script>
+  <script src="app.js?v=56" defer></script>
 </body>
 </html>
