@@ -157,6 +157,7 @@
       confirmDialogOkBtn: document.getElementById("confirmDialogOkBtn"),
       confirmDialogText: document.getElementById("confirmDialogText"),
       captureCanvas: document.getElementById("captureCanvas"),
+      historyCountBadge: document.getElementById("historyCountBadge"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
       compactToggleBtn: document.getElementById("compactToggleBtn"),
       historyEmpty: document.getElementById("historyEmpty"),
@@ -500,6 +501,8 @@
   }
 
   function renderHistory() {
+    const historyCount = state.history.length;
+    state.els.historyCountBadge.textContent = String(historyCount);
     state.els.clearAllBtn.disabled = state.history.length === 0;
     state.els.sendTxtBtn.disabled = state.history.length === 0;
     state.els.printBtn.disabled = state.history.length === 0;
