@@ -37,6 +37,10 @@
     html,
     body { min-height: 100%; }
 
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+
     body {
       margin: 0;
       color: var(--text);
@@ -47,10 +51,23 @@
         linear-gradient(180deg, #fbf8f2 0%, var(--bg) 100%);
     }
 
+    body.is-dialog-open {
+      position: fixed;
+      left: 0;
+      right: 0;
+      width: 100%;
+      overflow: hidden;
+    }
+
     .app-shell {
       width: min(820px, calc(100% - 24px));
       margin: 0 auto;
       padding: max(10px, env(safe-area-inset-top)) 0 max(16px, env(safe-area-inset-bottom));
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 10px;
+      overflow: hidden;
     }
 
     .card,
@@ -63,6 +80,12 @@
     }
 
     .card { padding: 12px; }
+
+    .app-shell > .section-card:last-of-type {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
 
     h2 {
       margin: 0;
@@ -87,7 +110,7 @@
     .preview-frame {
       position: relative;
       margin: 10px auto 0;
-      width: min(100%, 31vh);
+      width: min(100%, 34vh);
       aspect-ratio: 1 / 1;
       overflow: hidden;
       border-radius: var(--radius-lg);
@@ -154,18 +177,10 @@
       background: linear-gradient(90deg, transparent, rgba(255, 175, 141, 0.96), transparent);
       box-shadow: 0 0 18px rgba(255, 146, 92, 0.95);
       opacity: 0;
-      transform: translateY(0);
     }
 
     .preview-frame.is-scanning .scan-line {
-      opacity: 1;
-      animation: scanMove 1.8s linear infinite;
-    }
-
-    @keyframes scanMove {
-      0% { transform: translateY(0); }
-      50% { transform: translateY(56vw); }
-      100% { transform: translateY(0); }
+      opacity: 0;
     }
 
     .preview-placeholder {
@@ -217,9 +232,9 @@
 
     .controls { margin-top: 10px; }
 
-    .top-tools { grid-template-columns: 1fr; }
+    .top-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .button-row { grid-template-columns: 1fr; }
-    .lookup-row { grid-template-columns: minmax(0, 1fr) 88px 88px; }
+    .lookup-row { grid-template-columns: minmax(0, 1fr) 76px 62px; }
 
     .field-grid {
       grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -239,49 +254,6 @@
       min-width: 44px;
       padding: 0;
       font-size: 1rem;
-    }
-
-    .floating-torch-btn {
-      position: fixed;
-      top: max(16px, env(safe-area-inset-top));
-      right: max(16px, env(safe-area-inset-right));
-      z-index: 18;
-      width: 42px;
-      min-width: 42px;
-      height: 42px;
-      max-width: 42px;
-      padding: 0;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      flex: 0 0 42px;
-      background: #101720;
-      border: 1px solid #101720;
-      box-shadow: 0 14px 28px rgba(17, 24, 31, 0.18);
-      backdrop-filter: blur(10px);
-      transition: box-shadow 150ms ease;
-    }
-
-    .btn.floating-torch-btn {
-      width: 42px;
-      min-height: 42px;
-      border-radius: 999px;
-    }
-
-    .floating-torch-btn:disabled {
-      opacity: 0.88;
-    }
-
-    .floating-torch-btn svg {
-      width: 18px;
-      height: 18px;
-      color: #c8ced5;
-      transition: color 150ms ease;
-    }
-
-    .floating-torch-btn.is-on svg,
-    .floating-torch-btn.torch-on svg {
-      color: #000;
     }
 
     .dialog-actions {
@@ -309,14 +281,12 @@
       cursor: pointer;
       padding: 0 10px;
       font-weight: 700;
-      transition: transform 150ms ease, opacity 150ms ease;
       font-size: 0.82rem;
     }
 
-    .btn:hover { transform: translateY(-1px); }
     .btn:disabled,
     .input:disabled,
-    .select:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .select:disabled { opacity: 0.55; cursor: not-allowed; }
 
     .btn-primary {
       color: #fff7f2;
@@ -330,6 +300,7 @@
     }
 
     .btn-muted,
+    .input,
     .select {
       color: var(--text);
       background: rgba(20, 28, 36, 0.06);
@@ -337,12 +308,13 @@
     }
 
     .input,
+    .select,
     .textarea {
       padding: 9px 10px;
       border-color: rgba(20, 28, 36, 0.12);
       background: rgba(255, 255, 255, 0.96);
       color: var(--text);
-      font-size: 0.84rem;
+      font-size: 16px;
     }
 
     .textarea {
@@ -364,7 +336,7 @@
     }
 
     .section-card {
-      margin-top: 10px;
+      margin-top: 0;
     }
 
     .field-card {
@@ -377,7 +349,7 @@
     .field-card label {
       display: block;
       color: var(--muted);
-      font-size: 0.62rem;
+      font-size: 0.68rem;
       margin-bottom: 5px;
       text-transform: uppercase;
       letter-spacing: 0.06em;
@@ -415,15 +387,6 @@
       margin-bottom: 8px;
     }
 
-    .history-actions .mini-pill {
-      display: grid;
-      place-items: center;
-      min-height: 42px;
-      padding: 0 10px;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
     .history-empty {
       margin: 0;
       padding: 14px;
@@ -443,7 +406,6 @@
       line-height: 1.35;
       word-break: break-word;
       cursor: pointer;
-      transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
     }
 
     .history-primary {
@@ -508,14 +470,16 @@
       flex: 0 0 auto;
     }
 
-    .history-item:hover {
-      transform: translateY(-1px);
-      background: rgba(255, 255, 255, 0.92);
-    }
-
     .history-item.is-selected {
       border-color: rgba(191, 90, 49, 0.44);
       background: rgba(191, 90, 49, 0.1);
+    }
+
+    .history-list {
+      min-height: 0;
+      max-height: none;
+      overflow: visible;
+      padding-right: 2px;
     }
 
     .fab {
@@ -543,7 +507,7 @@
       position: fixed;
       left: 50%;
       bottom: max(78px, calc(env(safe-area-inset-bottom) + 78px));
-      transform: translateX(-50%) translateY(16px);
+      transform: translateX(-50%);
       padding: 10px 14px;
       border-radius: 999px;
       background: rgba(24, 33, 42, 0.94);
@@ -552,29 +516,48 @@
       font-weight: 700;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 180ms ease, transform 180ms ease;
       z-index: 30;
     }
 
     .toast.is-visible {
       opacity: 1;
-      transform: translateX(-50%) translateY(0);
+      transform: translateX(-50%);
     }
 
     body.is-compact .top-tools,
     body.is-compact #statusText,
     body.is-compact #productInfoTitle,
     body.is-compact #field_goods_code_card,
+    body.is-compact #field_supplier_name_card,
     body.is-compact #field_spec_card,
     body.is-compact #field_id_card,
-    body.is-compact #field_p_price_card,
-    body.is-compact #field_supplier_name_compact_card,
     body.is-compact #historyTitle {
       display: none !important;
     }
 
     body.is-compact .field-grid {
-      grid-template-columns: repeat(20, minmax(0, 1fr));
+      grid-template-columns: repeat(10, minmax(0, 1fr));
+    }
+
+    body.is-compact #field_italian_name_card {
+      grid-column: 1 / span 7;
+    }
+
+    body.is-compact #field_supplier_name_compact_card {
+      grid-column: 8 / span 3;
+      display: block !important;
+    }
+
+    body.is-compact #field_p_price_card {
+      grid-column: 1 / span 3;
+    }
+
+    body.is-compact #field_s_price_card {
+      grid-column: 4 / span 3;
+    }
+
+    body.is-compact #field_real_inventory_card {
+      grid-column: 7 / span 4;
     }
 
     .dialog-backdrop {
@@ -593,6 +576,68 @@
     .dialog-card {
       width: min(100%, 400px);
       padding: 14px;
+      max-height: min(calc(100dvh - 36px), 100%);
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    #historyEditDialog {
+      align-items: flex-start;
+      padding-top: max(10px, env(safe-area-inset-top));
+      padding-bottom: 0;
+    }
+
+    #historyEditDialog .dialog-card {
+      width: min(100%, 420px);
+      height: min(50dvh, 430px);
+      max-height: min(50dvh, 430px);
+      padding: 10px 12px 12px;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto auto;
+      gap: 6px;
+    }
+
+    #historyEditDialog .input {
+      touch-action: manipulation;
+      font-size: 16px;
+      min-height: 36px;
+    }
+
+    .history-edit-grid {
+      gap: 6px;
+      min-height: 0;
+    }
+
+    .history-edit-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .history-edit-row-primary {
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    }
+
+    .history-edit-field {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .history-edit-field > span {
+      color: var(--muted);
+      font-size: clamp(0.6rem, 1.35vh, 0.7rem);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      line-height: 1.05;
+    }
+
+    .history-edit-field-hidden {
+      display: none;
+    }
+
+    .history-edit-actions {
+      margin-top: 4px;
     }
 
     .dialog-card p {
@@ -601,157 +646,11 @@
       line-height: 1.45;
     }
 
-    #closestSearchDialog,
-    #historyEditDialog {
-      align-items: flex-start;
-      justify-content: center;
-      padding: max(12px, env(safe-area-inset-top)) 16px 16px;
-    }
-
-    #closestSearchDialog .dialog-card,
-    #historyEditDialog .dialog-card {
-      position: fixed;
-      top: max(12px, env(safe-area-inset-top));
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(calc(100% - 32px), 400px);
-      height: 45vh;
-      max-height: 45vh;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      scrollbar-gutter: stable;
-    }
-
-    .closest-search-dialog-card,
-    .detail-popup-card {
-      display: grid;
-      gap: 12px;
-      align-content: start;
-    }
-
-    .closest-search-status:empty {
-      display: none;
-    }
-
-    .closest-search-results {
-      gap: 0;
-      padding: 2px 2px 0;
-      overflow-y: auto;
-      align-content: start;
-    }
-
-    .closest-search-item {
-      display: grid;
-      grid-template-columns: minmax(0, 85fr) minmax(76px, 15fr);
-      gap: 12px;
-      align-items: center;
-      padding: 12px 4px;
-      border-bottom: 1px solid rgba(20, 28, 36, 0.1);
-    }
-
-    .closest-search-item:last-child {
-      border-bottom: 0;
-    }
-
-    .closest-search-info {
-      min-width: 0;
-      display: grid;
-      gap: 6px;
-    }
-
-    .closest-search-name {
-      min-width: 0;
-      font-size: 0.84rem;
-      font-weight: 800;
-      line-height: 1.25;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .closest-search-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      color: var(--muted);
-      font-size: 0.71rem;
-      line-height: 1.25;
-    }
-
-    .closest-search-meta span:not(:last-child)::after {
-      content: "|";
-      margin-left: 8px;
-      color: rgba(20, 28, 36, 0.3);
-    }
-
-    .closest-search-barcode {
-      color: var(--text);
-      font-weight: 800;
-    }
-
-    .closest-search-select-btn {
-      min-height: 34px;
-      margin: 0;
-      justify-self: center;
-      align-self: center;
-      padding: 0 12px;
-      border-radius: 999px;
-    }
-
-    .detail-popup-grid {
-      display: grid;
-      gap: 10px;
-      align-content: start;
-    }
-
-    .detail-popup-row {
-      display: grid;
-      gap: 10px;
-    }
-
-    .detail-popup-row--60-40 {
-      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    }
-
-    .detail-popup-row--half {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .detail-popup-field {
-      display: grid;
-      gap: 6px;
-      min-width: 0;
-    }
-
-    .detail-popup-field span {
-      color: var(--muted);
-      font-size: 0.62rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-
-    .detail-popup-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 2px;
-    }
-
     .save-note {
-      margin-top: 12px;
-      min-height: 1.3em;
+      margin-top: 4px;
+      min-height: 1.1em;
       color: var(--success);
-      font-size: 0.92rem;
-      transition: opacity 160ms ease, color 160ms ease;
-    }
-
-    .save-note:empty {
-      opacity: 0;
-    }
-
-    .save-note.show-success {
-      color: var(--success);
-      opacity: 1;
+      font-size: clamp(0.72rem, 1.5vh, 0.82rem);
     }
 
     .visually-hidden {
@@ -773,15 +672,24 @@
         box-shadow: 0 12px 24px rgba(18, 24, 31, 0.1);
         backdrop-filter: none;
       }
-      .top-tools { grid-template-columns: 1fr; }
+      .top-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .button-row { grid-template-columns: 1fr; }
-      .lookup-row { grid-template-columns: minmax(0, 1fr) 74px 74px; }
+      .lookup-row { grid-template-columns: minmax(0, 1fr) 68px 56px; }
       .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
       .helper-row { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.75fr) minmax(0, 2.5fr); }
       .card { border-radius: 22px; }
-      .preview-frame { width: min(100%, 26vh); }
+      .preview-frame { width: min(100%, 30vh); }
       .preview-meta { top: 8px; left: 8px; right: 8px; }
       .preview-placeholder { font-size: 0.74rem; }
+
+      #historyEditDialog .input {
+        font-size: 16px;
+      }
+
+      #historyEditDialog .dialog-card {
+        height: min(50dvh, 400px);
+        max-height: min(50dvh, 400px);
+      }
     }
 
     @media (max-width: 430px) {
@@ -800,31 +708,155 @@
       .history-name { font-size: 0.68rem; }
       .history-meta { gap: 10px; font-size: 0.68rem; }
       .compact-toggle-btn { font-size: 0.92rem; }
-      .floating-torch-btn {
-        top: max(12px, env(safe-area-inset-top));
-        right: max(12px, env(safe-area-inset-right));
-        width: 38px;
-        min-width: 38px;
-        max-width: 38px;
-        height: 38px;
-        flex-basis: 38px;
-      }
-      #closestSearchDialog .dialog-card,
-      #historyEditDialog .dialog-card {
-        width: min(calc(100% - 20px), 400px);
-        top: max(10px, env(safe-area-inset-top));
-      }
-      .closest-search-item {
-        grid-template-columns: minmax(0, 85fr) minmax(72px, 15fr);
-        gap: 10px;
-        padding: 10px 2px;
-      }
-      .detail-popup-row--60-40,
-      .detail-popup-row--half {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
       .history-detail-btn { min-height: 30px; width: auto; padding: 0 8px; margin-right: 32px; font-size: 0.68rem; }
       .toast { width: calc(100% - 28px); text-align: center; }
+
+      #historyEditDialog .dialog-card {
+        width: min(100%, 100%);
+        padding: 8px 10px 10px;
+        gap: 4px;
+      }
+
+      .history-edit-grid,
+      .history-edit-row {
+        gap: 4px;
+      }
+
+      .history-edit-field > span {
+        font-size: clamp(0.56rem, 1.2vh, 0.64rem);
+      }
+
+      #historyEditDialog .input {
+        min-height: 34px;
+        padding: 7px 8px;
+      }
+
+      .history-edit-actions {
+        margin-top: 2px;
+      }
+    }
+
+    @media (max-height: 900px) {
+      .app-shell {
+        width: min(100%, calc(100% - 14px));
+        padding: max(8px, env(safe-area-inset-top)) 0 max(10px, env(safe-area-inset-bottom));
+        gap: 8px;
+      }
+
+      .card,
+      .dialog-card {
+        box-shadow: 0 12px 24px rgba(18, 24, 31, 0.1);
+        backdrop-filter: none;
+      }
+
+      .card {
+        padding: 10px;
+      }
+
+      .controls,
+      .lookup-row,
+      .field-grid,
+      .helper-row,
+      .dialog-actions,
+      .field-list,
+      .history-list {
+        gap: 8px;
+      }
+
+      .top-status {
+        margin-top: 4px;
+        padding: 4px 8px;
+        font-size: 0.72rem;
+      }
+
+      .preview-frame {
+        width: min(100%, 26vh);
+        margin-top: 8px;
+      }
+
+      .field-grid {
+        margin-top: 8px;
+      }
+
+      .field-card {
+        padding: 7px 8px;
+      }
+
+      .field-card label {
+        font-size: 0.62rem;
+        margin-bottom: 4px;
+      }
+
+      .field-value {
+        font-size: 0.72rem;
+        min-height: 1.1em;
+      }
+
+      .btn,
+      .input,
+      .select {
+        min-height: 36px;
+      }
+
+      .btn {
+        font-size: 0.74rem;
+      }
+
+      .history-actions {
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+
+      .history-item {
+        padding: 8px 10px;
+      }
+
+      .history-primary {
+        font-size: 0.84rem;
+      }
+
+      .history-qty,
+      .history-name,
+      .history-meta,
+      .history-detail-btn {
+        font-size: 0.66rem;
+      }
+
+      .history-name,
+      .history-meta,
+      .history-footer {
+        margin-top: 5px;
+      }
+
+      .history-list {
+        max-height: none;
+      }
+
+      #historyEditDialog .dialog-card {
+        height: min(50dvh, 360px);
+        max-height: min(50dvh, 360px);
+        padding: 8px 10px 10px;
+        gap: 4px;
+      }
+
+      #historyEditDialog .input {
+        min-height: 32px;
+        padding: 6px 8px;
+        font-size: 16px;
+      }
+
+      .history-edit-grid,
+      .history-edit-row {
+        gap: 4px;
+      }
+
+      .history-edit-field > span {
+        font-size: clamp(0.56rem, 1.15vh, 0.64rem);
+      }
+
+      .history-edit-actions {
+        margin-top: 2px;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -842,6 +874,7 @@
   <main class="app-shell">
     <section class="card">
       <div class="controls top-tools">
+        <button class="btn btn-muted" id="torchBtn" type="button" disabled>Torch Off</button>
         <label id="cameraSelectWrap">
           <span class="visually-hidden">Choose camera</span>
           <select class="select" id="cameraSelect" disabled></select>
@@ -892,7 +925,6 @@
         <div class="field-card span-third" id="field_s_price_card"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
         <div class="field-card span-third" id="field_real_inventory_card"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
         <div class="field-card span-half" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
-        <div class="field-card span-full" id="field_create_time_card"><label for="field_create_time">Saved</label><div class="field-value" id="field_create_time"></div></div>
         <div class="field-card span-half" id="field_discount_percent_card" hidden><label for="field_discount_percent">Discount%</label><div class="field-value is-discount" id="field_discount_percent"></div></div>
         <div class="field-card span-half" id="field_spec_card"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
         <div class="field-card span-half" id="field_id_card"><label for="field_id">ID</label><div class="field-value" id="field_id"></div></div>
@@ -906,31 +938,17 @@
       <div class="history-actions">
         <button class="btn btn-muted" id="clearSelectedBtn" type="button" disabled>Clean Selected</button>
         <button class="btn btn-muted" id="clearAllBtn" type="button">Clean All</button>
-        <div class="mini-pill" id="historyCountBadge" aria-live="polite">Count: 0</div>
+        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
         <button class="btn btn-primary" id="printBtn" type="button">Print</button>
       </div>
       <div class="history-list" id="historyList" aria-live="polite">
         <p class="history-empty" id="historyEmpty">No barcodes scanned yet.</p>
       </div>
     </section>
+
   </main>
 
   <div class="toast" id="toast" aria-live="polite"></div>
-
-  <button class="btn btn-muted floating-torch-btn" id="torchBtn" type="button" disabled>
-    <span class="visually-hidden">Torch</span>
-    <svg id="torchIcon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="4"></circle>
-      <path d="M12 2.5v2.5"></path>
-      <path d="M12 19v2.5"></path>
-      <path d="M4.9 4.9l1.8 1.8"></path>
-      <path d="M17.3 17.3l1.8 1.8"></path>
-      <path d="M2.5 12H5"></path>
-      <path d="M19 12h2.5"></path>
-      <path d="M4.9 19.1l1.8-1.8"></path>
-      <path d="M17.3 6.7l1.8-1.8"></path>
-    </svg>
-  </button>
 
   <button class="fab" id="settingsBtn" type="button" aria-label="Open settings">
     <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -983,78 +1001,85 @@
       <div class="dialog-actions">
         <button class="btn btn-primary" id="printBigBtn" type="button">[BIG] 60*38</button>
         <button class="btn btn-primary" id="printStickerBtn" type="button">[STICKER] 40*25</button>
-        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
         <button class="btn btn-muted" id="printBackBtn" type="button">Back</button>
       </div>
     </div>
   </div>
 
-  <div class="dialog-backdrop" id="closestSearchDialog" aria-hidden="true">
-    <div class="dialog-card closest-search-dialog-card" role="dialog" aria-modal="true" aria-labelledby="closestSearchTitle">
-      <h2 id="closestSearchTitle">Closest Matches</h2>
-      <p class="closest-search-status" id="closestSearchStatus"></p>
-      <div class="history-list closest-search-results" id="closestSearchList" aria-live="polite">
-        <p class="history-empty">No similar products found.</p>
-      </div>
-      <div class="dialog-actions">
-        <button class="btn btn-muted" id="closestSearchBackBtn" type="button">Back</button>
-      </div>
-    </div>
-  </div>
-
   <div class="dialog-backdrop" id="historyEditDialog" aria-hidden="true">
-    <div class="dialog-card detail-popup-card" role="dialog" aria-modal="true" aria-label="Edit Barcode">
-      <label class="visually-hidden">
-        <span>ID</span>
-        <input class="input" id="historyEditIdInput" type="text" readonly />
-      </label>
-      <div class="detail-popup-grid">
-        <div class="detail-popup-row detail-popup-row--60-40">
-          <label class="detail-popup-field">
+    <div class="dialog-card" role="dialog" aria-modal="true" aria-label="Edit Barcode">
+      <div class="field-list history-edit-grid">
+        <label class="history-edit-field history-edit-field-hidden">
+          <span>ID</span>
+          <input class="input" id="historyEditIdInput" type="text" readonly />
+        </label>
+        <div class="history-edit-row history-edit-row-primary">
+          <label class="history-edit-field">
             <span>Barcode</span>
             <input class="input" id="historyEditBarcodeInput" type="text" readonly />
           </label>
-          <label class="detail-popup-field">
+          <label class="history-edit-field">
             <span>Quantity</span>
             <input class="input" id="historyEditQtyInput" type="number" min="1" step="1" />
           </label>
         </div>
-        <label class="detail-popup-field">
+        <label class="history-edit-field">
           <span>Italian Name</span>
           <input class="input" id="historyEditItalianNameInput" type="text" />
         </label>
-        <div class="detail-popup-row detail-popup-row--half">
-          <label class="detail-popup-field">
+        <div class="history-edit-row">
+          <label class="history-edit-field">
             <span>Cost</span>
             <input class="input" id="historyEditPPriceInput" type="text" inputmode="decimal" />
           </label>
-          <label class="detail-popup-field">
+          <label class="history-edit-field">
             <span>Price</span>
             <input class="input" id="historyEditSPriceInput" type="text" inputmode="decimal" />
           </label>
         </div>
-        <div class="detail-popup-row detail-popup-row--half">
-          <label class="detail-popup-field">
+        <div class="history-edit-row">
+          <label class="history-edit-field">
             <span>Discount%</span>
             <input class="input" id="historyEditSDiscountInput" type="text" inputmode="decimal" />
           </label>
-          <label class="detail-popup-field">
+          <label class="history-edit-field">
             <span>Disc. Price</span>
             <input class="input" id="historyEditDiscountPriceInput" type="text" inputmode="decimal" readonly />
           </label>
         </div>
-        <div class="detail-popup-actions">
-          <button class="btn btn-primary" id="historyEditSaveBtn" type="button">Save</button>
-          <button class="btn btn-muted" id="historyEditBackBtn" type="button">Back</button>
-        </div>
       </div>
       <div class="save-note" id="historyEditSaveNote" aria-live="polite"></div>
+      <div class="dialog-actions history-edit-actions">
+        <button class="btn btn-primary" id="historyEditSaveBtn" type="button">Save</button>
+        <button class="btn btn-muted" id="historyEditBackBtn" type="button">Back</button>
+      </div>
     </div>
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
-  <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
-  <script src="app.js?v=46" defer></script>
+  <script>
+    window.__ponyfillReadyPromise = new Promise(function (resolve) {
+      window.__resolvePonyfillReady = resolve;
+    });
+  </script>
+  <script type="module">
+    try {
+      if (window.BarcodeDetector && typeof window.BarcodeDetector.getSupportedFormats === "function") {
+        await window.BarcodeDetector.getSupportedFormats();
+      } else {
+        const module = await import("https://cdn.jsdelivr.net/npm/@undecaf/barcode-detector-polyfill@0.9.23/dist/main.js");
+        window.BarcodeDetector = module.BarcodeDetectorPolyfill;
+      }
+    } catch {
+      // Leave BarcodeDetector unset if the external library cannot be loaded.
+    }
+
+    window.BarcodeDetectionAPI = window.BarcodeDetectionAPI || {};
+    window.BarcodeDetectionAPI.BarcodeDetector = window.BarcodeDetector;
+    if (window.__resolvePonyfillReady) {
+      window.__resolvePonyfillReady();
+    }
+  </script>
+  <script src="app.js?v=55" defer></script>
 </body>
 </html>
