@@ -5,7 +5,6 @@
     cookieProxyEndpoint: "https://lgkiller.mattoteo96.workers.dev/",
     infoEndpoint: "https://lgerp.cc/goods/ongoodsCode",
     infoProxyEndpoint: "https://lgkillergetinfo.mattoteo96.workers.dev/",
-    closestSearchProxyEndpoint: "https://lgkillerclosestsearch.mattoteo96.workers.dev/",
     discountProxyEndpoint: "https://lgkillerdiscountinfo.mattoteo96.workers.dev/",
     updateProxyEndpoint: "https://lgkillerupdate.mattoteo96.workers.dev/",
     addProductProxyEndpoint: "https://lgkilleraddproduct.mattoteo96.workers.dev/",
@@ -15,10 +14,7 @@
     cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
     historyStorageKey: "web_barcode_scanner_history",
     cameraStorageKey: "web_barcode_scanner_camera",
-    scanIntervalMs: 240,
-    mobileScanIntervalMs: 170,
-    iosScanIntervalMs: 130,
-    duplicateScanCooldownMs: 600,
+    scanIntervalMs: 1200,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
     preferredSquareSize: 960,
@@ -39,7 +35,6 @@
       "id",
       "goods_code",
       "italian_name",
-      "create_time",
       "p_price",
       "s_price",
       "real_inventory",
@@ -74,8 +69,8 @@
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 1280, max: 1440 },
-        height: { ideal: 960, max: 1080 }
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 960, max: 1440 }
       }
     },
     androidVideoConstraints: {
@@ -123,22 +118,11 @@
     stalledPreviewChecks: 0,
     isRecoveringPreview: false,
     lookupSequence: 0,
-    displayMode: "full",
+    isCompactMode: false,
     lockedScrollY: 0,
     cameraStartPromise: null,
     focusRefreshTimers: [],
-    iosWarmRestartDone: false,
-    isIOS: false,
-    captureContext: null,
-    lastDetectedBarcode: "",
-    lastDetectedAt: 0,
-    scanAnimationFrame: 0,
-    closestSearchResults: [],
-    closestSearchCode: "",
-    closestSearchPendingHistoryId: "",
-    isClosestSearchLoading: false,
-    historyEditSuccessTimer: 0,
-    historyEditCloseTimer: 0
+    iosWarmRestartDone: false
   };
 
   function queryElements() {
@@ -150,11 +134,6 @@
       cameraSelect: document.getElementById("cameraSelect"),
       clearAllBtn: document.getElementById("clearAllBtn"),
       clearBarcodeBtn: document.getElementById("clearBarcodeBtn"),
-      closestSearchBackBtn: document.getElementById("closestSearchBackBtn"),
-      closestSearchDialog: document.getElementById("closestSearchDialog"),
-      closestSearchList: document.getElementById("closestSearchList"),
-      closestSearchStatus: document.getElementById("closestSearchStatus"),
-      closestSearchTitle: document.getElementById("closestSearchTitle"),
       clearSelectedBtn: document.getElementById("clearSelectedBtn"),
       confirmDialog: document.getElementById("confirmDialog"),
       confirmDialogCancelBtn: document.getElementById("confirmDialogCancelBtn"),
@@ -162,7 +141,7 @@
       confirmDialogText: document.getElementById("confirmDialogText"),
       captureCanvas: document.getElementById("captureCanvas"),
       closeSettingsBtn: document.getElementById("closeSettingsBtn"),
-      compactToggleBtn: document.getElementById("compactToggleBtn") || document.getElementById("displayModeSelect"),
+      compactToggleBtn: document.getElementById("compactToggleBtn"),
       historyEmpty: document.getElementById("historyEmpty"),
       historyEditBackBtn: document.getElementById("historyEditBackBtn"),
       historyEditBarcodeInput: document.getElementById("historyEditBarcodeInput"),
@@ -176,7 +155,6 @@
       historyEditSaveNote: document.getElementById("historyEditSaveNote"),
       historyEditSDiscountInput: document.getElementById("historyEditSDiscountInput"),
       historyEditSPriceInput: document.getElementById("historyEditSPriceInput"),
-      historyCountBadge: document.getElementById("historyCountBadge"),
       historyList: document.getElementById("historyList"),
       loginInput: document.getElementById("loginInput"),
       loginSettingsBtn: document.getElementById("loginSettingsBtn"),
@@ -378,7 +356,7 @@
       oscillator.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
 
       gainNode.gain.setValueAtTime(0.0001, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.14, now + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
       gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
 
       oscillator.connect(gainNode);
@@ -394,28 +372,23 @@
     try {
       const raw = localStorage.getItem(CONFIG.settingsStorageKey);
       const parsed = raw ? JSON.parse(raw) : null;
-      const savedDisplayMode = String(parsed?.displayMode || "").trim();
-      const legacyCompactMode = Boolean(parsed?.compactMode);
-      const displayMode = savedDisplayMode === "compact" || legacyCompactMode ? "compact" : "full";
       return {
         shopKey: parsed?.shopKey || "",
         login: parsed?.login || "",
         password: parsed?.password || "",
-        displayMode: displayMode
+        compactMode: Boolean(parsed?.compactMode)
       };
     } catch {
-      return { shopKey: "", login: "", password: "", displayMode: "full" };
+      return { shopKey: "", login: "", password: "", compactMode: false };
     }
   }
 
   function saveSettings(values, options) {
-    const displayMode = values?.displayMode === "compact" ? "compact" : "full";
     const normalizedValues = {
       shopKey: values?.shopKey || "",
       login: values?.login || "",
       password: values?.password || "",
-      displayMode: displayMode,
-      compactMode: displayMode === "compact"
+      compactMode: Boolean(values?.compactMode)
     };
     localStorage.setItem(CONFIG.settingsStorageKey, JSON.stringify(normalizedValues));
     if (options?.silent) {
@@ -431,149 +404,22 @@
     state.els.passwordInput.value = values.password || "";
   }
 
-  function ensureCompactToggleButton() {
-    const existingControl = state.els?.compactToggleBtn;
-    if (!existingControl) {
-      return;
-    }
-
-    if (existingControl.tagName === "BUTTON") {
-      return;
-    }
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.id = "compactToggleBtn";
-    button.className = existingControl.className || "btn";
-    button.disabled = existingControl.disabled;
-    if (existingControl.getAttribute("style")) {
-      button.setAttribute("style", existingControl.getAttribute("style"));
-    }
-
-    existingControl.replaceWith(button);
-    state.els.compactToggleBtn = button;
-  }
-
   function updateCompactToggleButton() {
     if (!state.els.compactToggleBtn) {
       return;
     }
-
-    const isCompactMode = state.displayMode === "compact";
-    state.els.compactToggleBtn.textContent = isCompactMode ? "+" : "-";
+    state.els.compactToggleBtn.textContent = state.isCompactMode ? "+" : "-";
     state.els.compactToggleBtn.setAttribute(
       "aria-label",
-      isCompactMode ? "Expand app sections" : "Compact app sections"
+      state.isCompactMode ? "Expand app sections" : "Compact app sections"
     );
-    state.els.compactToggleBtn.title = isCompactMode ? "Show full layout" : "Show compact layout";
+    state.els.compactToggleBtn.title = state.isCompactMode ? "Show hidden sections" : "Hide optional sections";
   }
 
-  function syncDisplayModeDiscountLayout() {
-    const hasDiscountFields = !document.getElementById("field_discount_price_card")?.hidden ||
-      !document.getElementById("field_discount_percent_card")?.hidden;
-    document.body.classList.toggle("has-discount-fields", hasDiscountFields);
-  }
-
-  function getResultCard(key) {
-    return document.getElementById(`field_${key}_card`);
-  }
-
-  function clearResultCardLayout(card) {
-    if (!card) {
-      return;
-    }
-
-    card.style.display = "";
-    card.style.order = "";
-    card.style.flex = "";
-    card.style.width = "";
-    card.style.maxWidth = "";
-  }
-
-  function applyCompactResultLayout() {
-    const primaryCard = getResultCard("italian_name") ||
-      getResultCard("supplier_name") ||
-      getResultCard("create_time") ||
-      getResultCard("s_price") ||
-      getResultCard("real_inventory");
-    const container = primaryCard?.parentElement || null;
-    const layoutCards = {
-      italian_name: getResultCard("italian_name"),
-      supplier_name: getResultCard("supplier_name"),
-      create_time: getResultCard("create_time"),
-      s_price: getResultCard("s_price"),
-      real_inventory: getResultCard("real_inventory"),
-      discount_percent: getResultCard("discount_percent"),
-      discount_price: getResultCard("discount_price")
-    };
-    CONFIG.resultFields.forEach(function (key) {
-      clearResultCardLayout(getResultCard(key));
-    });
-
-    if (!container) {
-      return;
-    }
-
-    if (state.displayMode !== "compact") {
-      container.style.display = "";
-      container.style.flexWrap = "";
-      container.style.alignItems = "";
-      container.style.gap = "";
-      return;
-    }
-
-    container.style.display = "flex";
-    container.style.flexWrap = "wrap";
-    container.style.alignItems = "stretch";
-    container.style.gap = "8px";
-
-    const compactLayout = [
-      { key: "italian_name", basis: "70%", order: 1 },
-      { key: "supplier_name", basis: "30%", order: 2 },
-      { key: "create_time", basis: "45%", order: 3 },
-      { key: "s_price", basis: "25%", order: 4 },
-      { key: "real_inventory", basis: "30%", order: 5 },
-      { key: "discount_percent", basis: "45%", order: 6 },
-      { key: "discount_price", basis: "55%", order: 7 }
-    ];
-    const visibleKeys = new Set(compactLayout.map(function (item) {
-      return item.key;
-    }));
-
-    CONFIG.resultFields.forEach(function (key) {
-      const card = getResultCard(key);
-      if (!card) {
-        return;
-      }
-
-      if (!visibleKeys.has(key)) {
-        card.style.display = "none";
-      }
-    });
-
-    compactLayout.forEach(function (item) {
-      const card = layoutCards[item.key];
-      if (!card) {
-        return;
-      }
-
-      card.style.display = card.hidden ? "none" : "";
-      card.style.order = String(item.order);
-      card.style.flex = `0 0 calc(${item.basis} - 8px)`;
-      card.style.width = `calc(${item.basis} - 8px)`;
-      card.style.maxWidth = `calc(${item.basis} - 8px)`;
-    });
-  }
-
-  function applyDisplayMode(mode) {
-    const nextMode = mode === "compact" ? "compact" : "full";
-    state.displayMode = nextMode;
-    document.body.classList.remove("display-mode-full", "display-mode-normal", "display-mode-compact");
-    document.body.classList.add(`display-mode-${nextMode}`);
-    document.body.classList.toggle("is-compact", nextMode === "compact");
+  function applyCompactMode(isCompact) {
+    state.isCompactMode = Boolean(isCompact);
+    document.body.classList.toggle("is-compact", state.isCompactMode);
     updateCompactToggleButton();
-    syncDisplayModeDiscountLayout();
-    applyCompactResultLayout();
   }
 
   function openSettingsDialog() {
@@ -640,11 +486,6 @@
     state.els.clearAllBtn.disabled = state.history.length === 0;
     state.els.sendTxtBtn.disabled = state.history.length === 0;
     state.els.printBtn.disabled = state.history.length === 0;
-    if (state.els.historyCountBadge) {
-      const countText = `Count: ${state.history.length}`;
-      state.els.historyCountBadge.textContent = countText;
-      state.els.historyCountBadge.setAttribute("aria-label", countText);
-    }
     if (state.history.length === 0) {
       state.selectedHistoryIndex = -1;
       state.els.clearSelectedBtn.disabled = true;
@@ -760,28 +601,6 @@
     saveHistoryState();
     renderHistory();
     return entry.id;
-  }
-
-  function addHistoryRecord(record, fallbackBarcode) {
-    const entry = normalizeHistoryItem({
-      ...record,
-      barcode: String(record?.barcode || fallbackBarcode || "").trim()
-    });
-    if (!entry.barcode) {
-      return "";
-    }
-
-    state.history.unshift(entry);
-    state.selectedHistoryIndex = 0;
-    saveHistoryState();
-    renderHistory();
-    return entry.id;
-  }
-
-  function createNoExactMatchError() {
-    const error = new Error("No exact product match found.");
-    error.code = "NO_EXACT_MATCH";
-    return error;
   }
 
   function updateHistoryItem(entryId, updates) {
@@ -1007,21 +826,10 @@
     }
 
     const cookie = await getCookieForRequests();
-    const [productResult, discountResult] = await Promise.allSettled([
+    const [productResponseText, discountResponseText] = await Promise.all([
       fetchProductInfoThroughProxy(code, cookie),
       fetchDiscountInfoThroughProxy(code, cookie)
     ]);
-
-    if (productResult.status !== "fulfilled") {
-      throw productResult.reason instanceof Error
-        ? productResult.reason
-        : new Error("Could not load product info.");
-    }
-
-    const productResponseText = productResult.value;
-    const discountResponseText = discountResult.status === "fulfilled"
-      ? discountResult.value
-      : "";
 
     let parsedProduct;
     let parsedDiscount = null;
@@ -1055,338 +863,21 @@
     };
   }
 
-  async function fetchClosestSearchResults(barcode) {
-    const code = String(barcode || "").trim();
-    if (!code) {
-      throw new Error("Barcode is empty");
-    }
-
-    const cookie = await getCookieForRequests();
-    const response = await fetch(CONFIG.closestSearchProxyEndpoint, {
-      method: "POST",
-      body: JSON.stringify({
-        supplierId: -1,
-        symbol: "combination",
-        contain: "bh",
-        content: code,
-        page: 1,
-        rows: 5,
-        cookie: cookie
-      }),
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Closest search request failed with status ${response.status}`);
-    }
-
-    const responseText = await response.text();
-    let parsedResponse;
-    try {
-      parsedResponse = JSON.parse(responseText);
-    } catch {
-      throw new Error("Closest search response was not valid JSON.");
-    }
-
-    const results = collectClosestSearchResults(parsedResponse);
-    if (results.length === 0) {
-      throw new Error("No similar products found");
-    }
-
-    return results;
-  }
-
-  async function handleClosestSearchLookup() {
-    const code = String(state.els.barcodeInput.value || "").trim();
-    if (!code) {
-      setStatus("Type a barcode first");
-      return;
-    }
-
-    state.els.barcodeInput.value = code;
-    state.isClosestSearchLoading = true;
-    state.closestSearchCode = code;
-    state.closestSearchPendingHistoryId = "";
-    state.closestSearchResults = [];
-    state.els.closestSearchBackBtn.disabled = true;
-    state.els.closestSearchTitle.textContent = "Closest Matches";
-    state.els.closestSearchStatus.textContent = `Searching matches for ${code}...`;
-    renderClosestSearchResults();
-    lockPageScroll();
-    state.els.closestSearchDialog.classList.add("is-open");
-    state.els.closestSearchDialog.setAttribute("aria-hidden", "false");
-
-    try {
-      const closestMatches = await fetchClosestSearchResults(code);
-      openClosestSearchDialog(code, closestMatches, "");
-      setStatus("Select one of the closest matches.");
-    } catch (error) {
-      state.isClosestSearchLoading = false;
-      state.els.closestSearchBackBtn.disabled = false;
-      state.closestSearchResults = [];
-      state.els.closestSearchStatus.textContent = error?.message || "No similar products found.";
-      renderClosestSearchResults();
-      setStatus(error?.message || "No similar products found.");
-    }
-  }
-
-  function normalizeClosestSearchResult(item) {
-    if (!item || typeof item !== "object") {
-      return null;
-    }
-
-    const barcode = String(
-      item.bh ||
-      item.goods_bh ||
-      item.goodsBh ||
-      item.goods_code ||
-      item.goodsCode ||
-      item.bar_code ||
-      item.barCode ||
-      item.barcode ||
-      item.code ||
-      item.ean ||
-      item.ean13 ||
-      item.upc ||
-      item.upcA ||
-      item.upc_a ||
-      item.content ||
-      ""
-    ).trim();
-    const italianName = String(
-      item.italian_name ||
-      item.italianName ||
-      item.goods_name ||
-      item.name ||
-      ""
-    ).trim();
-    const goodsId = String(item.id || item.goods_id || item.goodsId || "").trim();
-    const pPrice = String(item.p_price || item.pPrice || item.purchase_price || item.buying_price || item.cost || "").trim();
-    const sPrice = String(item.s_price || item.sPrice || item.sale_price || item.price || "").trim();
-
-    if (!barcode) {
-      return null;
-    }
-
-    return {
-      goods_id: goodsId,
-      barcode: barcode,
-      italian_name: italianName,
-      p_price: pPrice,
-      s_price: sPrice
-    };
-  }
-
-  function collectClosestSearchResults(rawData) {
-    const queue = [rawData];
-    const results = [];
-    const seen = new Set();
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) {
-        continue;
-      }
-
-      if (Array.isArray(current)) {
-        for (let index = 0; index < current.length; index += 1) {
-          queue.push(current[index]);
-        }
-        continue;
-      }
-
-      if (typeof current !== "object") {
-        continue;
-      }
-
-      const normalizedResult = normalizeClosestSearchResult(current);
-      if (normalizedResult) {
-        const key = `${normalizedResult.barcode}|${normalizedResult.goods_id}|${normalizedResult.italian_name}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          results.push(normalizedResult);
-        }
-      }
-
-      const values = Object.values(current);
-      for (let index = 0; index < values.length; index += 1) {
-        const value = values[index];
-        if (value && typeof value === "object") {
-          queue.push(value);
-        }
-      }
-    }
-
-    return results.slice(0, 25);
-  }
-
-  function renderClosestSearchResults() {
-    if (!state.els.closestSearchList) {
-      return;
-    }
-
-    if (state.closestSearchResults.length === 0) {
-      const emptyMessage = document.createElement("p");
-      emptyMessage.className = "history-empty";
-      emptyMessage.textContent = "No similar products found.";
-      state.els.closestSearchList.replaceChildren(emptyMessage);
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    for (let index = 0; index < state.closestSearchResults.length; index += 1) {
-      const item = state.closestSearchResults[index];
-      const article = document.createElement("article");
-      article.className = "closest-search-item";
-
-      const info = document.createElement("div");
-      info.className = "closest-search-info";
-
-      const nameLine = document.createElement("div");
-      nameLine.className = "closest-search-name";
-      nameLine.textContent = item.italian_name || item.barcode || "Unnamed product";
-      nameLine.title = item.italian_name || item.barcode || "";
-
-      const metaLine = document.createElement("div");
-      metaLine.className = "closest-search-meta";
-      metaLine.innerHTML =
-        `<span class="closest-search-barcode">${escapeHtml(item.barcode)}</span>` +
-        `<span>Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span>` +
-        `<span>Price: ${escapeHtml(formatPrice(item.s_price) || "-")}</span>`;
-
-      const selectButton = document.createElement("button");
-      selectButton.className = "btn btn-muted history-detail-btn closest-search-select-btn";
-      selectButton.type = "button";
-      selectButton.textContent = "Select";
-      selectButton.dataset.action = "select-closest";
-      selectButton.dataset.index = String(index);
-      selectButton.disabled = state.isClosestSearchLoading;
-
-      info.appendChild(nameLine);
-      info.appendChild(metaLine);
-      article.appendChild(info);
-      article.appendChild(selectButton);
-      fragment.appendChild(article);
-    }
-
-    state.els.closestSearchList.replaceChildren(fragment);
-  }
-
-  function openClosestSearchDialog(barcode, results, pendingHistoryId) {
-    state.closestSearchCode = String(barcode || "").trim();
-    state.closestSearchResults = Array.isArray(results) ? results.slice() : [];
-    state.closestSearchPendingHistoryId = String(pendingHistoryId || "").trim();
-    state.isClosestSearchLoading = false;
-    state.els.closestSearchBackBtn.disabled = false;
-    state.els.closestSearchTitle.textContent = `Closest Matches`;
-    state.els.closestSearchStatus.textContent = "";
-    renderClosestSearchResults();
-    lockPageScroll();
-    state.els.closestSearchDialog.classList.add("is-open");
-    state.els.closestSearchDialog.setAttribute("aria-hidden", "false");
-  }
-
-  function openClosestSearchLoadingDialog(barcode, pendingHistoryId) {
-    state.closestSearchCode = String(barcode || "").trim();
-    state.closestSearchResults = [];
-    state.closestSearchPendingHistoryId = String(pendingHistoryId || "").trim();
-    state.isClosestSearchLoading = true;
-    state.els.closestSearchBackBtn.disabled = true;
-    state.els.closestSearchTitle.textContent = "Closest Matches";
-    state.els.closestSearchStatus.textContent = state.closestSearchCode
-      ? `Searching closest matches for ${state.closestSearchCode}...`
-      : "Searching closest matches...";
-    renderClosestSearchResults();
-    lockPageScroll();
-    state.els.closestSearchDialog.classList.add("is-open");
-    state.els.closestSearchDialog.setAttribute("aria-hidden", "false");
-  }
-
-  function closeClosestSearchDialog() {
-    state.closestSearchResults = [];
-    state.closestSearchCode = "";
-    state.closestSearchPendingHistoryId = "";
-    state.isClosestSearchLoading = false;
-    state.els.closestSearchBackBtn.disabled = false;
-    state.els.closestSearchStatus.textContent = "";
-    state.els.closestSearchDialog.classList.remove("is-open");
-    state.els.closestSearchDialog.setAttribute("aria-hidden", "true");
-    window.setTimeout(function () {
-      unlockPageScroll();
-    }, 60);
-  }
-
-  async function handleClosestSearchSelection(index) {
-    if (index < 0 || index >= state.closestSearchResults.length || state.isClosestSearchLoading) {
-      return;
-    }
-
-    const selectedItem = state.closestSearchResults[index];
-    const barcode = String(selectedItem?.barcode || "").trim();
-    if (!barcode) {
-      return;
-    }
-
-    state.isClosestSearchLoading = true;
-    state.els.closestSearchBackBtn.disabled = true;
-    state.els.closestSearchStatus.textContent = `Loading ${barcode}...`;
-    renderClosestSearchResults();
-
-    try {
-      const selectedData = await loadProductAndDiscountResponse(barcode);
-      state.els.barcodeInput.value = barcode;
-      clearResultFields();
-      renderProductData({
-        product: selectedData.product,
-        sale: selectedData.sale
-      });
-      if (state.currentProductRecord) {
-        if (state.closestSearchPendingHistoryId) {
-          updateHistoryItem(state.closestSearchPendingHistoryId, state.currentProductRecord);
-        } else {
-          addHistoryRecord(state.currentProductRecord, barcode);
-        }
-      }
-      closeClosestSearchDialog();
-      setStatus(`Selected ${barcode}`);
-    } catch (error) {
-      state.els.closestSearchStatus.textContent = error.message || "Could not load selected product.";
-      state.isClosestSearchLoading = false;
-      state.els.closestSearchBackBtn.disabled = false;
-      renderClosestSearchResults();
-      throw error;
-    }
-  }
-
   function hasProductInDatabase(normalizedProduct, barcode) {
+    const normalizedBarcode = String(barcode || "").trim();
     if (!normalizedProduct || typeof normalizedProduct !== "object") {
       return false;
     }
 
     const goodsCode = String(normalizedProduct.goods_code || "").trim();
-    const italianName = String(normalizedProduct.italian_name || "").trim();
-    const pPrice = String(normalizedProduct.p_price || "").trim();
-    const sPrice = String(normalizedProduct.s_price || "").trim();
-    const inventory = String(normalizedProduct.real_inventory || "").trim();
-    const supplierName = String(normalizedProduct.supplier_name || "").trim();
     const id = String(normalizedProduct.id || "").trim();
+    const italianName = String(normalizedProduct.italian_name || "").trim();
 
-    if (!goodsCode) {
-      return false;
+    if (goodsCode && normalizedBarcode) {
+      return goodsCode === normalizedBarcode;
     }
 
-    if (!italianName) {
-      return false;
-    }
-
-    return Boolean(pPrice || sPrice || inventory || supplierName || id);
-  }
-
-  function shouldFallbackToClosestSearch(normalizedProduct, barcode, allowClosestSearch) {
-    return Boolean(allowClosestSearch) && !hasProductInDatabase(normalizedProduct, barcode);
+    return Boolean(id || italianName);
   }
 
   function selectHistoryItem(index) {
@@ -1453,8 +944,7 @@
 
   function openHistoryEditDialog(item) {
     fillHistoryEditForm(item);
-    clearHistoryEditFeedbackTimers();
-    clearHistoryEditSaveNote();
+    state.els.historyEditSaveNote.textContent = "";
     lockPageScroll();
     state.els.historyEditDialog.classList.add("is-open");
     state.els.historyEditDialog.setAttribute("aria-hidden", "false");
@@ -1465,9 +955,8 @@
     if (activeElement instanceof HTMLElement && state.els.historyEditDialog.contains(activeElement)) {
       activeElement.blur();
     }
-    clearHistoryEditFeedbackTimers();
     state.editingHistoryId = "";
-    clearHistoryEditSaveNote();
+    state.els.historyEditSaveNote.textContent = "";
     state.els.historyEditDialog.classList.remove("is-open");
     state.els.historyEditDialog.setAttribute("aria-hidden", "true");
     window.setTimeout(function () {
@@ -1745,14 +1234,6 @@
     if (compactSupplierField) {
       compactSupplierField.textContent = "";
     }
-    const compactInventoryField = document.getElementById("field_real_inventory_compact");
-    if (compactInventoryField) {
-      compactInventoryField.textContent = "";
-    }
-    const compactSavedField = document.getElementById("field_create_time_compact");
-    if (compactSavedField) {
-      compactSavedField.textContent = "";
-    }
     state.currentProductRecord = null;
     setDiscountVisibility(false);
   }
@@ -1768,20 +1249,6 @@
       if (compactSupplierField) {
         compactSupplierField.textContent = normalizedValue;
       }
-      return;
-    }
-    if (key === "real_inventory") {
-      const compactInventoryField = document.getElementById("field_real_inventory_compact");
-      if (compactInventoryField) {
-        compactInventoryField.textContent = normalizedValue;
-      }
-      return;
-    }
-    if (key === "create_time") {
-      const compactSavedField = document.getElementById("field_create_time_compact");
-      if (compactSavedField) {
-        compactSavedField.textContent = normalizedValue;
-      }
     }
   }
 
@@ -1794,8 +1261,6 @@
     if (percentCard) {
       percentCard.hidden = !visible;
     }
-    syncDisplayModeDiscountLayout();
-    applyCompactResultLayout();
   }
 
   function normalizeProductData(rawData) {
@@ -1910,39 +1375,6 @@
     state.els.historyEditDiscountPriceInput.value = discountPrice;
   }
 
-  function clearHistoryEditFeedbackTimers() {
-    if (state.historyEditSuccessTimer) {
-      window.clearTimeout(state.historyEditSuccessTimer);
-      state.historyEditSuccessTimer = 0;
-    }
-    if (state.historyEditCloseTimer) {
-      window.clearTimeout(state.historyEditCloseTimer);
-      state.historyEditCloseTimer = 0;
-    }
-  }
-
-  function clearHistoryEditSaveNote() {
-    if (!state.els?.historyEditSaveNote) {
-      return;
-    }
-
-    state.els.historyEditSaveNote.classList.remove("show-success");
-    state.els.historyEditSaveNote.textContent = "";
-  }
-
-  function showHistoryEditSuccessMessage(message) {
-    if (!state.els?.historyEditSaveNote) {
-      return;
-    }
-
-    clearHistoryEditFeedbackTimers();
-    state.els.historyEditSaveNote.textContent = message;
-    state.els.historyEditSaveNote.classList.add("show-success");
-    state.historyEditSuccessTimer = window.setTimeout(function () {
-      clearHistoryEditSaveNote();
-    }, 1800);
-  }
-
   function getDiscountFields(rawData, productData) {
     const saleData = normalizeSaleData(rawData);
 
@@ -1997,13 +1429,8 @@
     };
   }
 
-  async function fetchProductInfo(barcode, options) {
+  async function fetchProductInfo(barcode) {
     const code = String(barcode || "").trim();
-    const lookupOptions = {
-      allowClosestSearch: false,
-      addToHistoryBeforeLookup: true,
-      ...options
-    };
     if (!code) {
       setStatus("Type or scan a barcode first");
       return;
@@ -2013,97 +1440,57 @@
     clearResultFields();
     const lookupSequence = state.lookupSequence + 1;
     state.lookupSequence = lookupSequence;
-    const createdHistoryId = lookupOptions.addToHistoryBeforeLookup ? addHistoryItem(code) : "";
 
+    addHistoryItem(code);
     setStatus("Requesting product info...");
+
+    const cookie = await getCookieForRequests();
+
+    const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
+
+    let parsedProduct;
     try {
-      const cookie = await getCookieForRequests();
-      const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
-
-      let parsedProduct;
-      try {
-        parsedProduct = JSON.parse(productResponseText);
-      } catch {
-        if (lookupOptions.allowClosestSearch) {
-          throw createNoExactMatchError();
-        }
-        throw new Error("Product info response was not valid JSON.");
-      }
-
-      const normalizedProduct = normalizeProductData(parsedProduct?.product || parsedProduct);
-      if (shouldFallbackToClosestSearch(normalizedProduct, code, lookupOptions.allowClosestSearch)) {
-        throw createNoExactMatchError();
-      }
-
-      renderProductData({
-        product: parsedProduct?.product || parsedProduct,
-        sale: null
-      });
-      if (state.currentProductRecord) {
-        if (createdHistoryId) {
-          updateHistoryItem(createdHistoryId, state.currentProductRecord);
-        } else {
-          addHistoryRecord(state.currentProductRecord, code);
-        }
-      }
-      setStatus("Product info loaded");
-
-      fetchDiscountInfoThroughProxy(code, cookie)
-        .then(function (discountResponseText) {
-          let parsedDiscount = null;
-          try {
-            parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
-          } catch {
-            parsedDiscount = null;
-          }
-
-          const updatedRecord = buildHistoryItemFromLookupData(
-            parsedProduct?.product || parsedProduct,
-            parsedDiscount,
-            code,
-            state.currentProductRecord?.comparison_qty || 1
-          );
-
-          if (createdHistoryId) {
-            updateHistoryItem(createdHistoryId, updatedRecord);
-          } else {
-            syncHistoryRowsWithRecord(updatedRecord, code);
-          }
-
-          if (lookupSequence === state.lookupSequence && String(state.els.barcodeInput.value || "").trim() === code) {
-            renderProductData({
-              product: parsedProduct?.product || parsedProduct,
-              sale: parsedDiscount
-            });
-          }
-        })
-        .catch(function () {
-          // Temporary discount lookups are background-only for scan speed.
-        });
-    } catch (error) {
-      if (error?.code === "NO_EXACT_MATCH") {
-        if (lookupOptions.allowClosestSearch) {
-          try {
-            openClosestSearchLoadingDialog(code, createdHistoryId);
-            const closestMatches = await fetchClosestSearchResults(code);
-            openClosestSearchDialog(code, closestMatches, createdHistoryId);
-            setStatus("Exact barcode not found. Select one of the closest matches.");
-            return;
-          } catch (closestError) {
-            const message = closestError.message || "No similar products found.";
-            setStatus(`No exact product match found. ${message}`);
-            return;
-          }
-        }
-
-        setStatus("No exact product match found. Barcode added to list.");
-        return;
-      }
-
-      const message = error?.message || "Could not load product info";
-      setStatus(message);
-      throw new Error(message);
+      parsedProduct = JSON.parse(productResponseText);
+    } catch {
+      throw new Error("Product info response was not valid JSON.");
     }
+
+    renderProductData({
+      product: parsedProduct?.product || parsedProduct,
+      sale: null
+    });
+    if (state.currentProductRecord) {
+      syncHistoryRowsWithRecord(state.currentProductRecord, code);
+    }
+    setStatus("Product info loaded");
+
+    fetchDiscountInfoThroughProxy(code, cookie)
+      .then(function (discountResponseText) {
+        let parsedDiscount = null;
+        try {
+          parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
+        } catch {
+          parsedDiscount = null;
+        }
+
+        const updatedRecord = buildHistoryItemFromLookupData(
+          parsedProduct?.product || parsedProduct,
+          parsedDiscount,
+          code,
+          state.currentProductRecord?.comparison_qty || 1
+        );
+        syncHistoryRowsWithRecord(updatedRecord, code);
+
+        if (lookupSequence === state.lookupSequence && String(state.els.barcodeInput.value || "").trim() === code) {
+          renderProductData({
+            product: parsedProduct?.product || parsedProduct,
+            sale: parsedDiscount
+          });
+        }
+      })
+      .catch(function () {
+        // Temporary discount lookups are background-only for scan speed.
+      });
   }
 
   async function openHistoryEditor(index) {
@@ -2190,8 +1577,7 @@
         comparison_qty: comparisonQty
       });
       setStatus(`Saved quantity for ${currentItem.barcode}`);
-      showHistoryEditSuccessMessage("Saved successfully");
-      state.historyEditCloseTimer = window.setTimeout(closeHistoryEditDialog, 1800);
+      closeHistoryEditDialog();
       return;
     }
 
@@ -2335,8 +1721,7 @@
     }
 
     setStatus(`Saved ${updatedItem.barcode}`);
-    showHistoryEditSuccessMessage("Saved successfully");
-    state.historyEditCloseTimer = window.setTimeout(closeHistoryEditDialog, 1800);
+    closeHistoryEditDialog();
   }
 
   function supportsConfiguredScannerEngine() {
@@ -2386,10 +1771,6 @@
     if (state.scanTimer) {
       window.clearTimeout(state.scanTimer);
       state.scanTimer = 0;
-    }
-    if (state.scanAnimationFrame && typeof window.cancelAnimationFrame === "function") {
-      window.cancelAnimationFrame(state.scanAnimationFrame);
-      state.scanAnimationFrame = 0;
     }
     state.isScanLoopScheduled = false;
     state.isScanInFlight = false;
@@ -2480,6 +1861,7 @@
     state.isCameraRunning = false;
     state.torchOn = false;
     updateTorchUi(false, false);
+
     const scanner = state.scanner;
     const currentStream = state.stream;
     state.scanner = null;
@@ -2690,17 +2072,13 @@
       return;
     }
 
-    if (state.els.barcodeInput.value !== code) {
-      state.els.barcodeInput.value = code;
-    }
+    state.els.barcodeInput.value = code;
     playCaptureSound();
     stopScanning(true);
 
     try {
       await fetchProductInfo(code);
     } catch (error) {
-      state.lastDetectedBarcode = "";
-      state.lastDetectedAt = 0;
       setStatus(error.message || "Barcode was captured, but info request failed");
     }
   }
@@ -2713,18 +2091,18 @@
   }
 
   function getDetectionCropModes() {
-    if (state.isIOS) {
+    if (isIOSDevice()) {
       return ["full", "square", "wide"];
     }
     return CONFIG.detectionCropModes;
   }
 
   function getScanLoopIntervalMs() {
-    if (state.isIOS) {
-      return CONFIG.iosScanIntervalMs;
+    if (isIOSDevice()) {
+      return 450;
     }
     if (state.isMobileUi) {
-      return CONFIG.mobileScanIntervalMs;
+      return 750;
     }
     return CONFIG.scanIntervalMs;
   }
@@ -2732,14 +2110,14 @@
   function drawDetectionFrame(mode) {
     const video = state.els.cameraPreview;
     const canvas = state.els.captureCanvas;
-    const context = state.captureContext || canvas.getContext("2d", { alpha: false });
+    const context = canvas.getContext("2d", { alpha: false });
     const videoWidth = video.videoWidth || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
     const videoHeight = video.videoHeight || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
     let sx = 0;
     let sy = 0;
     let sw = videoWidth;
     let sh = videoHeight;
-    const isiOS = state.isIOS;
+    const isiOS = isIOSDevice();
 
     if (mode === "wide") {
       sw = Math.max(1, Math.floor(videoWidth * (isiOS ? 0.98 : 0.94)));
@@ -2761,16 +2139,8 @@
 
     const maxOutputSize = state.isMobileUi ? 720 : 960;
     const scale = Math.min(1, maxOutputSize / Math.max(sw, sh));
-    const outputWidth = Math.max(1, Math.round(sw * scale));
-    const outputHeight = Math.max(1, Math.round(sh * scale));
-
-    if (canvas.width !== outputWidth) {
-      canvas.width = outputWidth;
-    }
-    if (canvas.height !== outputHeight) {
-      canvas.height = outputHeight;
-    }
-
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
     context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
@@ -2791,12 +2161,17 @@
       return "";
     }
 
-    const detectionCropModes = getDetectionCropModes();
-    for (let index = 0; index < detectionCropModes.length; index += 1) {
-      const mode = detectionCropModes[index];
-      const source = mode === "full" ? state.els.cameraPreview : drawDetectionFrame(mode);
+    const sources = getDetectionCropModes().map(function (mode) {
+      return {
+        mode: mode,
+        source: mode === "full" ? state.els.cameraPreview : drawDetectionFrame(mode)
+      };
+    });
+
+    for (let index = 0; index < sources.length; index += 1) {
+      const currentSource = sources[index];
       try {
-        const results = await detector.detect(source);
+        const results = await detector.detect(currentSource.source);
         const detectedText = normalizeDetectedText(results?.[0]);
         if (detectedText) {
           return detectedText;
@@ -2822,7 +2197,7 @@
           }
           settled = true;
           resolve();
-        }, state.isIOS ? 55 : 35);
+        }, isIOSDevice() ? 140 : 90);
 
         video.requestVideoFrameCallback(function () {
           if (settled) {
@@ -2836,33 +2211,16 @@
     }
 
     return new Promise(function (resolve) {
-      window.setTimeout(resolve, state.isIOS ? 24 : 16);
+      window.setTimeout(resolve, isIOSDevice() ? 70 : 35);
     });
   }
 
-  function wasRecentlyDetected(detectedText) {
-    const code = String(detectedText || "").trim();
-    if (!code) {
-      return false;
-    }
-
-    const now = Date.now();
-    if (state.lastDetectedBarcode === code && (now - state.lastDetectedAt) < CONFIG.duplicateScanCooldownMs) {
-      return true;
-    }
-
-    state.lastDetectedBarcode = code;
-    state.lastDetectedAt = now;
-    return false;
-  }
-
   async function captureAttempt() {
-    const video = state.els.cameraPreview;
-    if (!state.isCameraRunning || !state.track || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    if (!state.isCameraRunning || !state.track || state.els.cameraPreview.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       return false;
     }
 
-    await waitForFreshVideoFrame(video);
+    await waitForFreshVideoFrame(state.els.cameraPreview);
     const detectedText = await detectBarcodeInFrame();
 
     if (!detectedText) {
@@ -2870,27 +2228,17 @@
       return false;
     }
 
-    if (wasRecentlyDetected(detectedText)) {
-      return false;
+    state.els.barcodeInput.value = detectedText;
+    playCaptureSound();
+    stopScanning(true);
+
+    try {
+      await fetchProductInfo(detectedText);
+      return true;
+    } catch (error) {
+      setStatus(error.message || "Barcode was captured, but info request failed");
+      return true;
     }
-
-    await handleDetectedCode(detectedText);
-    return true;
-  }
-
-  function scheduleScanCallback(callback, delayMs) {
-    state.scanTimer = window.setTimeout(function () {
-      state.scanTimer = 0;
-      if (typeof window.requestAnimationFrame === "function") {
-        state.scanAnimationFrame = window.requestAnimationFrame(function () {
-          state.scanAnimationFrame = 0;
-          callback();
-        });
-        return;
-      }
-
-      callback();
-    }, delayMs);
   }
 
   async function runScanLoop() {
@@ -2899,7 +2247,7 @@
     }
 
     state.isScanLoopScheduled = true;
-    scheduleScanCallback(function () {
+    state.scanTimer = window.setTimeout(async function () {
       state.isScanLoopScheduled = false;
       if (!state.isScanning || state.isScanInFlight) {
         if (state.isScanning) {
@@ -2910,28 +2258,24 @@
         return;
       }
 
-      (async function () {
-        state.isScanInFlight = true;
-        try {
-          const detected = await captureAttempt();
-          if (!detected && state.isScanning) {
-            runScanLoop().catch(() => {
-              // Ignore transient reschedule issues.
-            });
-          }
-        } catch {
-          setStatus("Scanning had a temporary read error");
-          if (state.isScanning) {
-            runScanLoop().catch(() => {
-              // Ignore transient reschedule issues.
-            });
-          }
-        } finally {
-          state.isScanInFlight = false;
+      state.isScanInFlight = true;
+      try {
+        const detected = await captureAttempt();
+        if (!detected && state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
         }
-      }()).catch(() => {
-        // Ignore transient async scan loop issues.
-      });
+      } catch {
+        setStatus("Scanning had a temporary read error");
+        if (state.isScanning) {
+          runScanLoop().catch(() => {
+            // Ignore transient reschedule issues.
+          });
+        }
+      } finally {
+        state.isScanInFlight = false;
+      }
     }, getScanLoopIntervalMs());
   }
 
@@ -2991,6 +2335,7 @@
     await applyTrackEnhancements(track, activeVideoConfig);
     scheduleFocusRefresh(track);
     await refreshDevices(state.activeDeviceId);
+    await syncTorchSupport();
   }
 
   function waitForVideoReadiness(video) {
@@ -3105,83 +2450,44 @@
     await requestFocusRefresh(track);
   }
 
-  function getTorchTrack() {
-    return state.track || getActiveStreamTrackFromPreview() || null;
-  }
-
-  function readTorchStateFromTrack(track) {
-    if (!track?.getSettings) {
-      return state.torchOn;
-    }
-
-    try {
-      const settings = track.getSettings();
-      if (typeof settings.torch === "boolean") {
-        return settings.torch;
-      }
-    } catch {
-      // Ignore unsupported settings reads.
-    }
-
-    return state.torchOn;
-  }
-
   function updateTorchUi(supported, enabled) {
-    if (!state.els?.torchBtn) {
-      return;
-    }
-
-    const isEnabled = Boolean(enabled);
-    state.els.torchBtn.disabled = !state.isCameraRunning;
-    state.els.torchBtn.classList.toggle("is-on", isEnabled);
-    state.els.torchBtn.classList.toggle("torch-on", isEnabled);
-    state.els.torchBtn.setAttribute(
-      "aria-label",
-      state.isCameraRunning ? (isEnabled ? "Torch on" : "Torch off") : "Torch unavailable"
-    );
-    state.els.torchBtn.title = state.isCameraRunning ? (isEnabled ? "Torch on" : "Torch off") : "Torch unavailable";
+    state.els.torchBtn.disabled = !supported || !state.isCameraRunning;
+    state.els.torchBtn.textContent = enabled ? "Torch On" : "Torch Off";
   }
 
   async function syncTorchSupport() {
-    const liveTrack = getTorchTrack();
-    if (!liveTrack?.getCapabilities) {
-      state.torchOn = false;
+    if (!state.track?.getCapabilities) {
       updateTorchUi(false, false);
       return;
     }
 
-    const capabilities = liveTrack.getCapabilities();
+    const capabilities = state.track.getCapabilities();
     const supported = !!capabilities.torch;
     if (!supported) {
-      state.torchOn = readTorchStateFromTrack(liveTrack);
-    } else {
-      state.torchOn = readTorchStateFromTrack(liveTrack);
+      state.torchOn = false;
     }
-    updateTorchUi(true, state.torchOn);
+    updateTorchUi(supported, state.torchOn);
   }
 
   async function toggleTorch() {
-    const liveTrack = getTorchTrack();
-    if (!liveTrack?.applyConstraints || !liveTrack.getCapabilities) {
-      setStatus("Torch is not available because the camera is not ready");
+    if (!state.track?.applyConstraints || !state.track.getCapabilities) return;
+
+    const capabilities = state.track.getCapabilities();
+    if (!capabilities.torch) {
       updateTorchUi(false, false);
+      setStatus("Torch is not supported on this camera");
       return;
     }
 
-    const capabilities = liveTrack.getCapabilities();
-    const nextTorchState = !readTorchStateFromTrack(liveTrack);
+    state.torchOn = !state.torchOn;
     try {
-      await liveTrack.applyConstraints({ advanced: [{ torch: nextTorchState }] });
-      state.torchOn = readTorchStateFromTrack(liveTrack);
-      if (state.torchOn !== nextTorchState) {
-        state.torchOn = nextTorchState;
-      }
+      await state.track.applyConstraints({ advanced: [{ torch: state.torchOn }] });
       updateTorchUi(true, state.torchOn);
       setStatus(state.torchOn ? "Torch enabled" : "Torch disabled");
-    } catch (error) {
+    } catch {
       state.torchOn = false;
-      updateTorchUi(false, false);
-      setStatus(error?.message || (capabilities.torch ? "Torch control failed on this device" : "Torch is not supported on this camera"));
+      updateTorchUi(true, false);
+      setStatus("Torch control failed on this device");
     }
   }
 
@@ -3217,7 +2523,6 @@
 
       state.isCameraRunning = true;
       state.isScanning = false;
-      await syncTorchSupport();
       setPreviewActive(true);
       updateResolutionBadge();
       updateScanButton();
@@ -3299,9 +2604,9 @@
     }
   }
 
-  async function handleBarcodeLookup(options) {
+  async function handleBarcodeLookup() {
     try {
-      await fetchProductInfo(state.els.barcodeInput.value, options);
+      await fetchProductInfo(state.els.barcodeInput.value);
     } catch (error) {
       setStatus(error.message || "Could not load product info");
     }
@@ -3327,10 +2632,7 @@
     state.els.searchBarcodeBtn.addEventListener("click", async function () {
       state.els.searchBarcodeBtn.disabled = true;
       try {
-        await handleBarcodeLookup({
-          allowClosestSearch: true,
-          addToHistoryBeforeLookup: false
-        });
+        await handleBarcodeLookup();
       } finally {
         state.els.searchBarcodeBtn.disabled = false;
       }
@@ -3352,7 +2654,6 @@
       state.els.sendTxtBtn.disabled = true;
       try {
         await sendTxtList();
-        closePrintDialog();
       } catch (error) {
         setStatus(error.message || "Send TXT failed");
       } finally {
@@ -3397,20 +2698,6 @@
     });
 
     state.els.printBackBtn.addEventListener("click", closePrintDialog);
-    state.els.torchBtn.addEventListener("click", async function () {
-      state.els.torchBtn.disabled = true;
-      try {
-        await toggleTorch();
-      } finally {
-        await syncTorchSupport();
-      }
-    });
-
-    state.els.closestSearchBackBtn.addEventListener("click", function () {
-      if (!state.isClosestSearchLoading) {
-        closeClosestSearchDialog();
-      }
-    });
 
     state.els.historyList.addEventListener("click", function (event) {
       const detailButton = event.target.closest('[data-action="detail"]');
@@ -3432,24 +2719,6 @@
       }
     });
 
-    state.els.closestSearchList.addEventListener("click", async function (event) {
-      const selectButton = event.target.closest('[data-action="select-closest"]');
-      if (!selectButton) {
-        return;
-      }
-
-      const matchIndex = Number(selectButton.dataset.index);
-      if (Number.isNaN(matchIndex)) {
-        return;
-      }
-
-      try {
-        await handleClosestSearchSelection(matchIndex);
-      } catch (error) {
-        setStatus(error.message || "Could not load selected product");
-      }
-    });
-
     state.els.historyList.addEventListener("keydown", function (event) {
       if (event.key !== "Enter" && event.key !== " ") return;
       const record = event.target.closest(".history-item");
@@ -3464,20 +2733,7 @@
     state.els.barcodeInput.addEventListener("keydown", async function (event) {
       if (event.key !== "Enter") return;
       event.preventDefault();
-      event.stopPropagation();
       await handleBarcodeLookup();
-      window.setTimeout(function () {
-        state.els.barcodeInput.blur();
-      }, 0);
-    });
-
-    state.els.barcodeInput.addEventListener("keyup", function (event) {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      event.stopPropagation();
-      window.setTimeout(function () {
-        state.els.barcodeInput.blur();
-      }, 0);
     });
 
     state.els.cameraSelect.addEventListener("change", async function () {
@@ -3491,14 +2747,23 @@
       }
     });
 
+    state.els.torchBtn.addEventListener("click", async function () {
+      state.els.torchBtn.disabled = true;
+      try {
+        await toggleTorch();
+      } finally {
+        await syncTorchSupport();
+      }
+    });
+
     state.els.settingsBtn.addEventListener("click", openSettingsDialog);
     state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
     state.els.compactToggleBtn.addEventListener("click", function () {
-      const nextDisplayMode = state.displayMode === "compact" ? "full" : "compact";
-      applyDisplayMode(nextDisplayMode);
+      const nextCompactMode = !state.isCompactMode;
+      applyCompactMode(nextCompactMode);
       saveSettings({
         ...readSavedSettings(),
-        displayMode: nextDisplayMode
+        compactMode: nextCompactMode
       }, { silent: true });
     });
 
@@ -3507,7 +2772,7 @@
         shopKey: state.els.shopKeyInput.value.trim(),
         login: state.els.loginInput.value.trim(),
         password: state.els.passwordInput.value,
-        displayMode: state.displayMode
+        compactMode: state.isCompactMode
       };
 
       saveSettings(values);
@@ -3562,19 +2827,11 @@
       }
     });
 
-    state.els.closestSearchDialog.addEventListener("click", function (event) {
-      if (event.target === state.els.closestSearchDialog && !state.isClosestSearchLoading) {
-        closeClosestSearchDialog();
-      }
-    });
-
     state.els.historyEditSaveBtn.addEventListener("click", async function () {
       state.els.historyEditSaveBtn.disabled = true;
       try {
         await saveHistoryEditorChanges();
       } catch (error) {
-        clearHistoryEditFeedbackTimers();
-        state.els.historyEditSaveNote.classList.remove("show-success");
         state.els.historyEditSaveNote.textContent = error.message || "Save failed.";
         if (!error?.toastShown) {
           showToast("Save failed");
@@ -3639,17 +2896,14 @@
 
     state.els = queryElements();
     requireElements(state.els);
-    ensureCompactToggleButton();
-    state.isIOS = isIOSDevice();
     state.isMobileUi = detectMobileUi();
-    state.captureContext = state.els.captureCanvas?.getContext("2d", { alpha: false }) || null;
     cacheResultFieldElements();
 
     const savedSettings = readSavedSettings();
     loadCookieState();
     loadHistoryState();
     fillSettingsForm(savedSettings);
-    applyDisplayMode(savedSettings.displayMode);
+    applyCompactMode(savedSettings.compactMode);
     clearResultFields();
     renderHistory();
     bindEvents();
