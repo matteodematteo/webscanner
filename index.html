@@ -2,1108 +2,168 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Barcode Scanner</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QR Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-  :root{
-    --bg: #14171c;
-    --panel: #1c2128;
-    --panel-alt: #242a33;
-    --border: #333a45;
-    --text: #e8eaed;
-    --text-muted: #8a94a3;
-    --laser: #ff3b30;
-    --amber: #ffb300;
-    --success: #34d399;
-    --font-display: 'IBM Plex Mono', monospace;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  }
-
-  *{ box-sizing: border-box; }
-
-  html, body{
-    margin:0; padding:0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font-body);
-    height: 100%;
-  }
-
-  body{
-    display:flex;
-    justify-content:center;
-    padding: 18px;
-  }
-
-  .app{
-    width:100%;
-    max-width: 480px;
-    display:flex;
-    flex-direction:column;
-    gap:14px;
-  }
-
-  .eyebrow{
-    font-family: var(--font-display);
-    font-size: 11px;
-    letter-spacing: 2.5px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    display:flex;
-    align-items:center;
-    gap:8px;
-  }
-  .eyebrow .spacer{ flex:1; }
-  .af-badge{
-    font-family: var(--font-display);
-    font-size: 10px;
-    letter-spacing: 1px;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 2px 7px;
-    display:none;
-    text-transform: none;
-  }
-  .af-badge.show{ display:inline-block; }
-  .af-badge.active{ color: var(--success); border-color: var(--success); }
-  .eyebrow .dot{
-    width:6px; height:6px; border-radius:50%;
-    background: var(--border);
-  }
-  .eyebrow .dot.live{
-    background: var(--laser);
-    box-shadow: 0 0 8px var(--laser);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  @keyframes pulse{
-    0%,100%{ opacity:1; }
-    50%{ opacity:0.35; }
-  }
-
-  /* ---------- camera panel ---------- */
-  .scanner-panel{
-    position:relative;
-    background: #0b0d10;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    overflow:hidden;
-    aspect-ratio: 4/3;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  }
-
-  video{
-    width:100%;
-    height:100%;
-    object-fit: cover;
-    display:none;
-  }
-  video.on{ display:block; }
-
-  .placeholder{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap:10px;
-    color: var(--text-muted);
-    padding: 20px;
-    text-align:center;
-  }
-  .placeholder svg{ opacity:0.5; }
-  .placeholder.hidden{ display:none; }
-
-  .placeholder .status-line{
-    font-family: var(--font-display);
-    font-size: 12px;
-    letter-spacing: 0.5px;
-  }
-
-  /* laser scan line — signature element */
-  .laser-line{
-    position:absolute;
-    left:6%; right:6%;
-    height:2px;
-    background: linear-gradient(90deg, transparent, var(--laser) 15%, var(--laser) 85%, transparent);
-    box-shadow: 0 0 10px 1px var(--laser), 0 0 24px 4px rgba(255,59,48,0.35);
-    top:0;
-    opacity:0;
-    pointer-events:none;
-  }
-  .laser-line.active{
-    animation: sweep 1.6s ease-in-out infinite;
-    opacity:1;
-  }
-  @keyframes sweep{
-    0%   { top: 12%; opacity: 0; }
-    8%   { opacity: 1; }
-    50%  { top: 88%; }
-    92%  { opacity: 1; }
-    100% { top: 12%; opacity: 0; }
-  }
-
-  .frame-corners span{
-    position:absolute;
-    width:22px; height:22px;
-    border-color: rgba(255,255,255,0.35);
-    border-style: solid;
-    border-width:0;
-  }
-  .frame-corners.hidden{ display:none; }
-  .fc-tl{ top:10%; left:6%; border-top-width:2px; border-left-width:2px; border-radius: 4px 0 0 0;}
-  .fc-tr{ top:10%; right:6%; border-top-width:2px; border-right-width:2px; border-radius: 0 4px 0 0;}
-  .fc-bl{ bottom:10%; left:6%; border-bottom-width:2px; border-left-width:2px; border-radius: 0 0 0 4px;}
-  .fc-br{ bottom:10%; right:6%; border-bottom-width:2px; border-right-width:2px; border-radius: 0 0 4px 0;}
-
-  .flash-toast{
-    position:absolute;
-    bottom:10px; left:50%;
-    transform: translateX(-50%) translateY(8px);
-    background: rgba(20,23,28,0.92);
-    border: 1px solid var(--success);
-    color: var(--success);
-    font-family: var(--font-display);
-    font-size: 12px;
-    padding: 6px 12px;
-    border-radius: 8px;
-    opacity:0;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    white-space: nowrap;
-    max-width: 90%;
-    overflow:hidden;
-    text-overflow: ellipsis;
-  }
-  .flash-toast.show{
-    opacity:1;
-    transform: translateX(-50%) translateY(0);
-  }
-
-  /* ---------- controls ---------- */
-  .mode-toggle{
-    display:flex;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 3px;
-    gap:3px;
-  }
-  .mode-toggle button{
-    flex:1;
-    border:none;
-    background: transparent;
-    color: var(--text-muted);
-    font-family: var(--font-body);
-    font-weight:600;
-    font-size: 13px;
-    padding: 9px 10px;
-    border-radius: 9px;
-    cursor:pointer;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-  .mode-toggle button.active{
-    background: var(--panel-alt);
-    color: var(--amber);
-    box-shadow: inset 0 0 0 1px var(--border);
-  }
-  .mode-toggle button:hover:not(.active){ color: var(--text); }
-
-  .permission-hint{
-    font-size: 12px;
-    color: var(--text-muted);
-    text-align:center;
-    line-height:1.5;
-    display:none;
-  }
-  .permission-hint.show{ display:block; }
-  .permission-hint a, .permission-hint .retry-link{
-    color: var(--amber);
-    cursor:pointer;
-    text-decoration: underline;
-  }
-
-  /* ---------- scan+quantity confirm overlay ---------- */
-  .confirm-overlay{
-    position:absolute;
-    inset:0;
-    background: rgba(11,13,16,0.88);
-    display:none;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    gap:14px;
-    padding: 20px;
-    text-align:center;
-    backdrop-filter: blur(2px);
-  }
-  .confirm-overlay.show{ display:flex; }
-  .confirm-label{
-    font-size:11px;
-    letter-spacing: 2px;
-    text-transform:uppercase;
-    color: var(--text-muted);
-    font-family: var(--font-display);
-  }
-  .confirm-code{
-    font-family: var(--font-display);
-    font-size: 20px;
-    font-weight:700;
-    color: var(--text);
-    word-break: break-all;
-    max-width: 100%;
-  }
-  .confirm-qty{
-    display:flex;
-    align-items:center;
-    gap:14px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 8px 10px;
-  }
-  .confirm-qty button{
-    width:34px; height:34px;
-    border:none;
-    border-radius:9px;
-    background: var(--panel-alt);
-    color: var(--amber);
-    font-family: var(--font-display);
-    font-size:18px;
-    cursor:pointer;
-  }
-  .confirm-qty button:hover{ filter: brightness(1.2); }
-  .confirm-qty .confirm-qty-value{
-    font-family: var(--font-display);
-    font-size:18px;
-    min-width: 32px;
-    text-align:center;
-  }
-  .confirm-actions{
-    display:flex;
-    gap:10px;
-    width:100%;
-  }
-  .confirm-actions button{
-    flex:1;
-    font-family: var(--font-body);
-    font-weight:600;
-    font-size: 14px;
-    padding: 11px 12px;
-    border-radius: 10px;
-    cursor:pointer;
-    border: 1px solid var(--border);
-  }
-  .confirm-add{
-    background: var(--laser);
-    border-color: var(--laser) !important;
-    color:#fff;
-  }
-  .confirm-add:hover{ filter: brightness(1.08); }
-  .confirm-rescan{
-    background: var(--panel-alt);
-    color: var(--text);
-  }
-  .confirm-rescan:hover{ border-color: var(--text-muted); }
-
-  .focus-ring{
-    position:absolute;
-    width:58px; height:58px;
-    top:0; left:0;
-    border: 2px solid var(--amber);
-    border-radius: 50%;
-    pointer-events:none;
-    opacity:0;
-    transform: translate(-50%,-50%) scale(1.4);
-  }
-  .focus-ring.pulse{
-    animation: focusPulse 0.7s ease-out;
-  }
-  @keyframes focusPulse{
-    0%   { opacity:0;   transform: translate(-50%,-50%) scale(1.5); }
-    18%  { opacity:1;   transform: translate(-50%,-50%) scale(1); }
-    75%  { opacity:1;   transform: translate(-50%,-50%) scale(0.88); }
-    100% { opacity:0;   transform: translate(-50%,-50%) scale(0.88); }
-  }
-
-  .tap-hint{
-    position:absolute;
-    bottom:10px; left:50%;
-    transform: translateX(-50%);
-    font-family: var(--font-body);
-    font-size: 11px;
-    color: var(--text-muted);
-    background: rgba(11,13,16,0.72);
-    padding: 5px 10px;
-    border-radius: 8px;
-    opacity:0;
-    transition: opacity 0.3s ease;
-    pointer-events:none;
-    white-space:nowrap;
-  }
-  .tap-hint.show{ opacity:1; }
-
-  .scan-btn{
-    font-family: var(--font-body);
-    font-weight:600;
-    font-size:15px;
-    border:none;
-    border-radius: 12px;
-    padding: 14px 18px;
-    cursor:pointer;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:8px;
-    background: var(--laser);
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #111;
     color: #fff;
-    transition: filter 0.15s ease, transform 0.05s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
   }
-  .scan-btn:active{ transform: scale(0.98); }
-  .scan-btn:hover{ filter: brightness(1.08); }
-  .scan-btn.stop{
-    background: var(--panel-alt);
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
-
-  .manual-row{
-    display:flex;
-    gap:8px;
-  }
-  .manual-row input[type="text"]{
-    flex:1;
-    min-width:0;
-  }
-  input[type="text"], input[type="number"]{
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: var(--font-display);
-    font-size: 13px;
-    padding: 11px 12px;
-    border-radius: 10px;
-    outline:none;
-  }
-  input[type="number"]{ width: 64px; text-align:center; }
-  input[type="text"]:focus, input[type="number"]:focus{
-    border-color: var(--amber);
-  }
-  input::placeholder{ color: var(--text-muted); font-family: var(--font-body); }
-
-  .add-btn{
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--amber);
-    font-family: var(--font-display);
-    font-weight:600;
+  h1 {
     font-size: 18px;
-    width: 44px;
+    font-weight: 600;
+    margin: 8px 0 16px;
+  }
+  #reader-wrap {
+    width: 100%;
+    max-width: 480px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+  }
+  #reader {
+    width: 100%;
+  }
+  /* Hide the library's default UI chrome we don't need */
+  #reader__dashboard_section_csr button,
+  #reader__filescan_input,
+  #reader__camera_selection {
+    display: none !important;
+  }
+  #result-box {
+    width: 100%;
+    max-width: 480px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: #1e1e1e;
     border-radius: 10px;
-    cursor:pointer;
+    min-height: 24px;
+    font-size: 15px;
+    word-break: break-all;
+    border: 1px solid #333;
   }
-  .add-btn:hover{ border-color: var(--amber); }
-
-  /* ---------- ledger / list ---------- */
-  .ledger-head{
-    display:flex;
-    justify-content:space-between;
-    align-items:baseline;
-    font-family: var(--font-display);
-    font-size: 11px;
-    letter-spacing: 2px;
+  #status {
+    font-size: 13px;
+    color: #888;
+    margin-top: 8px;
+    text-align: center;
+  }
+  #result-label {
+    font-size: 12px;
     text-transform: uppercase;
-    color: var(--text-muted);
-    padding: 2px 2px 0;
-  }
-  .ledger-head .count{ color: var(--amber); }
-
-  .ledger{
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    max-height: 320px;
-    overflow-y: auto;
-    display:flex;
-    flex-direction:column;
-  }
-  .ledger::-webkit-scrollbar{ width: 8px; }
-  .ledger::-webkit-scrollbar-thumb{ background: var(--border); border-radius: 8px; }
-
-  .empty-state{
-    padding: 34px 20px;
-    text-align:center;
-    color: var(--text-muted);
-    font-size: 13px;
-    line-height: 1.6;
-  }
-
-  .entry{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding: 12px 14px;
-    border-bottom: 1px dashed var(--border);
-    animation: slideIn 0.25s ease;
-  }
-  .entry:last-child{ border-bottom:none; }
-  @keyframes slideIn{
-    from{ opacity:0; transform: translateY(-6px); }
-    to{ opacity:1; transform: translateY(0); }
-  }
-
-  .entry-main{
-    flex:1;
-    min-width:0;
-  }
-  .entry-code{
-    font-family: var(--font-display);
-    font-size: 14px;
-    font-weight:600;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow: ellipsis;
-  }
-  .entry-time{
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 2px;
-  }
-
-  .qty-control{
-    display:flex;
-    align-items:center;
-    gap:6px;
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 2px;
-  }
-  .qty-control button{
-    width:24px; height:24px;
-    border:none;
-    background:transparent;
-    color: var(--amber);
-    font-family: var(--font-display);
-    font-size: 14px;
-    cursor:pointer;
-    border-radius: 6px;
-  }
-  .qty-control button:hover{ background: rgba(255,179,0,0.12); }
-  .qty-value{
-    font-family: var(--font-display);
-    font-size: 13px;
-    min-width: 20px;
-    text-align:center;
-  }
-
-  .delete-btn{
-    width:28px; height:28px;
-    border:none;
-    background:transparent;
-    color: var(--text-muted);
-    font-size: 16px;
-    cursor:pointer;
-    border-radius: 6px;
-    flex-shrink:0;
-  }
-  .delete-btn:hover{ color: var(--laser); background: rgba(255,59,48,0.1); }
-
-  .footer-note{
-    font-size: 11px;
-    color: var(--text-muted);
-    text-align:center;
-    line-height:1.5;
-    padding: 2px 12px 0;
+    letter-spacing: 0.05em;
+    color: #4caf50;
+    display: block;
+    margin-bottom: 4px;
   }
 </style>
 </head>
 <body>
 
-<div class="app">
+<h1>QR Code Scanner</h1>
 
-  <div class="eyebrow"><span class="dot" id="liveDot"></span><span id="eyebrowText">Ready to scan</span><span class="spacer"></span><span class="af-badge" id="afBadge">AF</span></div>
-
-  <div class="scanner-panel" id="scannerPanel">
-    <video id="video" playsinline muted></video>
-    <div class="laser-line" id="laserLine"></div>
-    <div class="frame-corners hidden" id="frameCorners">
-      <span class="fc-tl"></span><span class="fc-tr"></span><span class="fc-bl"></span><span class="fc-br"></span>
-    </div>
-    <div class="placeholder" id="placeholder">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <rect x="3" y="6" width="2" height="12"></rect>
-        <rect x="7" y="6" width="1" height="12"></rect>
-        <rect x="10" y="6" width="3" height="12"></rect>
-        <rect x="15" y="6" width="1" height="12"></rect>
-        <rect x="18" y="6" width="2" height="12"></rect>
-        <rect x="21" y="6" width="1" height="12"></rect>
-      </svg>
-      <div class="status-line" id="statusLine">CAMERA OFF</div>
-    </div>
-    <div class="flash-toast" id="flashToast"></div>
-    <div class="focus-ring" id="focusRing"></div>
-    <div class="tap-hint" id="tapHint">Tap to focus</div>
-
-    <div class="confirm-overlay" id="confirmOverlay">
-      <div class="confirm-label">Scanned</div>
-      <div class="confirm-code" id="confirmCode">—</div>
-      <div class="confirm-qty">
-        <button id="confirmQtyDec">−</button>
-        <span class="confirm-qty-value" id="confirmQtyValue">1</span>
-        <button id="confirmQtyInc">+</button>
-      </div>
-      <div class="confirm-actions">
-        <button class="confirm-rescan" id="confirmRescan">Rescan</button>
-        <button class="confirm-add" id="confirmAdd">Add to list</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="mode-toggle" id="modeToggle">
-    <button class="active" data-mode="quick" id="modeQuickBtn">Quick Add</button>
-    <button data-mode="confirm" id="modeConfirmBtn">Scan + Quantity</button>
-  </div>
-
-  <button class="scan-btn" id="scanBtn">
-    <span id="scanBtnLabel">▶ Start Scanning</span>
-  </button>
-
-  <div class="permission-hint" id="permissionHint"></div>
-
-  <div class="manual-row">
-    <input type="text" id="manualCode" placeholder="Enter barcode manually…">
-    <input type="number" id="manualQty" value="1" min="1">
-    <button class="add-btn" id="manualAddBtn" title="Add to list">+</button>
-  </div>
-
-  <div class="ledger-head">
-    <span>Captured</span>
-    <span class="count" id="entryCount">0</span>
-  </div>
-
-  <div class="ledger" id="ledger">
-    <div class="empty-state" id="emptyState">No barcodes yet.<br>Start scanning or add one manually.</div>
-  </div>
-
-  <div class="footer-note">Scanning the same code again adds to its quantity instead of duplicating the row.</div>
-
+<div id="reader-wrap">
+  <div id="reader"></div>
 </div>
 
+<div id="result-box">
+  <span id="result-label" style="display:none;">Last scanned</span>
+  <span id="result-text">Point camera at a QR code…</span>
+</div>
+<div id="status">Starting camera…</div>
+
 <script>
-(function(){
-  const video = document.getElementById('video');
-  const scannerPanel = document.getElementById('scannerPanel');
-  const placeholder = document.getElementById('placeholder');
-  const statusLine = document.getElementById('statusLine');
-  const laserLine = document.getElementById('laserLine');
-  const frameCorners = document.getElementById('frameCorners');
-  const scanBtn = document.getElementById('scanBtn');
-  const scanBtnLabel = document.getElementById('scanBtnLabel');
-  const liveDot = document.getElementById('liveDot');
-  const eyebrowText = document.getElementById('eyebrowText');
-  const flashToast = document.getElementById('flashToast');
-  const ledger = document.getElementById('ledger');
-  const emptyState = document.getElementById('emptyState');
-  const entryCount = document.getElementById('entryCount');
-  const manualCode = document.getElementById('manualCode');
-  const manualQty = document.getElementById('manualQty');
-  const manualAddBtn = document.getElementById('manualAddBtn');
-  const modeQuickBtn = document.getElementById('modeQuickBtn');
-  const modeConfirmBtn = document.getElementById('modeConfirmBtn');
-  const permissionHint = document.getElementById('permissionHint');
-  const confirmOverlay = document.getElementById('confirmOverlay');
-  const confirmCode = document.getElementById('confirmCode');
-  const confirmQtyValue = document.getElementById('confirmQtyValue');
-  const confirmQtyInc = document.getElementById('confirmQtyInc');
-  const confirmQtyDec = document.getElementById('confirmQtyDec');
-  const confirmRescan = document.getElementById('confirmRescan');
-  const confirmAdd = document.getElementById('confirmAdd');
-  const afBadge = document.getElementById('afBadge');
-  const focusRing = document.getElementById('focusRing');
-  const tapHint = document.getElementById('tapHint');
+(function () {
+  const resultText = document.getElementById("result-text");
+  const resultLabel = document.getElementById("result-label");
+  const statusEl = document.getElementById("status");
 
-  let focusCapable = false;
-  let pointFocusCapable = false;
-  let focusCaps = null;
-  let refocusTimer = null;
-
-  let entries = [];       // {id, code, qty, ts}
-  let stream = null;
-  let detectTimer = null;
-  let scanning = false;
-  let detector = null;
-  let lastSeen = {};       // code -> timestamp, to debounce repeat detections
-  const DEBOUNCE_MS = 1500;
-  const STORAGE_KEY = 'entries';
-
-  let mode = 'quick';           // 'quick' | 'confirm'
-  let awaitingConfirm = false;  // pauses detection while confirm overlay is open
-  let pendingCode = null;
-  let pendingQty = 1;
-
-  modeQuickBtn.addEventListener('click', () => setMode('quick'));
-  modeConfirmBtn.addEventListener('click', () => setMode('confirm'));
-
-  function setMode(next){
-    mode = next;
-    modeQuickBtn.classList.toggle('active', mode === 'quick');
-    modeConfirmBtn.classList.toggle('active', mode === 'confirm');
-    if(mode === 'quick') hideConfirmOverlay(false);
-  }
-
-  // ---------- persistence ----------
-  async function loadEntries(){
-    try{
-      const res = await window.storage.get(STORAGE_KEY, false);
-      if(res && res.value){
-        entries = JSON.parse(res.value);
-      }
-    }catch(e){
-      entries = [];
+  // Strict, minimal-processing configuration
+  const config = {
+    fps: 30,
+    qrbox: { width: 250, height: 250 },
+    aspectRatio: 1.0,
+    disableFlip: false,
+    videoConstraints: {
+      facingMode: { exact: "environment" },
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: false
     }
-    render();
-  }
+  };
 
-  async function saveEntries(){
-    try{
-      await window.storage.set(STORAGE_KEY, JSON.stringify(entries), false);
-    }catch(e){
-      console.error('Could not save entries', e);
-    }
-  }
-
-  // ---------- rendering ----------
-  function formatTime(ts){
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  }
-
-  function render(){
-    entryCount.textContent = entries.length;
-    ledger.querySelectorAll('.entry').forEach(el => el.remove());
-
-    if(entries.length === 0){
-      emptyState.style.display = 'block';
-      return;
-    }
-    emptyState.style.display = 'none';
-
-    // most recently touched first
-    const ordered = entries.slice().reverse();
-    ordered.forEach(entry => {
-      const row = document.createElement('div');
-      row.className = 'entry';
-      row.dataset.id = entry.id;
-      row.innerHTML = `
-        <div class="entry-main">
-          <div class="entry-code">${escapeHtml(entry.code)}</div>
-          <div class="entry-time">${formatTime(entry.ts)}</div>
-        </div>
-        <div class="qty-control">
-          <button class="qty-dec" title="Decrease quantity">−</button>
-          <span class="qty-value">${entry.qty}</span>
-          <button class="qty-inc" title="Increase quantity">+</button>
-        </div>
-        <button class="delete-btn" title="Remove">×</button>
-      `;
-      row.querySelector('.qty-inc').addEventListener('click', () => changeQty(entry.id, 1));
-      row.querySelector('.qty-dec').addEventListener('click', () => changeQty(entry.id, -1));
-      row.querySelector('.delete-btn').addEventListener('click', () => deleteEntry(entry.id));
-      ledger.appendChild(row);
-    });
-  }
-
-  function escapeHtml(str){
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  // ---------- entry logic ----------
-  function addEntry(code, qty){
-    qty = Math.max(1, parseInt(qty, 10) || 1);
-    code = String(code).trim();
-    if(!code) return;
-
-    const existingIndex = entries.findIndex(e => e.code === code);
-    if(existingIndex !== -1){
-      const existing = entries[existingIndex];
-      existing.qty += qty;
-      existing.ts = Date.now();
-      entries.splice(existingIndex, 1);
-      entries.push(existing);
-    } else {
-      entries.push({
-        id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
-        code,
-        qty,
-        ts: Date.now()
-      });
-    }
-    saveEntries();
-    render();
-    showFlash(code + (existingIndex !== -1 ? ' · qty updated' : ' · added'));
-  }
-
-  function changeQty(id, delta){
-    const entry = entries.find(e => e.id === id);
-    if(!entry) return;
-    entry.qty = Math.max(1, entry.qty + delta);
-    saveEntries();
-    render();
-  }
-
-  function deleteEntry(id){
-    entries = entries.filter(e => e.id !== id);
-    saveEntries();
-    render();
-  }
-
-  function showFlash(msg){
-    flashToast.textContent = msg;
-    flashToast.classList.add('show');
-    clearTimeout(showFlash._t);
-    showFlash._t = setTimeout(() => flashToast.classList.remove('show'), 1400);
-  }
-
-  // ---------- manual add ----------
-  manualAddBtn.addEventListener('click', () => {
-    if(!manualCode.value.trim()) return;
-    addEntry(manualCode.value, manualQty.value);
-    manualCode.value = '';
-    manualQty.value = 1;
-    manualCode.focus();
-  });
-  manualCode.addEventListener('keydown', (e) => {
-    if(e.key === 'Enter') manualAddBtn.click();
+  const html5QrCode = new Html5Qrcode("reader", {
+    formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
+    verbose: false
   });
 
-  // ---------- scan+quantity confirm overlay ----------
-  function openConfirmOverlay(code){
-    pendingCode = code;
-    pendingQty = 1;
-    confirmCode.textContent = code;
-    confirmQtyValue.textContent = pendingQty;
-    confirmOverlay.classList.add('show');
-    awaitingConfirm = true;
-    laserLine.classList.remove('active');
+  let lastCode = null;
+  let lastTime = 0;
+
+  function onScanSuccess(decodedText) {
+    const now = Date.now();
+    // Basic debounce so the same code doesn't spam the UI every frame
+    if (decodedText === lastCode && now - lastTime < 1500) return;
+    lastCode = decodedText;
+    lastTime = now;
+
+    resultLabel.style.display = "block";
+    resultText.textContent = decodedText;
+
+    if (navigator.vibrate) navigator.vibrate(80);
   }
 
-  function hideConfirmOverlay(debounceCode){
-    if(debounceCode && pendingCode){
-      lastSeen[pendingCode] = Date.now();
-    }
-    confirmOverlay.classList.remove('show');
-    awaitingConfirm = false;
-    pendingCode = null;
-    if(scanning) laserLine.classList.add('active');
+  function onScanFailure() {
+    // Expected on almost every frame with no QR code in view — ignore silently.
   }
 
-  confirmQtyInc.addEventListener('click', () => {
-    pendingQty += 1;
-    confirmQtyValue.textContent = pendingQty;
-  });
-  confirmQtyDec.addEventListener('click', () => {
-    pendingQty = Math.max(1, pendingQty - 1);
-    confirmQtyValue.textContent = pendingQty;
-  });
-  confirmAdd.addEventListener('click', () => {
-    if(pendingCode) addEntry(pendingCode, pendingQty);
-    hideConfirmOverlay(true);
-  });
-  confirmRescan.addEventListener('click', () => {
-    hideConfirmOverlay(true);
-  });
-
-  // ---------- camera permission + detection ----------
-  const supportsDetector = 'BarcodeDetector' in window;
-
-  function setPermissionHint(html){
-    if(!html){
-      permissionHint.classList.remove('show');
-      permissionHint.innerHTML = '';
-      return;
-    }
-    permissionHint.innerHTML = html;
-    permissionHint.classList.add('show');
+  function startWithConstraints(constraints) {
+    return html5QrCode.start(
+      constraints,
+      {
+        fps: config.fps,
+        qrbox: config.qrbox,
+        aspectRatio: config.aspectRatio,
+        formatsToSupport: config.formatsToSupport,
+        experimentalFeatures: config.experimentalFeatures,
+        videoConstraints: config.videoConstraints
+      },
+      onScanSuccess,
+      onScanFailure
+    );
   }
 
-  async function checkPermissionState(){
-    if(!navigator.permissions || !navigator.permissions.query) return null;
-    try{
-      const status = await navigator.permissions.query({ name: 'camera' });
-      return status;
-    }catch(e){
-      return null; // some browsers don't support querying 'camera'
-    }
-  }
-
-  async function startScan(){
-    setPermissionHint(null);
-
-    // Proactively check permission state so we can show a clear message
-    // instead of silently failing when access was previously denied.
-    const status = await checkPermissionState();
-    if(status && status.state === 'denied'){
-      statusLine.textContent = 'CAMERA BLOCKED';
-      placeholder.classList.remove('hidden');
-      setPermissionHint('Camera access is blocked for this page. Enable it in your browser\'s site settings, then <span class="retry-link" id="retryPermissionLink">try again</span>.');
-      const retry = document.getElementById('retryPermissionLink');
-      if(retry) retry.addEventListener('click', startScan);
-      return;
-    }
-
-    statusLine.textContent = 'REQUESTING CAMERA ACCESS…';
-    eyebrowText.textContent = 'Requesting camera access…';
-
-    try{
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          focusMode: 'continuous',
-          advanced: [{ focusMode: 'continuous' }]
-        },
-        audio: false
-      });
-    }catch(err){
-      placeholder.classList.remove('hidden');
-      if(err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')){
-        statusLine.textContent = 'CAMERA BLOCKED';
-        eyebrowText.textContent = 'Ready to scan';
-        setPermissionHint('Camera access was denied. Enable it in your browser\'s site settings, then <span class="retry-link" id="retryPermissionLink">try again</span>.');
-        const retry = document.getElementById('retryPermissionLink');
-        if(retry) retry.addEventListener('click', startScan);
-      } else if(err && err.name === 'NotFoundError'){
-        statusLine.textContent = 'NO CAMERA FOUND';
-        eyebrowText.textContent = 'Ready to scan';
-        showFlash('No camera found on this device');
-      } else {
-        statusLine.textContent = 'CAMERA UNAVAILABLE';
-        eyebrowText.textContent = 'Ready to scan';
-        showFlash('Camera unavailable — try manual entry');
-      }
-      return;
-    }
-
-    setPermissionHint(null);
-    video.srcObject = stream;
-    await video.play();
-    video.classList.add('on');
-    placeholder.classList.add('hidden');
-    frameCorners.classList.remove('hidden');
-    laserLine.classList.add('active');
-    liveDot.classList.add('live');
-    eyebrowText.textContent = 'Scanning…';
-    scanBtnLabel.textContent = '■ Stop Scanning';
-    scanBtn.classList.add('stop');
-    scanning = true;
-
-    setupFocus(stream);
-    tapHint.classList.add('show');
-    clearTimeout(setupFocus._hintTimer);
-    setupFocus._hintTimer = setTimeout(() => tapHint.classList.remove('show'), 3200);
-
-    if(supportsDetector){
-      if(!detector){
-        detector = new BarcodeDetector({
-          formats: ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','code_93','itf','codabar','qr_code']
+  // Try exact rear camera + 720p first; fall back to "ideal" if the device
+  // has no exact match (e.g. some Android devices, desktop testing).
+  startWithConstraints({ facingMode: { exact: "environment" } })
+    .then(() => {
+      statusEl.textContent = "Scanning…";
+    })
+    .catch(() => {
+      startWithConstraints({ facingMode: "environment" })
+        .then(() => {
+          statusEl.textContent = "Scanning…";
+        })
+        .catch((err) => {
+          statusEl.textContent = "Camera error: " + err;
         });
-      }
-      detectTimer = setInterval(async () => {
-        if(!scanning || awaitingConfirm) return;
-        try{
-          const codes = await detector.detect(video);
-          if(codes && codes.length){
-            const now = Date.now();
-            for(const c of codes){
-              const val = c.rawValue;
-              if(!val) continue;
-              if(!lastSeen[val] || now - lastSeen[val] > DEBOUNCE_MS){
-                lastSeen[val] = now;
-                if(mode === 'confirm'){
-                  openConfirmOverlay(val);
-                } else {
-                  addEntry(val, 1);
-                }
-                break; // handle one code per tick
-              }
-            }
-          }
-        }catch(e){ /* ignore transient detection errors */ }
-      }, 350);
-    } else {
-      showFlash('Live detection not supported here — use manual entry');
-    }
-  }
+    });
 
-  function stopScan(){
-    scanning = false;
-    hideConfirmOverlay(false);
-    if(detectTimer) clearInterval(detectTimer);
-    if(refocusTimer) clearInterval(refocusTimer);
-    if(stream){
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-    }
-    video.srcObject = null;
-    video.classList.remove('on');
-    placeholder.classList.remove('hidden');
-    frameCorners.classList.add('hidden');
-    laserLine.classList.remove('active');
-    liveDot.classList.remove('live');
-    eyebrowText.textContent = 'Ready to scan';
-    statusLine.textContent = 'CAMERA OFF';
-    scanBtnLabel.textContent = '▶ Start Scanning';
-    scanBtn.classList.remove('stop');
-    afBadge.classList.remove('show', 'active');
-    tapHint.classList.remove('show');
-    focusCapable = false;
-    pointFocusCapable = false;
-    focusCaps = null;
-  }
-
-  // ---------- focus management ----------
-  async function setupFocus(mediaStream){
-    focusCapable = false;
-    pointFocusCapable = false;
-    focusCaps = null;
-    afBadge.classList.remove('show', 'active');
-
-    const track = mediaStream.getVideoTracks()[0];
-    if(!track || !track.getCapabilities){
-      return; // this browser can't report or control focus at all
-    }
-
-    let caps;
-    try{
-      caps = track.getCapabilities();
-    }catch(e){
-      return;
-    }
-
-    if(!caps.focusMode || !caps.focusMode.length){
-      afBadge.textContent = 'AF · fixed';
-      afBadge.classList.add('show');
-      return; // hardware has no adjustable focus (e.g. fixed-focus webcam)
-    }
-
-    focusCaps = caps;
-    focusCapable = true;
-    pointFocusCapable = !!(caps.pointsOfInterest);
-
-    const preferred = caps.focusMode.includes('continuous') ? 'continuous' : caps.focusMode[0];
-    try{
-      await track.applyConstraints({ advanced: [{ focusMode: preferred }] });
-    }catch(e){ /* device rejected it — keep default focus behavior */ }
-
-    afBadge.textContent = pointFocusCapable ? 'AF · tap to focus' : 'AF · continuous';
-    afBadge.classList.add('show', 'active');
-
-    // Continuous AF can occasionally settle on a slightly soft image;
-    // nudging it with a brief single-shot refocus periodically keeps
-    // small, close-up barcodes crisp without needing user input.
-    if(caps.focusMode.includes('single-shot') && caps.focusMode.includes('continuous')){
-      if(refocusTimer) clearInterval(refocusTimer);
-      refocusTimer = setInterval(() => {
-        if(!scanning || awaitingConfirm) return;
-        nudgeRefocus();
-      }, 4000);
-    }
-  }
-
-  async function nudgeRefocus(point){
-    if(!stream || !focusCapable) return;
-    const track = stream.getVideoTracks()[0];
-    if(!track) return;
-    try{
-      const constraint = point
-        ? { focusMode: 'single-shot', pointsOfInterest: [point] }
-        : { focusMode: 'single-shot' };
-      await track.applyConstraints({ advanced: [constraint] });
-      setTimeout(async () => {
-        try{
-          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
-        }catch(e){}
-      }, 900);
-    }catch(e){ /* device rejected single-shot refocus */ }
-  }
-
-  function mapTapToVideoPoint(clickX, clickY, rect){
-    const vw = video.videoWidth || rect.width;
-    const vh = video.videoHeight || rect.height;
-    const containerW = rect.width, containerH = rect.height;
-    const videoRatio = vw / vh;
-    const containerRatio = containerW / containerH;
-    let scale, offsetX = 0, offsetY = 0;
-
-    if(videoRatio > containerRatio){
-      scale = containerH / vh;
-      offsetX = (vw * scale - containerW) / 2;
-    } else {
-      scale = containerW / vw;
-      offsetY = (vh * scale - containerH) / 2;
-    }
-
-    const videoX = (clickX + offsetX) / scale;
-    const videoY = (clickY + offsetY) / scale;
-    return {
-      x: Math.min(1, Math.max(0, videoX / vw)),
-      y: Math.min(1, Math.max(0, videoY / vh))
-    };
-  }
-
-  function showFocusRing(x, y){
-    focusRing.style.left = x + 'px';
-    focusRing.style.top = y + 'px';
-    focusRing.classList.remove('pulse');
-    // force reflow so the animation can restart on repeated taps
-    void focusRing.offsetWidth;
-    focusRing.classList.add('pulse');
-  }
-
-  scannerPanel.addEventListener('click', (e) => {
-    if(!scanning || !stream) return;
-    if(e.target.closest('.confirm-overlay')) return;
-
-    const rect = scannerPanel.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-    showFocusRing(clickX, clickY);
-    tapHint.classList.remove('show');
-
-    if(!focusCapable) return;
-
-    if(pointFocusCapable){
-      const point = mapTapToVideoPoint(clickX, clickY, rect);
-      nudgeRefocus(point);
-    } else if(focusCaps && focusCaps.focusMode.includes('single-shot')){
-      nudgeRefocus();
-    }
+  window.addEventListener("beforeunload", () => {
+    html5QrCode.stop().catch(() => {});
   });
-
-  scanBtn.addEventListener('click', () => {
-    if(scanning) stopScan(); else startScan();
-  });
-
-  (async function initPermissionState(){
-    const status = await checkPermissionState();
-    if(status){
-      if(status.state === 'denied'){
-        setPermissionHint('Camera access is blocked for this page. Enable it in your browser\'s site settings, then <span class="retry-link" id="retryPermissionLink">try again</span>.');
-        const retry = document.getElementById('retryPermissionLink');
-        if(retry) retry.addEventListener('click', startScan);
-      }
-      status.onchange = () => {
-        if(status.state === 'granted') setPermissionHint(null);
-      };
-    }
-  })();
-
-  loadEntries();
 })();
 </script>
 
