@@ -55,6 +55,20 @@
     align-items:center;
     gap:8px;
   }
+  .eyebrow .spacer{ flex:1; }
+  .af-badge{
+    font-family: var(--font-display);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 7px;
+    display:none;
+    text-transform: none;
+  }
+  .af-badge.show{ display:inline-block; }
+  .af-badge.active{ color: var(--success); border-color: var(--success); }
   .eyebrow .dot{
     width:6px; height:6px; border-radius:50%;
     background: var(--border);
@@ -293,6 +307,43 @@
   }
   .confirm-rescan:hover{ border-color: var(--text-muted); }
 
+  .focus-ring{
+    position:absolute;
+    width:58px; height:58px;
+    top:0; left:0;
+    border: 2px solid var(--amber);
+    border-radius: 50%;
+    pointer-events:none;
+    opacity:0;
+    transform: translate(-50%,-50%) scale(1.4);
+  }
+  .focus-ring.pulse{
+    animation: focusPulse 0.7s ease-out;
+  }
+  @keyframes focusPulse{
+    0%   { opacity:0;   transform: translate(-50%,-50%) scale(1.5); }
+    18%  { opacity:1;   transform: translate(-50%,-50%) scale(1); }
+    75%  { opacity:1;   transform: translate(-50%,-50%) scale(0.88); }
+    100% { opacity:0;   transform: translate(-50%,-50%) scale(0.88); }
+  }
+
+  .tap-hint{
+    position:absolute;
+    bottom:10px; left:50%;
+    transform: translateX(-50%);
+    font-family: var(--font-body);
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(11,13,16,0.72);
+    padding: 5px 10px;
+    border-radius: 8px;
+    opacity:0;
+    transition: opacity 0.3s ease;
+    pointer-events:none;
+    white-space:nowrap;
+  }
+  .tap-hint.show{ opacity:1; }
+
   .scan-btn{
     font-family: var(--font-body);
     font-weight:600;
@@ -472,7 +523,7 @@
 
 <div class="app">
 
-  <div class="eyebrow"><span class="dot" id="liveDot"></span><span id="eyebrowText">Ready to scan</span></div>
+  <div class="eyebrow"><span class="dot" id="liveDot"></span><span id="eyebrowText">Ready to scan</span><span class="spacer"></span><span class="af-badge" id="afBadge">AF</span></div>
 
   <div class="scanner-panel" id="scannerPanel">
     <video id="video" playsinline muted></video>
@@ -492,6 +543,8 @@
       <div class="status-line" id="statusLine">CAMERA OFF</div>
     </div>
     <div class="flash-toast" id="flashToast"></div>
+    <div class="focus-ring" id="focusRing"></div>
+    <div class="tap-hint" id="tapHint">Tap to focus</div>
 
     <div class="confirm-overlay" id="confirmOverlay">
       <div class="confirm-label">Scanned</div>
@@ -567,6 +620,14 @@
   const confirmQtyDec = document.getElementById('confirmQtyDec');
   const confirmRescan = document.getElementById('confirmRescan');
   const confirmAdd = document.getElementById('confirmAdd');
+  const afBadge = document.getElementById('afBadge');
+  const focusRing = document.getElementById('focusRing');
+  const tapHint = document.getElementById('tapHint');
+
+  let focusCapable = false;
+  let pointFocusCapable = false;
+  let focusCaps = null;
+  let refocusTimer = null;
 
   let entries = [];       // {id, code, qty, ts}
   let stream = null;
@@ -799,7 +860,13 @@
 
     try{
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          focusMode: 'continuous',
+          advanced: [{ focusMode: 'continuous' }]
+        },
         audio: false
       });
     }catch(err){
@@ -834,6 +901,11 @@
     scanBtnLabel.textContent = '■ Stop Scanning';
     scanBtn.classList.add('stop');
     scanning = true;
+
+    setupFocus(stream);
+    tapHint.classList.add('show');
+    clearTimeout(setupFocus._hintTimer);
+    setupFocus._hintTimer = setTimeout(() => tapHint.classList.remove('show'), 3200);
 
     if(supportsDetector){
       if(!detector){
@@ -872,6 +944,7 @@
     scanning = false;
     hideConfirmOverlay(false);
     if(detectTimer) clearInterval(detectTimer);
+    if(refocusTimer) clearInterval(refocusTimer);
     if(stream){
       stream.getTracks().forEach(t => t.stop());
       stream = null;
@@ -886,7 +959,131 @@
     statusLine.textContent = 'CAMERA OFF';
     scanBtnLabel.textContent = '▶ Start Scanning';
     scanBtn.classList.remove('stop');
+    afBadge.classList.remove('show', 'active');
+    tapHint.classList.remove('show');
+    focusCapable = false;
+    pointFocusCapable = false;
+    focusCaps = null;
   }
+
+  // ---------- focus management ----------
+  async function setupFocus(mediaStream){
+    focusCapable = false;
+    pointFocusCapable = false;
+    focusCaps = null;
+    afBadge.classList.remove('show', 'active');
+
+    const track = mediaStream.getVideoTracks()[0];
+    if(!track || !track.getCapabilities){
+      return; // this browser can't report or control focus at all
+    }
+
+    let caps;
+    try{
+      caps = track.getCapabilities();
+    }catch(e){
+      return;
+    }
+
+    if(!caps.focusMode || !caps.focusMode.length){
+      afBadge.textContent = 'AF · fixed';
+      afBadge.classList.add('show');
+      return; // hardware has no adjustable focus (e.g. fixed-focus webcam)
+    }
+
+    focusCaps = caps;
+    focusCapable = true;
+    pointFocusCapable = !!(caps.pointsOfInterest);
+
+    const preferred = caps.focusMode.includes('continuous') ? 'continuous' : caps.focusMode[0];
+    try{
+      await track.applyConstraints({ advanced: [{ focusMode: preferred }] });
+    }catch(e){ /* device rejected it — keep default focus behavior */ }
+
+    afBadge.textContent = pointFocusCapable ? 'AF · tap to focus' : 'AF · continuous';
+    afBadge.classList.add('show', 'active');
+
+    // Continuous AF can occasionally settle on a slightly soft image;
+    // nudging it with a brief single-shot refocus periodically keeps
+    // small, close-up barcodes crisp without needing user input.
+    if(caps.focusMode.includes('single-shot') && caps.focusMode.includes('continuous')){
+      if(refocusTimer) clearInterval(refocusTimer);
+      refocusTimer = setInterval(() => {
+        if(!scanning || awaitingConfirm) return;
+        nudgeRefocus();
+      }, 4000);
+    }
+  }
+
+  async function nudgeRefocus(point){
+    if(!stream || !focusCapable) return;
+    const track = stream.getVideoTracks()[0];
+    if(!track) return;
+    try{
+      const constraint = point
+        ? { focusMode: 'single-shot', pointsOfInterest: [point] }
+        : { focusMode: 'single-shot' };
+      await track.applyConstraints({ advanced: [constraint] });
+      setTimeout(async () => {
+        try{
+          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+        }catch(e){}
+      }, 900);
+    }catch(e){ /* device rejected single-shot refocus */ }
+  }
+
+  function mapTapToVideoPoint(clickX, clickY, rect){
+    const vw = video.videoWidth || rect.width;
+    const vh = video.videoHeight || rect.height;
+    const containerW = rect.width, containerH = rect.height;
+    const videoRatio = vw / vh;
+    const containerRatio = containerW / containerH;
+    let scale, offsetX = 0, offsetY = 0;
+
+    if(videoRatio > containerRatio){
+      scale = containerH / vh;
+      offsetX = (vw * scale - containerW) / 2;
+    } else {
+      scale = containerW / vw;
+      offsetY = (vh * scale - containerH) / 2;
+    }
+
+    const videoX = (clickX + offsetX) / scale;
+    const videoY = (clickY + offsetY) / scale;
+    return {
+      x: Math.min(1, Math.max(0, videoX / vw)),
+      y: Math.min(1, Math.max(0, videoY / vh))
+    };
+  }
+
+  function showFocusRing(x, y){
+    focusRing.style.left = x + 'px';
+    focusRing.style.top = y + 'px';
+    focusRing.classList.remove('pulse');
+    // force reflow so the animation can restart on repeated taps
+    void focusRing.offsetWidth;
+    focusRing.classList.add('pulse');
+  }
+
+  scannerPanel.addEventListener('click', (e) => {
+    if(!scanning || !stream) return;
+    if(e.target.closest('.confirm-overlay')) return;
+
+    const rect = scannerPanel.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    showFocusRing(clickX, clickY);
+    tapHint.classList.remove('show');
+
+    if(!focusCapable) return;
+
+    if(pointFocusCapable){
+      const point = mapTapToVideoPoint(clickX, clickY, rect);
+      nudgeRefocus(point);
+    } else if(focusCaps && focusCaps.focusMode.includes('single-shot')){
+      nudgeRefocus();
+    }
+  });
 
   scanBtn.addEventListener('click', () => {
     if(scanning) stopScan(); else startScan();
