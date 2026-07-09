@@ -17,6 +17,8 @@
   const zoomVal = document.getElementById("zoomVal");
   const focusModeSelect = document.getElementById("focusMode");
   const cameraSelect = document.getElementById("cameraSelect");
+  const resolutionSelect = document.getElementById("resolution");
+  const actualResEl = document.getElementById("actualRes");
   const applyBtn = document.getElementById("applyBtn");
   const formatChipsEl = document.getElementById("formatChips");
 
@@ -51,6 +53,21 @@
   fpsInput.addEventListener("input", () => fpsVal.textContent = fpsInput.value);
   qrboxInput.addEventListener("input", () => qrboxVal.textContent = qrboxInput.value);
   zoomInput.addEventListener("input", () => zoomVal.textContent = parseFloat(zoomInput.value).toFixed(1) + "×");
+  zoomVal.textContent = parseFloat(zoomInput.value).toFixed(1) + "×";
+
+  zoomInput.addEventListener("change", async () => {
+    // Live-apply zoom to the running track without a full restart, when possible.
+    if (html5QrCode && typeof html5QrCode.applyVideoConstraints === "function") {
+      try {
+        await html5QrCode.applyVideoConstraints({
+          advanced: [{ zoom: parseFloat(zoomInput.value) }]
+        });
+        log("Applied live zoom=" + zoomInput.value + "× (no restart)");
+      } catch (err) {
+        log("Live zoom apply failed, use Apply & Restart instead: " + err);
+      }
+    }
+  });
 
   function log(msg) {
     const line = document.createElement("div");
@@ -113,9 +130,11 @@
     if (fm !== "none") advanced.push({ focusMode: fm });
     advanced.push({ zoom: parseFloat(zoomInput.value) });
 
+    const [resW, resH] = resolutionSelect.value.split("x").map(Number);
+
     const constraints = {
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
+      width: { ideal: resW },
+      height: { ideal: resH },
       advanced: advanced
     };
 
@@ -150,6 +169,7 @@
         opt.value = d.id;
         opt.textContent = d.label || ("Camera " + (i + 1));
         cameraSelect.appendChild(opt);
+        log("Camera " + i + ": " + (d.label || "(no label)") + " [id=" + d.id.slice(0, 12) + "…]");
       });
 
       // Try to default-select a rear/back camera if the label hints at it
@@ -220,6 +240,7 @@
       log("Started: " + (selectedDeviceId ? "deviceId=" + selectedDeviceId : "facingMode=environment")
         + " fps=" + scanConfig.fps + " roi=" + qrboxInput.value + " zoom=" + zoomInput.value
         + " focus=" + focusModeSelect.value + " formats=" + Array.from(enabledFormats).join(","));
+      reportActualResolution();
     } catch (err) {
       log("Primary camera start failed, falling back: " + err);
       try {
@@ -233,6 +254,7 @@
           onScanFailure
         );
         statusEl.textContent = "Scanning (fallback facingMode)…";
+        reportActualResolution();
       } catch (err2) {
         statusEl.textContent = "Camera error: " + err2;
         log("Camera error: " + err2);
@@ -246,6 +268,28 @@
       loadCameras();
     }
   }
+
+  function reportActualResolution() {
+    // `ideal` in getUserMedia constraints is a request, not a guarantee —
+    // this reads back what the browser/camera actually negotiated.
+    try {
+      if (!html5QrCode) return;
+      const caps = html5QrCode.getRunningTrackSettings
+        ? html5QrCode.getRunningTrackSettings()
+        : null;
+      if (caps && caps.width && caps.height) {
+        actualResEl.textContent = caps.width + " × " + caps.height;
+        log("Actual camera feed: " + caps.width + "×" + caps.height
+          + (caps.zoom ? " (zoom=" + caps.zoom + "×)" : ""));
+      } else {
+        actualResEl.textContent = "unavailable";
+      }
+    } catch (err) {
+      actualResEl.textContent = "unavailable";
+    }
+  }
+
+  resolutionSelect.addEventListener("change", startScanner);
 
   applyBtn.addEventListener("click", startScanner);
 
