@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>QR Scanner</title>
+<title>QR/Barcode Scanner — Test Bench</title>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -16,154 +16,292 @@
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
-    padding: 16px;
+    padding: 12px;
   }
-  h1 {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 8px 0 16px;
-  }
-  #reader-wrap {
-    width: 100%;
-    max-width: 480px;
-    border-radius: 12px;
-    overflow: hidden;
-    background: #000;
-  }
-  #reader {
-    width: 100%;
-  }
-  /* Hide the library's default UI chrome we don't need */
+  h1 { font-size: 17px; font-weight: 600; margin: 4px 0 12px; }
+  #reader-wrap { width: 100%; max-width: 480px; border-radius: 12px; overflow: hidden; background: #000; }
+  #reader { width: 100%; }
   #reader__dashboard_section_csr button,
   #reader__filescan_input,
-  #reader__camera_selection {
-    display: none !important;
-  }
+  #reader__camera_selection { display: none !important; }
+
   #result-box {
-    width: 100%;
-    max-width: 480px;
-    margin-top: 16px;
-    padding: 14px 16px;
-    background: #1e1e1e;
-    border-radius: 10px;
-    min-height: 24px;
-    font-size: 15px;
-    word-break: break-all;
-    border: 1px solid #333;
+    width: 100%; max-width: 480px; margin-top: 12px; padding: 12px 14px;
+    background: #1e1e1e; border-radius: 10px; min-height: 22px; font-size: 14px;
+    word-break: break-all; border: 1px solid #333;
   }
-  #status {
-    font-size: 13px;
-    color: #888;
-    margin-top: 8px;
-    text-align: center;
-  }
-  #result-label {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #4caf50;
-    display: block;
-    margin-bottom: 4px;
-  }
+  #result-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #4caf50; display: block; margin-bottom: 4px; }
+  #status { font-size: 12px; color: #888; margin-top: 6px; text-align: center; }
+
+  #stats { width: 100%; max-width: 480px; margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .stat { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 8px; text-align: center; }
+  .stat .val { font-size: 18px; font-weight: 700; color: #4caf50; }
+  .stat .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  #panel { width: 100%; max-width: 480px; margin-top: 14px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 14px; }
+  #panel h2 { font-size: 13px; margin: 0 0 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.04em; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; font-size: 13px; }
+  .row label { flex: 1; color: #ddd; }
+  .row .value { width: 46px; text-align: right; color: #4caf50; font-variant-numeric: tabular-nums; }
+  input[type="range"] { flex: 2; accent-color: #4caf50; }
+  select { flex: 2; background: #111; color: #fff; border: 1px solid #333; border-radius: 6px; padding: 4px 6px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .chip { padding: 6px 10px; border-radius: 16px; border: 1px solid #333; background: #111; font-size: 12px; color: #aaa; cursor: pointer; user-select: none; }
+  .chip.active { background: #234d29; border-color: #4caf50; color: #b8f0c0; }
+
+  #applyBtn { width: 100%; padding: 12px; margin-top: 4px; background: #4caf50; border: none; border-radius: 8px; color: #062b09; font-weight: 700; font-size: 14px; }
+  #applyBtn:active { background: #3d9c41; }
+  #log { width: 100%; max-width: 480px; margin-top: 10px; font-size: 11px; color: #666; max-height: 90px; overflow-y: auto; background: #151515; border-radius: 8px; padding: 8px; }
 </style>
 </head>
 <body>
 
-<h1>QR Code Scanner</h1>
+<h1>Scanner Test Bench</h1>
 
-<div id="reader-wrap">
-  <div id="reader"></div>
-</div>
+<div id="reader-wrap"><div id="reader"></div></div>
 
 <div id="result-box">
   <span id="result-label" style="display:none;">Last scanned</span>
-  <span id="result-text">Point camera at a QR code…</span>
+  <span id="result-text">Point camera at a code…</span>
 </div>
 <div id="status">Starting camera…</div>
+
+<div id="stats">
+  <div class="stat"><div class="val" id="statLatency">–</div><div class="lbl">ms/read</div></div>
+  <div class="stat"><div class="val" id="statCount">0</div><div class="lbl">scans</div></div>
+  <div class="stat"><div class="val" id="statRate">–</div><div class="lbl">scans/sec</div></div>
+</div>
+
+<div id="panel">
+  <h2>Formats</h2>
+  <div class="checks" id="formatChips"></div>
+
+  <h2>Camera / Decode Settings</h2>
+  <div class="row">
+    <label for="fps">FPS</label>
+    <input type="range" id="fps" min="5" max="30" step="1" value="30">
+    <span class="value" id="fpsVal">30</span>
+  </div>
+  <div class="row">
+    <label for="qrbox">ROI box (px)</label>
+    <input type="range" id="qrbox" min="150" max="400" step="10" value="250">
+    <span class="value" id="qrboxVal">250</span>
+  </div>
+  <div class="row">
+    <label for="zoom">Digital zoom</label>
+    <input type="range" id="zoom" min="1" max="4" step="0.1" value="2">
+    <span class="value" id="zoomVal">2.0×</span>
+  </div>
+  <div class="row">
+    <label for="focusMode">Focus mode</label>
+    <select id="focusMode">
+      <option value="continuous" selected>continuous</option>
+      <option value="single-shot">single-shot</option>
+      <option value="manual">manual</option>
+      <option value="none">off (browser default)</option>
+    </select>
+  </div>
+
+  <button id="applyBtn">Apply & Restart Camera</button>
+  <div style="font-size:11px;color:#666;margin-top:8px;">
+    Tip: change one setting at a time, rescan the same barcode a few times, and watch <b>ms/read</b> and <b>scans/sec</b> to compare.
+  </div>
+</div>
+
+<div id="log"></div>
 
 <script>
 (function () {
   const resultText = document.getElementById("result-text");
   const resultLabel = document.getElementById("result-label");
   const statusEl = document.getElementById("status");
+  const logEl = document.getElementById("log");
 
-  // Strict, minimal-processing configuration
-  const config = {
-    fps: 30,
-    qrbox: { width: 250, height: 250 },
-    aspectRatio: 1.0,
-    disableFlip: false,
-    videoConstraints: {
-      facingMode: { exact: "environment" },
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
-    formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
-    experimentalFeatures: {
-      useBarCodeDetectorIfSupported: false
-    }
-  };
+  const statLatency = document.getElementById("statLatency");
+  const statCount = document.getElementById("statCount");
+  const statRate = document.getElementById("statRate");
 
-  const html5QrCode = new Html5Qrcode("reader", {
-    formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ],
-    verbose: false
+  const fpsInput = document.getElementById("fps");
+  const fpsVal = document.getElementById("fpsVal");
+  const qrboxInput = document.getElementById("qrbox");
+  const qrboxVal = document.getElementById("qrboxVal");
+  const zoomInput = document.getElementById("zoom");
+  const zoomVal = document.getElementById("zoomVal");
+  const focusModeSelect = document.getElementById("focusMode");
+  const applyBtn = document.getElementById("applyBtn");
+  const formatChipsEl = document.getElementById("formatChips");
+
+  const ALL_FORMATS = [
+    { key: "QR_CODE", label: "QR" },
+    { key: "EAN_13", label: "EAN-13" },
+    { key: "EAN_8", label: "EAN-8" },
+    { key: "CODE_128", label: "Code128" },
+    { key: "UPC_A", label: "UPC-A" },
+    { key: "UPC_E", label: "UPC-E" },
+    { key: "CODE_39", label: "Code39" }
+  ];
+  const enabledFormats = new Set(["EAN_13", "EAN_8", "CODE_128", "UPC_A"]);
+
+  ALL_FORMATS.forEach(f => {
+    const chip = document.createElement("div");
+    chip.className = "chip" + (enabledFormats.has(f.key) ? " active" : "");
+    chip.textContent = f.label;
+    chip.dataset.key = f.key;
+    chip.addEventListener("click", () => {
+      if (enabledFormats.has(f.key)) {
+        enabledFormats.delete(f.key);
+        chip.classList.remove("active");
+      } else {
+        enabledFormats.add(f.key);
+        chip.classList.add("active");
+      }
+    });
+    formatChipsEl.appendChild(chip);
   });
 
+  fpsInput.addEventListener("input", () => fpsVal.textContent = fpsInput.value);
+  qrboxInput.addEventListener("input", () => qrboxVal.textContent = qrboxInput.value);
+  zoomInput.addEventListener("input", () => zoomVal.textContent = parseFloat(zoomInput.value).toFixed(1) + "×");
+
+  function log(msg) {
+    const line = document.createElement("div");
+    line.textContent = new Date().toLocaleTimeString() + " — " + msg;
+    logEl.prepend(line);
+  }
+
+  let html5QrCode = null;
+  let scanTimestamps = [];
+  let scanCount = 0;
   let lastCode = null;
-  let lastTime = 0;
+  let lastCodeTime = 0;
+  let lastFrameSeenAt = performance.now();
+
+  function resetStats() {
+    scanTimestamps = [];
+    scanCount = 0;
+    statCount.textContent = "0";
+    statRate.textContent = "–";
+    statLatency.textContent = "–";
+  }
 
   function onScanSuccess(decodedText) {
-    const now = Date.now();
-    // Basic debounce so the same code doesn't spam the UI every frame
-    if (decodedText === lastCode && now - lastTime < 1500) return;
+    const now = performance.now();
+    const gapMs = now - lastFrameSeenAt;
+    lastFrameSeenAt = now;
+
+    const wallNow = Date.now();
+    if (decodedText === lastCode && wallNow - lastCodeTime < 1200) {
+      return; // debounce duplicate reads of the same code
+    }
     lastCode = decodedText;
-    lastTime = now;
+    lastCodeTime = wallNow;
+
+    scanCount++;
+    scanTimestamps.push(now);
+    scanTimestamps = scanTimestamps.filter(t => now - t <= 5000);
+
+    statCount.textContent = String(scanCount);
+    statLatency.textContent = gapMs.toFixed(0);
+    statRate.textContent = (scanTimestamps.length / 5).toFixed(2);
 
     resultLabel.style.display = "block";
     resultText.textContent = decodedText;
-
-    if (navigator.vibrate) navigator.vibrate(80);
+    if (navigator.vibrate) navigator.vibrate(60);
+    log("Scan #" + scanCount + ": " + decodedText + " (Δ" + gapMs.toFixed(0) + "ms)");
   }
 
-  function onScanFailure() {
-    // Expected on almost every frame with no QR code in view — ignore silently.
+  function onScanFailure() { /* expected most frames */ }
+
+  function currentFormats() {
+    return Array.from(enabledFormats).map(k => Html5QrcodeSupportedFormats[k]);
   }
 
-  function startWithConstraints(constraints) {
-    return html5QrCode.start(
-      constraints,
-      {
-        fps: config.fps,
-        qrbox: config.qrbox,
-        aspectRatio: config.aspectRatio,
-        formatsToSupport: config.formatsToSupport,
-        experimentalFeatures: config.experimentalFeatures,
-        videoConstraints: config.videoConstraints
-      },
-      onScanSuccess,
-      onScanFailure
-    );
+  function buildVideoConstraints(facingModeConstraint) {
+    const advanced = [];
+    const fm = focusModeSelect.value;
+    if (fm !== "none") advanced.push({ focusMode: fm });
+    advanced.push({ zoom: parseFloat(zoomInput.value) });
+
+    return {
+      facingMode: facingModeConstraint,
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      advanced: advanced
+    };
   }
 
-  // Try exact rear camera + 720p first; fall back to "ideal" if the device
-  // has no exact match (e.g. some Android devices, desktop testing).
-  startWithConstraints({ facingMode: { exact: "environment" } })
-    .then(() => {
-      statusEl.textContent = "Scanning…";
-    })
-    .catch(() => {
-      startWithConstraints({ facingMode: "environment" })
-        .then(() => {
-          statusEl.textContent = "Scanning…";
-        })
-        .catch((err) => {
-          statusEl.textContent = "Camera error: " + err;
-        });
+  async function stopIfRunning() {
+    if (html5QrCode) {
+      try {
+        const state = html5QrCode.getState();
+        if (state === Html5QrcodeScannerState.SCANNING || state === Html5QrcodeScannerState.PAUSED) {
+          await html5QrCode.stop();
+        }
+        html5QrCode.clear();
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  async function startScanner() {
+    await stopIfRunning();
+    resetStats();
+    lastCode = null;
+
+    const formats = currentFormats();
+    if (formats.length === 0) {
+      statusEl.textContent = "Select at least one format above.";
+      return;
+    }
+
+    html5QrCode = new Html5Qrcode("reader", {
+      formatsToSupport: formats,
+      verbose: false
     });
 
+    const scanConfig = {
+      fps: parseInt(fpsInput.value, 10),
+      qrbox: { width: parseInt(qrboxInput.value, 10), height: parseInt(qrboxInput.value, 10) },
+      aspectRatio: 1.0,
+      formatsToSupport: formats,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: false }
+    };
+
+    statusEl.textContent = "Starting camera…";
+
+    try {
+      await html5QrCode.start(
+        buildVideoConstraints({ exact: "environment" }),
+        scanConfig,
+        onScanSuccess,
+        onScanFailure
+      );
+      statusEl.textContent = "Scanning… (fps=" + scanConfig.fps + ", roi=" + qrboxInput.value + "px, zoom=" + zoomInput.value + "×, focus=" + focusModeSelect.value + ")";
+      log("Started: fps=" + scanConfig.fps + " roi=" + qrboxInput.value + " zoom=" + zoomInput.value + " focus=" + focusModeSelect.value + " formats=" + Array.from(enabledFormats).join(","));
+    } catch (err) {
+      log("Exact environment facing failed, falling back: " + err);
+      try {
+        await html5QrCode.start(
+          buildVideoConstraints("environment"),
+          scanConfig,
+          onScanSuccess,
+          onScanFailure
+        );
+        statusEl.textContent = "Scanning (fallback facingMode)…";
+      } catch (err2) {
+        statusEl.textContent = "Camera error: " + err2;
+        log("Camera error: " + err2);
+      }
+    }
+  }
+
+  applyBtn.addEventListener("click", startScanner);
+
   window.addEventListener("beforeunload", () => {
-    html5QrCode.stop().catch(() => {});
+    if (html5QrCode) html5QrCode.stop().catch(() => {});
   });
+
+  // Initial start with defaults
+  startScanner();
 })();
 </script>
 
