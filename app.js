@@ -156,7 +156,16 @@
 
   async function loadCameras() {
     try {
-      const devices = await Html5Qrcode.getCameras();
+      // Use the low-level browser API directly instead of Html5Qrcode.getCameras().
+      // getCameras() can trigger its own getUserMedia() call to check permissions,
+      // which conflicts with the stream we already have open and silently fails
+      // on many mobile browsers. enumerateDevices() just lists what's already
+      // permitted — no second camera grab, no conflict.
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      const devices = allDevices
+        .filter(d => d.kind === "videoinput")
+        .map(d => ({ id: d.deviceId, label: d.label }));
+
       cameraSelect.innerHTML = "";
 
       const autoOpt = document.createElement("option");
@@ -164,22 +173,22 @@
       autoOpt.textContent = "Auto (rear camera)";
       cameraSelect.appendChild(autoOpt);
 
+      if (devices.length === 0) {
+        log("enumerateDevices() returned 0 video inputs — permission may not be fully granted yet.");
+      }
+
       devices.forEach((d, i) => {
         const opt = document.createElement("option");
         opt.value = d.id;
         opt.textContent = d.label || ("Camera " + (i + 1));
         cameraSelect.appendChild(opt);
-        log("Camera " + i + ": " + (d.label || "(no label)") + " [id=" + d.id.slice(0, 12) + "…]");
+        log("Camera " + i + ": " + (d.label || "(no label — try reloading after granting permission)") + " [id=" + d.id.slice(0, 12) + "…]");
       });
 
-      // Try to default-select a rear/back camera if the label hints at it
-      const rearGuess = devices.find(d => /back|rear|environment/i.test(d.label));
-      if (rearGuess) cameraSelect.value = rearGuess.id;
-
-      log("Found " + devices.length + " camera(s).");
+      log("Found " + devices.length + " camera(s) total.");
     } catch (err) {
       cameraSelect.innerHTML = "<option value=''>Auto (rear camera)</option>";
-      log("Could not list cameras (permission needed first): " + err);
+      log("Could not list cameras: " + err);
     }
   }
 
