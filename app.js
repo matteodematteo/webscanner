@@ -242,23 +242,55 @@
         + " focus=" + focusModeSelect.value + " formats=" + Array.from(enabledFormats).join(","));
       reportActualResolution();
     } catch (err) {
-      log("Primary camera start failed, falling back: " + err);
-      try {
-        // Fallback: plain "environment" facing mode, still via videoConstraints.
-        const fallbackSource = "environment";
-        scanConfig.videoConstraints = buildVideoConstraints(fallbackSource);
-        await html5QrCode.start(
-          simpleCameraIdOrConfig(fallbackSource),
-          scanConfig,
-          onScanSuccess,
-          onScanFailure
-        );
-        statusEl.textContent = "Scanning (fallback facingMode)…";
-        reportActualResolution();
-      } catch (err2) {
-        statusEl.textContent = "Camera error: " + err2;
-        log("Camera error: " + err2);
+      log("Primary start failed (" + err + "), retrying with reduced constraints…");
+
+      let recovered = false;
+
+      // Step 2: if a specific camera was picked, retry THAT exact camera
+      // with a minimal constraint set (no advanced zoom/focus, no forced
+      // resolution) before ever giving up on the user's chosen device.
+      if (selectedDeviceId) {
+        try {
+          const minimalConfig = {
+            fps: scanConfig.fps,
+            qrbox: scanConfig.qrbox,
+            formatsToSupport: formats,
+            experimentalFeatures: { useBarCodeDetectorIfSupported: false }
+          };
+          await html5QrCode.start(
+            { deviceId: { exact: selectedDeviceId } },
+            minimalConfig,
+            onScanSuccess,
+            onScanFailure
+          );
+          statusEl.textContent = "Scanning on selected camera (reduced constraints)…";
+          log("Recovered on selected camera with minimal constraints (resolution/zoom/focus not forced).");
+          recovered = true;
+        } catch (err2) {
+          log("Selected camera still failed (" + err2 + "), falling back to auto camera.");
+        }
       }
+
+      // Step 3: last resort — generic rear-facing camera, only reached if
+      // no device was selected, or the selected device truly can't start.
+      if (!recovered) {
+        try {
+          const fallbackSource = "environment";
+          scanConfig.videoConstraints = buildVideoConstraints(fallbackSource);
+          await html5QrCode.start(
+            simpleCameraIdOrConfig(fallbackSource),
+            scanConfig,
+            onScanSuccess,
+            onScanFailure
+          );
+          statusEl.textContent = "Scanning (fallback facingMode — your camera pick could not start)…";
+        } catch (err3) {
+          statusEl.textContent = "Camera error: " + err3;
+          log("Camera error: " + err3);
+        }
+      }
+
+      reportActualResolution();
     }
 
     // Populate/refresh the camera list now that permission has been granted
@@ -279,8 +311,12 @@
         : null;
       if (caps && caps.width && caps.height) {
         actualResEl.textContent = caps.width + " × " + caps.height;
+        const idNote = caps.deviceId ? (" [deviceId=" + caps.deviceId.slice(0, 12) + "…]") : "";
+        const matchNote = (cameraSelect.value && caps.deviceId)
+          ? (caps.deviceId === cameraSelect.value ? " ✓ matches selection" : " ⚠ DIFFERENT camera than selected")
+          : "";
         log("Actual camera feed: " + caps.width + "×" + caps.height
-          + (caps.zoom ? " (zoom=" + caps.zoom + "×)" : ""));
+          + (caps.zoom ? " (zoom=" + caps.zoom + "×)" : "") + idNote + matchNote);
       } else {
         actualResEl.textContent = "unavailable";
       }
