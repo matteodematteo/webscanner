@@ -106,25 +106,33 @@
   }
 
   function buildVideoConstraints(source) {
-    // `source` is either { deviceId: "..." } to pin an exact camera,
-    // or a facingMode value (string or { exact: "environment" }) as fallback.
+    // Full MediaTrackConstraints, passed via `videoConstraints` in the scan
+    // config (NOT as cameraIdOrConfig — that param must have exactly 1 key).
     const advanced = [];
     const fm = focusModeSelect.value;
     if (fm !== "none") advanced.push({ focusMode: fm });
     advanced.push({ zoom: parseFloat(zoomInput.value) });
 
-    const base = {
+    const constraints = {
       width: { ideal: 1280 },
       height: { ideal: 720 },
       advanced: advanced
     };
 
     if (source && source.deviceId) {
-      base.deviceId = { exact: source.deviceId };
+      constraints.deviceId = { exact: source.deviceId };
     } else {
-      base.facingMode = source;
+      constraints.facingMode = source; // e.g. "environment" or { exact: "environment" }
     }
-    return base;
+    return constraints;
+  }
+
+  function simpleCameraIdOrConfig(source) {
+    // html5-qrcode requires this first-arg object to have exactly ONE key.
+    if (source && source.deviceId) {
+      return { deviceId: { exact: source.deviceId } };
+    }
+    return { facingMode: source };
   }
 
   async function loadCameras() {
@@ -193,37 +201,33 @@
       experimentalFeatures: { useBarCodeDetectorIfSupported: false }
     };
 
+    const selectedDeviceId = cameraSelect.value; // "" means "Auto (rear camera)"
+    const source = selectedDeviceId ? { deviceId: selectedDeviceId } : { exact: "environment" };
+
+    scanConfig.videoConstraints = buildVideoConstraints(source);
+
     statusEl.textContent = "Starting camera…";
 
-    const selectedDeviceId = cameraSelect.value; // "" means "Auto (rear camera)"
-
     try {
-      if (selectedDeviceId) {
-        // User explicitly picked a camera from the list — use it directly.
-        await html5QrCode.start(
-          buildVideoConstraints({ deviceId: selectedDeviceId }),
-          scanConfig,
-          onScanSuccess,
-          onScanFailure
-        );
-        statusEl.textContent = "Scanning on selected camera… (fps=" + scanConfig.fps + ", roi=" + qrboxInput.value + "px, zoom=" + zoomInput.value + "×, focus=" + focusModeSelect.value + ")";
-        log("Started with deviceId=" + selectedDeviceId);
-      } else {
-        // Auto mode: prefer exact rear camera, fall back to non-exact.
-        await html5QrCode.start(
-          buildVideoConstraints({ exact: "environment" }),
-          scanConfig,
-          onScanSuccess,
-          onScanFailure
-        );
-        statusEl.textContent = "Scanning… (fps=" + scanConfig.fps + ", roi=" + qrboxInput.value + "px, zoom=" + zoomInput.value + "×, focus=" + focusModeSelect.value + ")";
-        log("Started: fps=" + scanConfig.fps + " roi=" + qrboxInput.value + " zoom=" + zoomInput.value + " focus=" + focusModeSelect.value + " formats=" + Array.from(enabledFormats).join(","));
-      }
+      await html5QrCode.start(
+        simpleCameraIdOrConfig(source),
+        scanConfig,
+        onScanSuccess,
+        onScanFailure
+      );
+      statusEl.textContent = (selectedDeviceId ? "Scanning on selected camera… " : "Scanning… ")
+        + "(fps=" + scanConfig.fps + ", roi=" + qrboxInput.value + "px, zoom=" + zoomInput.value + "×, focus=" + focusModeSelect.value + ")";
+      log("Started: " + (selectedDeviceId ? "deviceId=" + selectedDeviceId : "facingMode=environment")
+        + " fps=" + scanConfig.fps + " roi=" + qrboxInput.value + " zoom=" + zoomInput.value
+        + " focus=" + focusModeSelect.value + " formats=" + Array.from(enabledFormats).join(","));
     } catch (err) {
       log("Primary camera start failed, falling back: " + err);
       try {
+        // Fallback: plain "environment" facing mode, still via videoConstraints.
+        const fallbackSource = "environment";
+        scanConfig.videoConstraints = buildVideoConstraints(fallbackSource);
         await html5QrCode.start(
-          buildVideoConstraints("environment"),
+          simpleCameraIdOrConfig(fallbackSource),
           scanConfig,
           onScanSuccess,
           onScanFailure
