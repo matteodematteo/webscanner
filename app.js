@@ -20,7 +20,7 @@
   const resolutionSelect = document.getElementById("resolution");
   const actualResEl = document.getElementById("actualRes");
   const applyBtn = document.getElementById("applyBtn");
-  const startBtn = document.getElementById("startBtn");
+  const toggleScanBtn = document.getElementById("toggleScanBtn");
   const formatChipsEl = document.getElementById("formatChips");
   const stopOnCaptureEl = document.getElementById("stopOnCapture");
   const beepOnCaptureEl = document.getElementById("beepOnCapture");
@@ -29,6 +29,13 @@
   const clearDataBtn = document.getElementById("clearDataBtn");
   const tabBtns = document.querySelectorAll(".tab-btn");
   const tabPanels = document.querySelectorAll(".tab-panel");
+  const modeBtns = document.querySelectorAll(".mode-btn");
+  const qtyPicker = document.getElementById("qty-picker");
+  const qtyPickerCode = document.getElementById("qtyPickerCode");
+  const qtyInput = document.getElementById("qtyInput");
+  const qtyMinus = document.getElementById("qtyMinus");
+  const qtyPlus = document.getElementById("qtyPlus");
+  const qtyConfirmBtn = document.getElementById("qtyConfirmBtn");
 
   const ALL_FORMATS = [
     { key: "QR_CODE", label: "QR" },
@@ -87,6 +94,53 @@
     });
   });
 
+  function switchToDataTab() {
+    tabBtns.forEach(b => b.classList.toggle("active", b.dataset.tab === "data"));
+    tabPanels.forEach(p => p.classList.toggle("active", p.id === "tab-data"));
+  }
+
+  // --- Scan mode: classic (qty=1) vs quantity (ask each time) ---
+  let scanMode = "classic";
+  modeBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      modeBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      scanMode = btn.dataset.mode;
+      log("Scan mode: " + scanMode);
+    });
+  });
+
+  // --- Quantity picker ---
+  let pendingScan = null; // { text, format }
+
+  function showQtyPicker(text, format) {
+    pendingScan = { text: text, format: format };
+    qtyPickerCode.textContent = text;
+    qtyInput.value = 1;
+    qtyPicker.style.display = "block";
+    switchToDataTab();
+  }
+
+  function hideQtyPicker() {
+    qtyPicker.style.display = "none";
+    pendingScan = null;
+  }
+
+  qtyMinus.addEventListener("click", () => {
+    const v = Math.max(1, (parseInt(qtyInput.value, 10) || 1) - 1);
+    qtyInput.value = v;
+  });
+  qtyPlus.addEventListener("click", () => {
+    const v = Math.max(1, (parseInt(qtyInput.value, 10) || 1) + 1);
+    qtyInput.value = v;
+  });
+  qtyConfirmBtn.addEventListener("click", () => {
+    if (!pendingScan) return;
+    const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+    addCapturedBarcode(pendingScan.text, pendingScan.format, qty);
+    hideQtyPicker();
+  });
+
   // --- Captured barcode list (newest first) ---
   let capturedBarcodes = [];
 
@@ -99,7 +153,7 @@
     emptyDataEl.style.display = "none";
     capturedListEl.innerHTML = capturedBarcodes.map(item => `
       <div class="captured-item">
-        <div class="code">${escapeHtml(item.text)}</div>
+        <div class="code">${escapeHtml(item.text)} <span style="color:#4caf50;">×${item.qty}</span></div>
         <div class="meta"><span>${item.format}</span><span>${item.time}</span></div>
       </div>
     `).join("");
@@ -111,10 +165,11 @@
     return div.innerHTML;
   }
 
-  function addCapturedBarcode(text, format) {
+  function addCapturedBarcode(text, format, qty) {
     capturedBarcodes.unshift({
       text: text,
       format: format || "—",
+      qty: qty || 1,
       time: new Date().toLocaleTimeString()
     });
     renderCapturedList();
@@ -170,6 +225,15 @@
   }
 
   let isStoppingAfterCapture = false;
+  let isScanning = false;
+
+  function setScanningUI(scanning) {
+    isScanning = scanning;
+    toggleScanBtn.disabled = false;
+    toggleScanBtn.textContent = scanning ? "Stop Scan" : "Start Scan";
+    toggleScanBtn.classList.toggle("state-start", !scanning);
+    toggleScanBtn.classList.toggle("state-stop", scanning);
+  }
 
   function onScanSuccess(decodedText, decodedResult) {
     const now = performance.now();
@@ -196,19 +260,34 @@
 
     const formatName = (decodedResult && decodedResult.result && decodedResult.result.format
       && decodedResult.result.format.formatName) || "";
-    addCapturedBarcode(decodedText, formatName);
 
     if (navigator.vibrate) navigator.vibrate(60);
     playBeep();
-    log("Scan #" + scanCount + ": " + decodedText + " (Δ" + gapMs.toFixed(0) + "ms)");
+    log("Scan #" + scanCount + ": " + decodedText + " (Δ" + gapMs.toFixed(0) + "ms) mode=" + scanMode);
+
+    if (scanMode === "quantity") {
+      // Quantity mode always stops to let the user pick a quantity —
+      // the barcode isn't added to the list until they confirm.
+      if (!isStoppingAfterCapture) {
+        isStoppingAfterCapture = true;
+        statusEl.textContent = "Captured — choose quantity below.";
+        stopIfRunning().then(() => {
+          setScanningUI(false);
+          isStoppingAfterCapture = false;
+          showQtyPicker(decodedText, formatName);
+        });
+      }
+      return;
+    }
+
+    // Classic mode: add immediately with quantity 1.
+    addCapturedBarcode(decodedText, formatName, 1);
 
     if (stopOnCaptureEl.checked && !isStoppingAfterCapture) {
       isStoppingAfterCapture = true;
       statusEl.textContent = "Captured — camera stopped.";
       stopIfRunning().then(() => {
-        startBtn.textContent = "Scan Next Barcode";
-        startBtn.style.display = "block";
-        startBtn.disabled = false;
+        setScanningUI(false);
         isStoppingAfterCapture = false;
       });
     }
@@ -290,7 +369,10 @@
     }
   }
 
-  cameraSelect.addEventListener("change", startScanner);
+  cameraSelect.addEventListener("change", async () => {
+    const ok = await startScanner();
+    setScanningUI(ok);
+  });
 
   function withTimeout(promise, ms, label) {
     return Promise.race([
@@ -459,28 +541,28 @@
     }
   }
 
-  resolutionSelect.addEventListener("change", startScanner);
+  resolutionSelect.addEventListener("change", async () => {
+    const ok = await startScanner();
+    setScanningUI(ok);
+  });
 
-  applyBtn.addEventListener("click", startScanner);
+  applyBtn.addEventListener("click", async () => {
+    const ok = await startScanner();
+    setScanningUI(ok);
+  });
 
   window.addEventListener("beforeunload", () => {
     if (html5QrCode) html5QrCode.stop().catch(() => {});
   });
 
-  startBtn.addEventListener("click", async () => {
-    startBtn.textContent = "Starting…";
-    startBtn.disabled = true;
-    const ok = await startScanner();
-    if (ok) {
-      startBtn.style.display = "none";
+  toggleScanBtn.addEventListener("click", async () => {
+    toggleScanBtn.disabled = true;
+    if (isScanning) {
+      toggleScanBtn.textContent = "Stopping…";
+      await stopIfRunning();
+      setScanningUI(false);
+      statusEl.textContent = "Stopped.";
     } else {
-      startBtn.textContent = "Retry Start Camera";
-      startBtn.disabled = false;
-    }
-  });
-
-  statusEl.textContent = "Tap \"Start Camera\" above to begin.";
-  // NOTE: intentionally NOT auto-starting on load — camera access tied to
-  // a real tap avoids the silent hang some mobile browsers cause when
-  // getUserMedia/video playback is requested without a user gesture.
-})();
+      toggleScanBtn.textContent = "Starting…";
+      const ok = await startScanner();
+      s
