@@ -565,4 +565,4 @@
     } else {
       toggleScanBtn.textContent = "Starting…";
       const ok = await startScanner();
-      s
+      s 
