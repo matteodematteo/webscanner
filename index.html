@@ -104,14 +104,19 @@
     margin-bottom: 8px;
   }
   #captured-header h2 { font-size: 13px; margin: 0; color: #aaa; text-transform: uppercase; letter-spacing: 0.04em; }
-  #clearDataBtn {
+  #clearDataBtn, #deleteSelectedBtn {
     background: none; border: 1px solid #444; color: #888;
     border-radius: 6px; padding: 4px 10px; font-size: 11px;
   }
+  #deleteSelectedBtn:not(:disabled) { border-color: #d9453d; color: #ff8a80; }
+  #deleteSelectedBtn:disabled { opacity: 0.4; }
   #captured-list { display: flex; flex-direction: column; gap: 8px; }
   .captured-item {
     background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
-    padding: 10px 12px;
+    padding: 10px 12px; cursor: pointer;
+  }
+  .captured-item.selected {
+    border-color: #4caf50; background: #1e2e1e;
   }
   .captured-item .code { font-size: 14px; word-break: break-all; }
   .captured-item .meta { font-size: 11px; color: #666; margin-top: 4px; display: flex; justify-content: space-between; }
@@ -215,7 +220,10 @@
 
     <div id="captured-header">
       <h2>Captured barcodes</h2>
-      <button id="clearDataBtn">Clear</button>
+      <div style="display:flex;gap:8px;">
+        <button id="deleteSelectedBtn" disabled>Delete selected</button>
+        <button id="clearDataBtn">Clear all</button>
+      </div>
     </div>
     <div id="captured-list"></div>
     <div id="empty-data">No barcodes captured yet.</div>
