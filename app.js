@@ -165,7 +165,7 @@
     return div.innerHTML;
   }
 
-  function addCapturedBarcode(text, format, qty) {
+function addCapturedBarcode(text, format, qty) {
     capturedBarcodes.unshift({
       text: text,
       format: format || "—",
@@ -565,4 +565,13 @@
     } else {
       toggleScanBtn.textContent = "Starting…";
       const ok = await startScanner();
-      s 
+      setScanningUI(ok);
+      if (!ok) toggleScanBtn.textContent = "Retry Start Scan";
+    }
+  });
+
+  statusEl.textContent = "Tap \"Start Scan\" to begin.";
+  // NOTE: intentionally NOT auto-starting on load — camera access tied to
+  // a real tap avoids the silent hang some mobile browsers cause when
+  // getUserMedia/video playback is requested without a user gesture.
+})();
