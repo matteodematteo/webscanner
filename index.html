@@ -141,7 +141,7 @@
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
   }
   .keypad-grid .key {
-    padding: 14px 0; border: none; border-radius: 8px; background: #1e1e1e;
+    padding: 7px 0; border: none; border-radius: 8px; background: #1e1e1e;
     color: #fff; font-size: 18px; font-weight: 700; border: 1px solid #2a2a2a;
   }
   .keypad-grid .key:active { background: #2a2a2a; }
@@ -216,12 +216,6 @@
       <span id="result-text">Point camera at a code…</span>
     </div>
 
-    <div id="stats">
-      <div class="stat"><div class="val" id="statLatency">–</div><div class="lbl">ms/read</div></div>
-      <div class="stat"><div class="val" id="statCount">0</div><div class="lbl">scans</div></div>
-      <div class="stat"><div class="val" id="statRate">–</div><div class="lbl">scans/sec</div></div>
-    </div>
-
     <div id="captured-header">
       <h2>Captured barcodes</h2>
       <div style="display:flex;gap:8px;">
@@ -235,6 +229,13 @@
 
   <div id="tab-settings" class="tab-panel">
     <div id="panel">
+      <h2>Performance</h2>
+      <div id="stats">
+        <div class="stat"><div class="val" id="statLatency">–</div><div class="lbl">ms/read</div></div>
+        <div class="stat"><div class="val" id="statCount">0</div><div class="lbl">scans</div></div>
+        <div class="stat"><div class="val" id="statRate">–</div><div class="lbl">scans/sec</div></div>
+      </div>
+
       <h2>Formats</h2>
       <div class="checks" id="formatChips"></div>
 
@@ -264,9 +265,14 @@
         <span class="value" id="fpsVal">30</span>
       </div>
       <div class="row">
-        <label for="qrbox">ROI box (px)</label>
-        <input type="range" id="qrbox" min="150" max="400" step="10" value="250">
-        <span class="value" id="qrboxVal">250</span>
+        <label for="roiWidth">ROI width (px)</label>
+        <input type="range" id="roiWidth" min="100" max="450" step="10" value="250">
+        <span class="value" id="roiWidthVal">250</span>
+      </div>
+      <div class="row">
+        <label for="roiHeight">ROI height (px)</label>
+        <input type="range" id="roiHeight" min="100" max="450" step="10" value="250">
+        <span class="value" id="roiHeightVal">250</span>
       </div>
       <div class="row">
         <label for="zoom">Zoom (1.0 = main lens)</label>
