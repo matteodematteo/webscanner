@@ -145,6 +145,7 @@
     color: #fff; font-size: 18px; font-weight: 700; border: 1px solid #2a2a2a;
   }
   .keypad-grid .key:active { background: #2a2a2a; }
+  .keypad-grid .key:disabled { opacity: 0.3; }
   .keypad-grid .key-back { color: #ff8a80; }
   .keypad-grid .key-add { background: #234d29; border-color: #4caf50; color: #b8f0c0; }
 
@@ -183,13 +184,13 @@
   <div id="tab-data" class="tab-panel active">
 
     <div class="ctrl-row">
-      <input type="text" id="lastScannedInput" placeholder="Last scanned barcode">
+      <input type="text" id="lastScannedInput">
       <button id="searchBtn">Search</button>
       <button id="cleanBtn">Clean</button>
     </div>
 
     <div class="ctrl-row">
-      <input type="text" id="qtyBox" value="1" inputmode="numeric" readonly disabled>
+      <input type="text" id="qtyBox" value="" placeholder="qty" inputmode="numeric" readonly disabled>
       <button id="toggleScanBtn" class="state-start">Start Scan</button>
       <button id="modeSwitchBtn">Mode: Classic</button>
     </div>
@@ -213,11 +214,11 @@
 
     <div id="result-box">
       <span id="result-label" style="display:none;">Last scanned</span>
-      <span id="result-text">Point camera at a code…</span>
+      <span id="result-text"></span>
     </div>
 
     <div id="captured-header">
-      <h2>Captured barcodes</h2>
+      <h2>Captured barcodes <span id="recordCounter" style="color:#4caf50;">(0)</span></h2>
       <div style="display:flex;gap:8px;">
         <button id="deleteSelectedBtn" disabled>Delete selected</button>
         <button id="clearDataBtn">Clear all</button>
