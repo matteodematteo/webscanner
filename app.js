@@ -1,3 +1,4 @@
+// script.js — Barcode/QR Scanner logic (html5-qrcode)
 (function () {
   const resultText = document.getElementById("result-text");
   const resultLabel = document.getElementById("result-label");
@@ -30,13 +31,13 @@
   const deleteSelectedBtn = document.getElementById("deleteSelectedBtn");
   const tabBtns = document.querySelectorAll(".tab-btn");
   const tabPanels = document.querySelectorAll(".tab-panel");
-  const modeBtns = document.querySelectorAll(".mode-btn");
-  const qtyPicker = document.getElementById("qty-picker");
-  const qtyPickerCode = document.getElementById("qtyPickerCode");
-  const qtyInput = document.getElementById("qtyInput");
-  const qtyMinus = document.getElementById("qtyMinus");
-  const qtyPlus = document.getElementById("qtyPlus");
-  const qtyConfirmBtn = document.getElementById("qtyConfirmBtn");
+  const lastScannedInput = document.getElementById("lastScannedInput");
+  const searchBtn = document.getElementById("searchBtn");
+  const cleanBtn = document.getElementById("cleanBtn");
+  const qtyBox = document.getElementById("qtyBox");
+  const modeSwitchBtn = document.getElementById("modeSwitchBtn");
+  const numKeypad = document.getElementById("numKeypad");
+  const keypadKeys = numKeypad.querySelectorAll(".key");
 
   // --- Settings persistence (localStorage) ---
   const SETTINGS_KEY = "barcodeScannerSettings_v1";
@@ -153,53 +154,83 @@
     });
   });
 
-  function switchToDataTab() {
-    tabBtns.forEach(b => b.classList.toggle("active", b.dataset.tab === "data"));
-    tabPanels.forEach(p => p.classList.toggle("active", p.id === "tab-data"));
+  // --- Scan mode: classic (qty=1, no keypad) vs quantity (keypad + confirm) ---
+  let scanMode = (savedSettings && savedSettings.scanMode) ? savedSettings.scanMode : "classic";
+
+  // --- Compact keypad: builds qtyBox's value digit by digit ---
+  let pendingScan = null; // { text, format } — set when a scan is awaiting quantity confirmation
+  let qtyFreshEntry = true; // true right after a reset — next digit replaces "1" instead of appending
+
+  function resetQtyBox() {
+    qtyBox.value = "1";
+    qtyFreshEntry = true;
   }
 
-  // --- Scan mode: classic (qty=1) vs quantity (ask each time) ---
-  let scanMode = (savedSettings && savedSettings.scanMode) ? savedSettings.scanMode : "classic";
-  modeBtns.forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.mode === scanMode);
-    btn.addEventListener("click", () => {
-      modeBtns.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      scanMode = btn.dataset.mode;
-      log("Scan mode: " + scanMode);
-      saveSettings();
+  function applyModeUI() {
+    const isQty = scanMode === "quantity";
+    modeSwitchBtn.textContent = isQty ? "Mode: Quantity" : "Mode: Classic";
+    numKeypad.style.display = isQty ? "block" : "none";
+    qtyBox.disabled = !isQty;
+    resetQtyBox();
+  }
+  applyModeUI();
+
+  modeSwitchBtn.addEventListener("click", () => {
+    scanMode = (scanMode === "classic") ? "quantity" : "classic";
+    applyModeUI();
+    log("Scan mode: " + scanMode);
+    saveSettings();
+  });
+
+  keypadKeys.forEach(key => {
+    key.addEventListener("click", () => {
+      const k = key.dataset.key;
+      if (k === "back") {
+        qtyBox.value = qtyBox.value.slice(0, -1);
+        qtyFreshEntry = false;
+      } else if (k === "add") {
+        if (!pendingScan) {
+          log("No scan waiting to confirm.");
+          return;
+        }
+        const qty = Math.max(1, parseInt(qtyBox.value, 10) || 1);
+        addCapturedBarcode(pendingScan.text, pendingScan.format, qty);
+        pendingScan = null;
+        resetQtyBox();
+        statusEl.textContent = "Added — resuming…";
+        resumeScanning().then(ok => setScanningUI(ok));
+      } else {
+        // digit key — first tap after a reset replaces the placeholder "1"
+        if (qtyFreshEntry) {
+          qtyBox.value = k;
+          qtyFreshEntry = false;
+        } else {
+          qtyBox.value = (qtyBox.value + k).slice(0, 6); // reasonable cap
+        }
+      }
     });
   });
 
-  // --- Quantity picker ---
-  let pendingScan = null; // { text, format }
-
-  function showQtyPicker(text, format) {
-    pendingScan = { text: text, format: format };
-    qtyPickerCode.textContent = text;
-    qtyInput.value = 1;
-    qtyPicker.style.display = "block";
-    switchToDataTab();
-  }
-
-  function hideQtyPicker() {
-    qtyPicker.style.display = "none";
-    pendingScan = null;
-  }
-
-  qtyMinus.addEventListener("click", () => {
-    const v = Math.max(1, (parseInt(qtyInput.value, 10) || 1) - 1);
-    qtyInput.value = v;
+  // --- Search / Clean (row 1) ---
+  searchBtn.addEventListener("click", () => {
+    const query = lastScannedInput.value.trim();
+    if (!query) return;
+    const match = capturedBarcodes.find(item => item.text === query)
+      || capturedBarcodes.find(item => item.text.toLowerCase().includes(query.toLowerCase()));
+    if (match) {
+      selectedBarcodeId = match.id;
+      renderCapturedList();
+      const el = capturedListEl.querySelector(`[data-id="${match.id}"]`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      log("Search: found match for \"" + query + "\".");
+    } else {
+      log("Search: no match found for \"" + query + "\".");
+      statusEl.textContent = "No match found in list.";
+    }
   });
-  qtyPlus.addEventListener("click", () => {
-    const v = Math.max(1, (parseInt(qtyInput.value, 10) || 1) + 1);
-    qtyInput.value = v;
-  });
-  qtyConfirmBtn.addEventListener("click", () => {
-    if (!pendingScan) return;
-    const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
-    addCapturedBarcode(pendingScan.text, pendingScan.format, qty);
-    hideQtyPicker();
+
+  cleanBtn.addEventListener("click", () => {
+    lastScannedInput.value = "";
   });
 
   // --- Captured barcode list (newest first) ---
@@ -394,7 +425,7 @@
     const gapMs = now - lastFrameSeenAt;
     lastFrameSeenAt = now;
 
-const wallNow = Date.now();
+    const wallNow = Date.now();
     if (decodedText === lastCode && wallNow - lastCodeTime < 1200) {
       return; // debounce duplicate reads of the same code
     }
@@ -411,6 +442,7 @@ const wallNow = Date.now();
 
     resultLabel.style.display = "block";
     resultText.textContent = decodedText;
+    lastScannedInput.value = decodedText;
 
     const formatName = formatNameEarly;
 
@@ -419,16 +451,17 @@ const wallNow = Date.now();
     log("Scan #" + scanCount + ": " + decodedText + " (Δ" + gapMs.toFixed(0) + "ms) mode=" + scanMode);
 
     if (scanMode === "quantity") {
-      // Quantity mode always pauses to let the user pick a quantity —
-      // the barcode isn't added to the list until they confirm. Preview
-      // stays live (pause, not stop).
+      // Quantity mode always pauses so the keypad can be used to set a
+      // quantity — the barcode isn't added to the list until "Add ✓" is
+      // tapped. Preview stays live (pause, not stop).
       if (!isStoppingAfterCapture) {
         isStoppingAfterCapture = true;
-        statusEl.textContent = "Captured — choose quantity below.";
+        pendingScan = { text: decodedText, format: formatName };
+        resetQtyBox();
+        statusEl.textContent = "Captured — enter quantity on keypad, then tap Add ✓.";
         pauseScanning().then(() => {
           setScanningUI(false);
           isStoppingAfterCapture = false;
-          showQtyPicker(decodedText, formatName);
         });
       }
       return;
