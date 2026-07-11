@@ -31,6 +31,7 @@
   const emptyDataEl = document.getElementById("empty-data");
   const clearDataBtn = document.getElementById("clearDataBtn");
   const deleteSelectedBtn = document.getElementById("deleteSelectedBtn");
+  const recordCounterEl = document.getElementById("recordCounter");
   const tabBtns = document.querySelectorAll(".tab-btn");
   const tabPanels = document.querySelectorAll(".tab-panel");
   const lastScannedInput = document.getElementById("lastScannedInput");
@@ -178,19 +179,27 @@
 
   // --- Compact keypad: builds qtyBox's value digit by digit ---
   let pendingScan = null; // { text, format } — set when a scan is awaiting quantity confirmation
-  let qtyFreshEntry = true; // true right after a reset — next digit replaces "1" instead of appending
 
   function resetQtyBox() {
-    qtyBox.value = "1";
-    qtyFreshEntry = true;
+    qtyBox.value = "";
+  }
+
+  // Keypad + qty box are only usable in quantity mode while paused waiting
+  // for a quantity to be entered — disabled and blank the instant scanning
+  // is active, so nothing can be tapped mid-scan.
+  function updateKeypadInteractivity() {
+    const isQty = scanMode === "quantity";
+    const usable = isQty && !isScanning;
+    keypadKeys.forEach(k => { k.disabled = !usable; });
+    qtyBox.disabled = !usable;
+    if (!usable) resetQtyBox();
   }
 
   function applyModeUI() {
     const isQty = scanMode === "quantity";
     modeSwitchBtn.textContent = isQty ? "Mode: Quantity" : "Mode: Classic";
     numKeypad.style.display = isQty ? "block" : "none";
-    qtyBox.disabled = !isQty;
-    resetQtyBox();
+    updateKeypadInteractivity();
   }
   applyModeUI();
 
@@ -206,7 +215,6 @@
       const k = key.dataset.key;
       if (k === "back") {
         qtyBox.value = qtyBox.value.slice(0, -1);
-        qtyFreshEntry = false;
       } else if (k === "add") {
         if (!pendingScan) {
           log("No scan waiting to confirm.");
@@ -219,13 +227,8 @@
         statusEl.textContent = "Added — resuming…";
         resumeScanning().then(ok => setScanningUI(ok));
       } else {
-        // digit key — first tap after a reset replaces the placeholder "1"
-        if (qtyFreshEntry) {
-          qtyBox.value = k;
-          qtyFreshEntry = false;
-        } else {
-          qtyBox.value = (qtyBox.value + k).slice(0, 6); // reasonable cap
-        }
+        // digit key — appends naturally since the box starts empty
+        qtyBox.value = (qtyBox.value + k).slice(0, 6); // reasonable cap
       }
     });
   });
@@ -258,6 +261,7 @@
   let selectedBarcodeId = null;
 
   function renderCapturedList() {
+    recordCounterEl.textContent = "(" + capturedBarcodes.length + ")";
     if (capturedBarcodes.length === 0) {
       emptyDataEl.style.display = "block";
       capturedListEl.innerHTML = "";
@@ -315,7 +319,7 @@
 
   renderCapturedList();
 
-  // --- Beep sound (Web Audio API, no external asset needed) ---
+// --- Beep sound (Web Audio API, no external asset needed) ---
   let audioCtx = null;
   function playBeep() {
     if (!beepOnCaptureEl.checked) return;
@@ -336,7 +340,7 @@
     }
   }
 
-function log(msg) {
+  function log(msg) {
     const line = document.createElement("div");
     line.textContent = new Date().toLocaleTimeString() + " — " + msg;
     logEl.prepend(line);
@@ -366,6 +370,7 @@ function log(msg) {
     toggleScanBtn.textContent = scanning ? "Pause Scan" : (html5QrCode ? "Resume Scan" : "Start Scan");
     toggleScanBtn.classList.toggle("state-start", !scanning);
     toggleScanBtn.classList.toggle("state-stop", scanning);
+    updateKeypadInteractivity();
   }
 
   // --- Checksum validation for numeric retail barcodes ---
@@ -476,7 +481,6 @@ function log(msg) {
       if (!isStoppingAfterCapture) {
         isStoppingAfterCapture = true;
         pendingScan = { text: decodedText, format: formatName };
-        resetQtyBox();
         statusEl.textContent = "Captured — enter quantity on keypad, then tap Add ✓.";
         pauseScanning().then(() => {
           setScanningUI(false);
@@ -829,8 +833,18 @@ function log(msg) {
     }
   });
 
-  statusEl.textContent = "Tap \"Start Scan\" to begin.";
-  // NOTE: intentionally NOT auto-starting on load — camera access tied to
-  // a real tap avoids the silent hang some mobile browsers cause when
-  // getUserMedia/video playback is requested without a user gesture.
+  // Auto-start immediately so the preview appears as fast as possible.
+  // (The earlier "wait for a tap" approach was a precaution against a
+  // suspected autoplay-gesture hang — the actual cause of that turned out
+  // to be an unrelated truncated-file bug. The 10s timeout + retry-chain
+  // in startScanner() already guards against a genuine hang, so it's safe
+  // to fire immediately here; if it ever fails, the button still offers
+  // "Retry Start Scan".)
+  toggleScanBtn.textContent = "Starting…";
+  toggleScanBtn.disabled = true;
+  statusEl.textContent = "Starting camera…";
+  startScanner().then(ok => {
+    setScanningUI(ok);
+    if (!ok) toggleScanBtn.textContent = "Retry Start Scan";
+  });
 })();
