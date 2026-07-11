@@ -38,20 +38,6 @@
   #reader__filescan_input,
   #reader__camera_selection { display: none !important; }
 
-  /* --- Start/Stop control bar (separate from preview, always accessible) --- */
-  #controls { flex-shrink: 0; padding: 10px 12px 0; }
-  #toggleScanBtn {
-    width: 100%;
-    padding: 14px;
-    border: none;
-    border-radius: 10px;
-    font-weight: 700;
-    font-size: 15px;
-  }
-  #toggleScanBtn.state-start { background: #4caf50; color: #062b09; }
-  #toggleScanBtn.state-stop { background: #d9453d; color: #2b0705; }
-  #toggleScanBtn:disabled { opacity: 0.6; }
-
   #status {
     font-size: 11px;
     color: #888;
@@ -122,36 +108,45 @@
   .captured-item .meta { font-size: 11px; color: #666; margin-top: 4px; display: flex; justify-content: space-between; }
   #empty-data { color: #666; font-size: 13px; text-align: center; padding: 30px 10px; }
 
-  /* --- Scan mode toggle --- */
-  #mode-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
-  .mode-btn {
-    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #333;
-    background: #151515; color: #888; font-size: 13px; font-weight: 600;
+  /* --- Scan control rows (barcode/search/clean + qty/scan/mode) --- */
+  .ctrl-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  #lastScannedInput {
+    flex: 3; min-width: 0; background: #1a1a1a; color: #fff;
+    border: 1px solid #333; border-radius: 8px; padding: 10px; font-size: 13px;
   }
-  .mode-btn.active { background: #234d29; border-color: #4caf50; color: #b8f0c0; }
+  #searchBtn, #cleanBtn {
+    flex: 1; border: 1px solid #333; background: #151515; color: #ccc;
+    border-radius: 8px; font-size: 12px; font-weight: 600;
+  }
+  #qtyBox {
+    flex: 1; min-width: 0; text-align: center; font-size: 16px; font-weight: 700;
+    background: #1a1a1a; color: #fff; border: 1px solid #333; border-radius: 8px; padding: 10px;
+  }
+  #qtyBox:disabled { opacity: 0.4; }
+  #toggleScanBtn {
+    flex: 2; padding: 12px; border: none; border-radius: 8px;
+    font-weight: 700; font-size: 14px;
+  }
+  #toggleScanBtn.state-start { background: #4caf50; color: #062b09; }
+  #toggleScanBtn.state-stop { background: #d9453d; color: #2b0705; }
+  #toggleScanBtn:disabled { opacity: 0.6; }
+  #modeSwitchBtn {
+    flex: 1; border: 1px solid #333; background: #151515; color: #4caf50;
+    border-radius: 8px; font-size: 11px; font-weight: 700;
+  }
 
-  /* --- Quantity picker card --- */
-  #qty-picker {
-    display: none;
-    background: #1e1e1e; border: 2px solid #4caf50; border-radius: 10px;
-    padding: 14px; margin-bottom: 14px;
+  /* --- Compact number keypad (quantity mode only) --- */
+  #numKeypad { display: none; margin-bottom: 14px; }
+  .keypad-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
   }
-  #qty-picker .qty-label { font-size: 11px; color: #4caf50; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-  #qty-picker .qty-code { font-size: 15px; word-break: break-all; margin-bottom: 12px; }
-  .qty-stepper { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-  .qty-stepper button {
-    width: 44px; height: 44px; border-radius: 8px; border: none;
-    background: #2a2a2a; color: #fff; font-size: 20px; font-weight: 700;
+  .keypad-grid .key {
+    padding: 14px 0; border: none; border-radius: 8px; background: #1e1e1e;
+    color: #fff; font-size: 18px; font-weight: 700; border: 1px solid #2a2a2a;
   }
-  .qty-stepper input {
-    flex: 1; text-align: center; font-size: 20px; font-weight: 700;
-    background: #111; color: #fff; border: 1px solid #333; border-radius: 8px;
-    padding: 10px; -moz-appearance: textfield;
-  }
-  #qtyConfirmBtn {
-    width: 100%; padding: 12px; background: #4caf50; border: none;
-    border-radius: 8px; color: #062b09; font-weight: 700; font-size: 14px;
-  }
+  .keypad-grid .key:active { background: #2a2a2a; }
+  .keypad-grid .key-back { color: #ff8a80; }
+  .keypad-grid .key-add { background: #234d29; border-color: #4caf50; color: #b8f0c0; }
 
   /* --- Settings tab --- */
   #panel h2 { font-size: 13px; margin: 16px 0 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -176,10 +171,6 @@
   <div id="reader"></div>
 </div>
 
-<div id="controls">
-  <button id="toggleScanBtn" class="state-start">Start Scan</button>
-</div>
-
 <div id="status">Tap "Start Scan" to begin.</div>
 
 <div id="tab-bar">
@@ -191,20 +182,33 @@
 
   <div id="tab-data" class="tab-panel active">
 
-    <div id="mode-toggle">
-      <button class="mode-btn active" data-mode="classic">Classic (qty = 1)</button>
-      <button class="mode-btn" data-mode="quantity">Choose Quantity</button>
+    <div class="ctrl-row">
+      <input type="text" id="lastScannedInput" placeholder="Last scanned barcode">
+      <button id="searchBtn">Search</button>
+      <button id="cleanBtn">Clean</button>
     </div>
 
-    <div id="qty-picker">
-      <div class="qty-label">Scanned — choose quantity</div>
-      <div class="qty-code" id="qtyPickerCode"></div>
-      <div class="qty-stepper">
-        <button id="qtyMinus" type="button">−</button>
-        <input type="number" id="qtyInput" value="1" min="1" inputmode="numeric">
-        <button id="qtyPlus" type="button">+</button>
+    <div class="ctrl-row">
+      <input type="text" id="qtyBox" value="1" inputmode="numeric" readonly disabled>
+      <button id="toggleScanBtn" class="state-start">Start Scan</button>
+      <button id="modeSwitchBtn">Mode: Classic</button>
+    </div>
+
+    <div id="numKeypad">
+      <div class="keypad-grid">
+        <button class="key" data-key="1">1</button>
+        <button class="key" data-key="2">2</button>
+        <button class="key" data-key="3">3</button>
+        <button class="key" data-key="4">4</button>
+        <button class="key" data-key="5">5</button>
+        <button class="key" data-key="6">6</button>
+        <button class="key" data-key="7">7</button>
+        <button class="key" data-key="8">8</button>
+        <button class="key" data-key="9">9</button>
+        <button class="key key-back" data-key="back">⌫</button>
+        <button class="key" data-key="0">0</button>
+        <button class="key key-add" data-key="add">Add ✓</button>
       </div>
-      <button id="qtyConfirmBtn">Add to list</button>
     </div>
 
     <div id="result-box">
