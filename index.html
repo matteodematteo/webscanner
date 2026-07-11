@@ -284,6 +284,15 @@
         </select>
       </div>
       <div class="row">
+        <label for="verifyReads">Verify reads (checksum + double-read)</label>
+        <input type="checkbox" id="verifyReads" checked style="flex:0;width:20px;height:20px;accent-color:#4caf50;">
+      </div>
+      <div style="font-size:11px;color:#666;margin:-4px 0 10px;">
+        Rejects a scan if it fails its checksum (catches garbled digits, e.g. from motion blur),
+        and requires the same code twice in a row before accepting. Adds a tiny delay but fixes
+        occasional wrong-digit misreads. Turn off only if scanning feels too slow.
+      </div>
+      <div class="row">
         <label for="stopOnCapture">Stop after each scan</label>
         <input type="checkbox" id="stopOnCapture" checked style="flex:0;width:20px;height:20px;accent-color:#4caf50;">
       </div>
