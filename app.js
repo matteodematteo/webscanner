@@ -1,4 +1,3 @@
-// script.js — Barcode/QR Scanner logic (html5-qrcode)
 (function () {
   const resultText = document.getElementById("result-text");
   const resultLabel = document.getElementById("result-label");
@@ -24,6 +23,7 @@
   const formatChipsEl = document.getElementById("formatChips");
   const stopOnCaptureEl = document.getElementById("stopOnCapture");
   const beepOnCaptureEl = document.getElementById("beepOnCapture");
+  const verifyReadsEl = document.getElementById("verifyReads");
   const capturedListEl = document.getElementById("captured-list");
   const emptyDataEl = document.getElementById("empty-data");
   const clearDataBtn = document.getElementById("clearDataBtn");
@@ -62,6 +62,7 @@
         enabledFormats: Array.from(enabledFormats),
         stopOnCapture: stopOnCaptureEl.checked,
         beepOnCapture: beepOnCaptureEl.checked,
+        verifyReads: verifyReadsEl.checked,
         scanMode: scanMode
       }));
     } catch (e) {
@@ -94,6 +95,7 @@
     if (savedSettings.resolution) resolutionSelect.value = savedSettings.resolution;
     if (typeof savedSettings.stopOnCapture === "boolean") stopOnCaptureEl.checked = savedSettings.stopOnCapture;
     if (typeof savedSettings.beepOnCapture === "boolean") beepOnCaptureEl.checked = savedSettings.beepOnCapture;
+    if (typeof savedSettings.verifyReads === "boolean") verifyReadsEl.checked = savedSettings.verifyReads;
   }
 
   ALL_FORMATS.forEach(f => {
@@ -124,6 +126,7 @@
   focusModeSelect.addEventListener("change", saveSettings);
   stopOnCaptureEl.addEventListener("change", saveSettings);
   beepOnCaptureEl.addEventListener("change", saveSettings);
+  verifyReadsEl.addEventListener("change", saveSettings);
 
   zoomInput.addEventListener("change", async () => {
     saveSettings();
@@ -315,12 +318,83 @@
     toggleScanBtn.classList.toggle("state-stop", scanning);
   }
 
+  // --- Checksum validation for numeric retail barcodes ---
+  // A garbled/blurry read (classic symptom: first digit wrong) will almost
+  // always fail its own check digit — this catches that before it's accepted.
+  function digitsOf(str) {
+    return str.split("").map(Number);
+  }
+
+  function validEAN13(text) {
+    if (!/^\d{13}$/.test(text)) return true; // not this format's shape, don't block
+    const d = digitsOf(text);
+    const check = d.pop();
+    let sum = 0;
+    d.forEach((n, i) => sum += n * (i % 2 === 0 ? 1 : 3));
+    return ((10 - (sum % 10)) % 10) === check;
+  }
+
+  function validEAN8(text) {
+    if (!/^\d{8}$/.test(text)) return true;
+    const d = digitsOf(text);
+    const check = d.pop();
+    let sum = 0;
+    d.forEach((n, i) => sum += n * (i % 2 === 0 ? 3 : 1));
+    return ((10 - (sum % 10)) % 10) === check;
+  }
+
+  function validUPCA(text) {
+    if (!/^\d{12}$/.test(text)) return true;
+    const d = digitsOf(text);
+    const check = d.pop();
+    let sum = 0;
+    d.forEach((n, i) => sum += n * (i % 2 === 0 ? 3 : 1));
+    return ((10 - (sum % 10)) % 10) === check;
+  }
+
+  function passesChecksum(text, formatName) {
+    if (formatName === "EAN_13") return validEAN13(text);
+    if (formatName === "EAN_8") return validEAN8(text);
+    if (formatName === "UPC_A") return validUPCA(text);
+    return true; // QR/Code128/etc. — no simple universal check digit, skip
+  }
+
+  // --- Double-read confirmation: require the same value twice in a row
+  // before accepting, to filter one-off misreads from blur/glare/angle. ---
+  let pendingConfirmText = null;
+  let pendingConfirmTime = 0;
+  const CONFIRM_WINDOW_MS = 700;
+
   function onScanSuccess(decodedText, decodedResult) {
+    const formatNameEarly = (decodedResult && decodedResult.result && decodedResult.result.format
+      && decodedResult.result.format.formatName) || "";
+
+    // Gate 1: checksum. Reject silently and keep scanning — this is the
+    // classic "first digit wrong" symptom, caught before it ever reaches you.
+    if (verifyReadsEl.checked && !passesChecksum(decodedText, formatNameEarly)) {
+      log("Rejected (checksum failed): " + decodedText);
+      return;
+    }
+
+    // Gate 2: require the same value on two consecutive frames.
+    if (verifyReadsEl.checked) {
+      const nowConfirm = Date.now();
+      const isRepeatConfirm = (decodedText === pendingConfirmText)
+        && (nowConfirm - pendingConfirmTime < CONFIRM_WINDOW_MS);
+      if (!isRepeatConfirm) {
+        pendingConfirmText = decodedText;
+        pendingConfirmTime = nowConfirm;
+        return; // wait for the next frame to confirm before accepting
+      }
+      // Confirmed — clear pending state and fall through to normal handling.
+      pendingConfirmText = null;
+    }
+
     const now = performance.now();
     const gapMs = now - lastFrameSeenAt;
     lastFrameSeenAt = now;
 
-    const wallNow = Date.now();
+const wallNow = Date.now();
     if (decodedText === lastCode && wallNow - lastCodeTime < 1200) {
       return; // debounce duplicate reads of the same code
     }
@@ -338,8 +412,7 @@
     resultLabel.style.display = "block";
     resultText.textContent = decodedText;
 
-    const formatName = (decodedResult && decodedResult.result && decodedResult.result.format
-      && decodedResult.result.format.formatName) || "";
+    const formatName = formatNameEarly;
 
     if (navigator.vibrate) navigator.vibrate(60);
     playBeep();
