@@ -11,8 +11,10 @@
 
   const fpsInput = document.getElementById("fps");
   const fpsVal = document.getElementById("fpsVal");
-  const qrboxInput = document.getElementById("qrbox");
-  const qrboxVal = document.getElementById("qrboxVal");
+  const roiWidthInput = document.getElementById("roiWidth");
+  const roiWidthVal = document.getElementById("roiWidthVal");
+  const roiHeightInput = document.getElementById("roiHeight");
+  const roiHeightVal = document.getElementById("roiHeightVal");
   const zoomInput = document.getElementById("zoom");
   const zoomVal = document.getElementById("zoomVal");
   const focusModeSelect = document.getElementById("focusMode");
@@ -55,7 +57,8 @@
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify({
         fps: fpsInput.value,
-        qrbox: qrboxInput.value,
+        roiWidth: roiWidthInput.value,
+        roiHeight: roiHeightInput.value,
         zoom: zoomInput.value,
         focusMode: focusModeSelect.value,
         resolution: resolutionSelect.value,
@@ -90,7 +93,8 @@
 
   if (savedSettings) {
     if (savedSettings.fps) fpsInput.value = savedSettings.fps;
-    if (savedSettings.qrbox) qrboxInput.value = savedSettings.qrbox;
+    if (savedSettings.roiWidth) roiWidthInput.value = savedSettings.roiWidth;
+    if (savedSettings.roiHeight) roiHeightInput.value = savedSettings.roiHeight;
     if (savedSettings.zoom) zoomInput.value = savedSettings.zoom;
     if (savedSettings.focusMode) focusModeSelect.value = savedSettings.focusMode;
     if (savedSettings.resolution) resolutionSelect.value = savedSettings.resolution;
@@ -118,16 +122,31 @@
   });
 
   fpsInput.addEventListener("input", () => { fpsVal.textContent = fpsInput.value; saveSettings(); });
-  qrboxInput.addEventListener("input", () => { qrboxVal.textContent = qrboxInput.value; saveSettings(); });
+  roiWidthInput.addEventListener("input", () => { roiWidthVal.textContent = roiWidthInput.value; });
+  roiHeightInput.addEventListener("input", () => { roiHeightVal.textContent = roiHeightInput.value; });
   zoomInput.addEventListener("input", () => zoomVal.textContent = parseFloat(zoomInput.value).toFixed(1) + "×");
   fpsVal.textContent = fpsInput.value;
-  qrboxVal.textContent = qrboxInput.value;
+  roiWidthVal.textContent = roiWidthInput.value;
+  roiHeightVal.textContent = roiHeightInput.value;
   zoomVal.textContent = parseFloat(zoomInput.value).toFixed(1) + "×";
 
   focusModeSelect.addEventListener("change", saveSettings);
   stopOnCaptureEl.addEventListener("change", saveSettings);
   beepOnCaptureEl.addEventListener("change", saveSettings);
   verifyReadsEl.addEventListener("change", saveSettings);
+
+  // ROI box is part of html5-qrcode's start() config, not a live video
+  // constraint — so "real-time" here means: as soon as you release the
+  // slider (change event), it restarts the scan with the new box size.
+  // The camera itself doesn't drop, only the decode region changes.
+  async function applyRoiChange() {
+    saveSettings();
+    if (!html5QrCode) return; // not started yet — new value takes effect on first start
+    const ok = await startScanner();
+    setScanningUI(ok);
+  }
+  roiWidthInput.addEventListener("change", applyRoiChange);
+  roiHeightInput.addEventListener("change", applyRoiChange);
 
   zoomInput.addEventListener("change", async () => {
     saveSettings();
@@ -317,7 +336,7 @@
     }
   }
 
-  function log(msg) {
+function log(msg) {
     const line = document.createElement("div");
     line.textContent = new Date().toLocaleTimeString() + " — " + msg;
     logEl.prepend(line);
@@ -651,7 +670,7 @@
 
     const scanConfig = {
       fps: parseInt(fpsInput.value, 10),
-      qrbox: { width: parseInt(qrboxInput.value, 10), height: parseInt(qrboxInput.value, 10) },
+      qrbox: { width: parseInt(roiWidthInput.value, 10), height: parseInt(roiHeightInput.value, 10) },
       aspectRatio: 1.0,
       formatsToSupport: formats,
       experimentalFeatures: { useBarCodeDetectorIfSupported: false }
@@ -676,9 +695,9 @@
         "Camera start"
       );
       statusEl.textContent = (selectedDeviceId ? "Scanning on selected camera… " : "Scanning… ")
-        + "(fps=" + scanConfig.fps + ", roi=" + qrboxInput.value + "px, zoom=" + zoomInput.value + "×, focus=" + focusModeSelect.value + ")";
+        + "(fps=" + scanConfig.fps + ", roi=" + roiWidthInput.value + "×" + roiHeightInput.value + "px, zoom=" + zoomInput.value + "×, focus=" + focusModeSelect.value + ")";
       log("Started: " + (selectedDeviceId ? "deviceId=" + selectedDeviceId : "facingMode=environment")
-        + " fps=" + scanConfig.fps + " roi=" + qrboxInput.value + " zoom=" + zoomInput.value
+        + " fps=" + scanConfig.fps + " roi=" + roiWidthInput.value + "x" + roiHeightInput.value + " zoom=" + zoomInput.value
         + " focus=" + focusModeSelect.value + " formats=" + Array.from(enabledFormats).join(","));
       reportActualResolution();
 
