@@ -1,6 +1,5 @@
 // script.js — Barcode/QR Scanner logic (html5-qrcode)
 (function () {
-  const resultText = document.getElementById("result-text");
   const statusEl = document.getElementById("status");
   const logEl = document.getElementById("log");
 
@@ -254,6 +253,28 @@
     lastScannedInput.value = "";
   });
 
+  // Pressing Enter in the barcode box acts as a manual "scan": in Classic
+  // mode it's added straight to the list; in Quantity mode it activates
+  // the keypad exactly as a real camera scan would, awaiting confirmation.
+  lastScannedInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const value = lastScannedInput.value.trim();
+    if (!value) return;
+
+    if (scanMode === "quantity") {
+      pendingScan = { text: value, format: "Manual" };
+      resetQtyBox();
+      updateKeypadInteractivity();
+      statusEl.textContent = "Manual entry — enter quantity on keypad, then tap Add ✓.";
+      log("Manual entry (quantity mode): " + value);
+    } else {
+      addCapturedBarcode(value, "Manual", 1);
+      statusEl.textContent = "Added manually.";
+      log("Manual entry (classic mode): " + value);
+    }
+  });
+
   // --- Captured barcode list (newest first) ---
   let capturedBarcodes = [];
   let nextBarcodeId = 1;
@@ -464,7 +485,6 @@
     statLatency.textContent = gapMs.toFixed(0);
     statRate.textContent = (scanTimestamps.length / 5).toFixed(2);
 
-    resultText.textContent = decodedText;
     lastScannedInput.value = decodedText;
 
     const formatName = formatNameEarly;
