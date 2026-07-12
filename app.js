@@ -1,7 +1,6 @@
 // script.js — Barcode/QR Scanner logic (html5-qrcode)
 (function () {
   const resultText = document.getElementById("result-text");
-  const resultLabel = document.getElementById("result-label");
   const statusEl = document.getElementById("status");
   const logEl = document.getElementById("log");
 
@@ -184,12 +183,11 @@
     qtyBox.value = "";
   }
 
-  // Keypad + qty box are only usable in quantity mode while paused waiting
-  // for a quantity to be entered — disabled and blank the instant scanning
-  // is active, so nothing can be tapped mid-scan.
+  // Keypad + qty box are only usable once an actual scan is waiting to be
+  // confirmed — not just because quantity mode is on, and not just because
+  // scanning happens to be paused (e.g. right after switching modes).
   function updateKeypadInteractivity() {
-    const isQty = scanMode === "quantity";
-    const usable = isQty && !isScanning;
+    const usable = scanMode === "quantity" && pendingScan !== null;
     keypadKeys.forEach(k => { k.disabled = !usable; });
     qtyBox.disabled = !usable;
     if (!usable) resetQtyBox();
@@ -205,6 +203,7 @@
 
   modeSwitchBtn.addEventListener("click", () => {
     scanMode = (scanMode === "classic") ? "quantity" : "classic";
+    pendingScan = null; // switching modes invalidates any unconfirmed scan
     applyModeUI();
     log("Scan mode: " + scanMode);
     saveSettings();
@@ -366,6 +365,7 @@
 
   function setScanningUI(scanning) {
     isScanning = scanning;
+    if (scanning) pendingScan = null; // a fresh scanning session shouldn't carry over a stale pending item
     toggleScanBtn.disabled = false;
     toggleScanBtn.textContent = scanning ? "Pause Scan" : (html5QrCode ? "Resume Scan" : "Start Scan");
     toggleScanBtn.classList.toggle("state-start", !scanning);
@@ -464,7 +464,6 @@
     statLatency.textContent = gapMs.toFixed(0);
     statRate.textContent = (scanTimestamps.length / 5).toFixed(2);
 
-    resultLabel.style.display = "block";
     resultText.textContent = decodedText;
     lastScannedInput.value = decodedText;
 
