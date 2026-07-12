@@ -319,7 +319,7 @@
 
   renderCapturedList();
 
-// --- Beep sound (Web Audio API, no external asset needed) ---
+  // --- Beep sound (Web Audio API, no external asset needed) ---
   let audioCtx = null;
   function playBeep() {
     if (!beepOnCaptureEl.checked) return;
@@ -541,6 +541,29 @@
     return { facingMode: source };
   }
 
+  // Applies resolution/zoom/focus to an ALREADY-live track via the browser's
+  // applyConstraints — no re-negotiation of the camera, no new permission
+  // prompt, no visible interruption. This runs in the background right after
+  // the fast/lean start succeeds, so the heavy constraint set never blocks
+  // the preview from appearing.
+  async function refineVideoConstraints() {
+    if (!html5QrCode || typeof html5QrCode.applyVideoConstraints !== "function") return;
+    const selectedDeviceId = cameraSelect.value;
+    const source = selectedDeviceId ? { deviceId: selectedDeviceId } : "environment";
+    const constraints = buildVideoConstraints(source);
+    // The track is already on the right device — re-asserting deviceId/
+    // facingMode here is redundant and can only slow this step down.
+    delete constraints.deviceId;
+    delete constraints.facingMode;
+    try {
+      await html5QrCode.applyVideoConstraints(constraints);
+      log("Refined stream: resolution/zoom/focus applied to the live track.");
+      reportActualResolution();
+    } catch (err) {
+      log("Could not refine resolution/zoom/focus after start (camera still usable at default res): " + err);
+    }
+  }
+
   async function loadCameras() {
     try {
       // Use the low-level browser API directly instead of Html5Qrcode.getCameras().
@@ -681,12 +704,19 @@
     };
 
     const selectedDeviceId = cameraSelect.value; // "" means "Auto (rear camera)"
-    const source = selectedDeviceId ? { deviceId: selectedDeviceId } : { exact: "environment" };
-
-    scanConfig.videoConstraints = buildVideoConstraints(source);
+    // Non-exact "environment" negotiates faster and almost never throws
+    // OverconstrainedError (unlike { exact: "environment" }), so the slow
+    // fallback chain below is rarely even reached anymore.
+    const source = selectedDeviceId ? { deviceId: selectedDeviceId } : "environment";
 
     statusEl.textContent = "Starting camera…";
 
+    // FAST PATH: request just the camera itself first — no resolution, no
+    // advanced zoom/focus. A bare-minimum constraint set negotiates far
+    // faster than a combined one. Resolution/zoom/focus get layered on
+    // AFTER the stream is already live, via applyVideoConstraints — the
+    // preview appears almost immediately instead of waiting on the full
+    // negotiation.
     try {
       await withTimeout(
         html5QrCode.start(
@@ -699,11 +729,12 @@
         "Camera start"
       );
       statusEl.textContent = (selectedDeviceId ? "Scanning on selected camera… " : "Scanning… ")
-        + "(fps=" + scanConfig.fps + ", roi=" + roiWidthInput.value + "×" + roiHeightInput.value + "px, zoom=" + zoomInput.value + "×, focus=" + focusModeSelect.value + ")";
-      log("Started: " + (selectedDeviceId ? "deviceId=" + selectedDeviceId : "facingMode=environment")
-        + " fps=" + scanConfig.fps + " roi=" + roiWidthInput.value + "x" + roiHeightInput.value + " zoom=" + zoomInput.value
-        + " focus=" + focusModeSelect.value + " formats=" + Array.from(enabledFormats).join(","));
+        + "(fps=" + scanConfig.fps + ", roi=" + roiWidthInput.value + "×" + roiHeightInput.value + "px)";
+      log("Fast-started: " + (selectedDeviceId ? "deviceId=" + selectedDeviceId : "facingMode=environment")
+        + " fps=" + scanConfig.fps + " roi=" + roiWidthInput.value + "x" + roiHeightInput.value
+        + " formats=" + Array.from(enabledFormats).join(","));
       reportActualResolution();
+      refineVideoConstraints(); // upgrade resolution/zoom/focus in the background, non-blocking
 
       if (!cameraSelect.dataset.loaded) {
         cameraSelect.dataset.loaded = "1";
