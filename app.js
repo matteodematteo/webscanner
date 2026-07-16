@@ -134,38 +134,18 @@
   beepOnCaptureEl.addEventListener("change", saveSettings);
   verifyReadsEl.addEventListener("change", saveSettings);
 
-  const customRoi = document.getElementById("custom-roi");
-
-  // 1. When the user drags the box on the camera feed, update the sliders
-  const roiObserver = new ResizeObserver(entries => {
-    for (let entry of entries) {
-      // Use offsetWidth/Height to include the border
-      const w = Math.round(customRoi.offsetWidth);
-      const h = Math.round(customRoi.offsetHeight);
-      
-      roiWidthInput.value = w;
-      roiWidthVal.textContent = w;
-      roiHeightInput.value = h;
-      roiHeightVal.textContent = h;
-    }
-  });
-  roiObserver.observe(customRoi);
-
-  // 2. When the user moves the sliders in Settings, update the box size instantly
-  function updateRoiBoxFromSliders() {
-    customRoi.style.width = roiWidthInput.value + "px";
-    customRoi.style.height = roiHeightInput.value + "px";
+  // ROI box is part of html5-qrcode's start() config, not a live video
+  // constraint — so "real-time" here means: as soon as you release the
+  // slider (change event), it restarts the scan with the new box size.
+  // The camera itself doesn't drop, only the decode region changes.
+  async function applyRoiChange() {
     saveSettings();
+    if (!html5QrCode) return; // not started yet — new value takes effect on first start
+    const ok = await startScanner();
+    setScanningUI(ok);
   }
-  
-  roiWidthInput.addEventListener("input", updateRoiBoxFromSliders);
-  roiHeightInput.addEventListener("input", updateRoiBoxFromSliders);
-
-  // 3. Initialize the box size on load based on saved settings
-  if (savedSettings) {
-    if (savedSettings.roiWidth) customRoi.style.width = savedSettings.roiWidth + "px";
-    if (savedSettings.roiHeight) customRoi.style.height = savedSettings.roiHeight + "px";
-  }
+  roiWidthInput.addEventListener("change", applyRoiChange);
+  roiHeightInput.addEventListener("change", applyRoiChange);
 
   zoomInput.addEventListener("change", async () => {
     saveSettings();
@@ -736,7 +716,7 @@
 
     const scanConfig = {
       fps: parseInt(fpsInput.value, 10),
-      // Removed qrbox so it scans the full feed, relying on our visual box instead
+      qrbox: { width: parseInt(roiWidthInput.value, 10), height: parseInt(roiHeightInput.value, 10) },
       aspectRatio: 1.0,
       formatsToSupport: formats,
       experimentalFeatures: { useBarCodeDetectorIfSupported: false }
@@ -792,7 +772,7 @@
         try {
           const minimalConfig = {
             fps: scanConfig.fps,
-            // Removed qrbox here as well
+            qrbox: scanConfig.qrbox,
             formatsToSupport: formats,
             experimentalFeatures: { useBarCodeDetectorIfSupported: false }
           };
