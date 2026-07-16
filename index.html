@@ -21,7 +21,6 @@
 
   /* --- Camera preview: fixed to 1/4 of viewport height, always visible --- */
   #reader-wrap {
-    position: relative; /* Added for custom ROI */
     width: 100%;
     height: 25vh;
     min-height: 140px;
@@ -38,37 +37,6 @@
   #reader__dashboard_section_csr button,
   #reader__filescan_input,
   #reader__camera_selection { display: none !important; }
-
-  /* --- Custom Live ROI Overlay --- */
-  #custom-roi-wrapper {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none; /* Let touches pass through to video */
-    z-index: 10;
-    overflow: hidden;
-  }
-
-  #custom-roi {
-    width: 250px;
-    height: 250px;
-    border: 2px solid #4caf50;
-    /* Massive box-shadow creates the dark overlay outside the box */
-    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6); 
-    resize: both;
-    overflow: hidden;
-    pointer-events: auto; /* Allow grabbing the bottom-right resize handle */
-    min-width: 80px;
-    min-height: 80px;
-    max-width: 95%;
-    max-height: 95%;
-    flex-shrink: 0;
-  }
-
-  /* Hide the library's default static shaded region */
-  #qr-shaded-region { display: none !important; }
 
   #status {
     font-size: 11px;
@@ -196,9 +164,6 @@
 
 <div id="reader-wrap">
   <div id="reader"></div>
-  <div id="custom-roi-wrapper">
-    <div id="custom-roi"></div>
-  </div>
 </div>
 
 <div id="status">Tap "Start Scan" to begin.</div>
