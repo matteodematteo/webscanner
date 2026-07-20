@@ -188,19 +188,19 @@ function bindEvents() {
       return;
     }
 
-    try {
-      await handleBarcodeLookup({
-        allowClosestSearch: true,
-        addToHistoryBeforeLookup: true,
-        persistToHistory: true
-      });
-    } catch (error) {
+    // Kick off the lookup (it reads the code from the field synchronously,
+    // before its first await) without waiting for it to resolve.
+    handleBarcodeLookup({
+      allowClosestSearch: true,
+      addToHistoryBeforeLookup: true,
+      persistToHistory: true
+    }).catch(function (error) {
       setStatus(error.message || "Could not add barcode to history");
-    } finally {
-      // Clean the barcode field so it's ready for the next scan.
-      state.els.barcodeInput.value = "";
-      moveFocusToInput(state.els.barcodeInput);
-    }
+    });
+
+    // Clean the barcode field right away, without waiting for the lookup to finish.
+    state.els.barcodeInput.value = "";
+    moveFocusToInput(state.els.barcodeInput);
   });
 
   state.els.barcodeInput.addEventListener("keyup", function (event) {
