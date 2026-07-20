@@ -187,11 +187,20 @@ function bindEvents() {
       setStatus("Type or scan a barcode first");
       return;
     }
-    state.els.barcodeInput.value = "";
-    moveFocusToInput(state.els.barcodeInput);
-    fetchProductInfo(code).catch(function (error) {
-      setStatus(error.message || "Could not load product info");
-    });
+
+    try {
+      await handleBarcodeLookup({
+        allowClosestSearch: true,
+        addToHistoryBeforeLookup: true,
+        persistToHistory: true
+      });
+    } catch (error) {
+      setStatus(error.message || "Could not add barcode to history");
+    } finally {
+      // Clean the barcode field so it's ready for the next scan.
+      state.els.barcodeInput.value = "";
+      moveFocusToInput(state.els.barcodeInput);
+    }
   });
 
   state.els.barcodeInput.addEventListener("keyup", function (event) {
@@ -434,4 +443,3 @@ function bindEvents() {
     });
   }
 }
-
