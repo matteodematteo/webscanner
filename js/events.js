@@ -191,7 +191,7 @@ function bindEvents() {
     // Kick off the lookup (it reads the code from the field synchronously,
     // before its first await) without waiting for it to resolve.
     handleBarcodeLookup({
-      allowClosestSearch: true,
+      allowClosestSearch: false,
       addToHistoryBeforeLookup: true,
       persistToHistory: true
     }).catch(function (error) {
