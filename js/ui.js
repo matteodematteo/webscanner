@@ -150,6 +150,7 @@ function toggleScreenScrollLock() {
     document.body.classList.add("is-scroll-locked");
     state.manualScrollLocked = true;
   }
+  saveScrollLockState(state.manualScrollLocked);  // ← ADD THIS LINE
   updateLockScreenScrollButton();
 }
 
