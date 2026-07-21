@@ -172,6 +172,14 @@ function bindEvents() {
     }
   });
 
+  // Set default input mode to none to prevent keyboard from popping on programmatic focus
+  state.els.barcodeInput.setAttribute("inputmode", "none");
+
+  // Re-enable the keyboard only when the user explicitly taps/clicks on the input field
+  state.els.barcodeInput.addEventListener("pointerdown", function () {
+    state.els.barcodeInput.removeAttribute("inputmode");
+  });
+
   state.els.barcodeInput.addEventListener("keydown", async function (event) {
     if (event.key !== "Enter") return;
     event.preventDefault();
@@ -220,6 +228,9 @@ function bindEvents() {
   });
 
   state.els.barcodeInput.addEventListener("blur", function () {
+    // Reset input mode back to 'none' when focus is lost
+    state.els.barcodeInput.setAttribute("inputmode", "none");
+    
     window.setTimeout(function () {
       if (isAnyDialogOpen()) {
         return;
