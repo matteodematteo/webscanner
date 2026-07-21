@@ -50,11 +50,13 @@ function bindEvents() {
     }
     openConfirmDialog("Delete all barcodes from the list?", clearAllHistory);
   });
+  
   state.els.sendTxtBtn.addEventListener("click", async function () {
     state.els.sendTxtBtn.disabled = true;
     try {
       await sendTxtList();
       closePrintDialog();
+      moveFocusToInput(state.els.barcodeInput);
     } catch (error) {
       setStatus(error.message || "Send TXT failed");
     } finally {
@@ -76,6 +78,7 @@ function bindEvents() {
     try {
       await printHistoryList("60*38");
       closePrintDialog();
+      moveFocusToInput(state.els.barcodeInput);
     } catch (error) {
       setStatus(error.message || "Print failed");
     } finally {
@@ -90,6 +93,7 @@ function bindEvents() {
     try {
       await printHistoryList("40*25");
       closePrintDialog();
+      moveFocusToInput(state.els.barcodeInput);
     } catch (error) {
       setStatus(error.message || "Print failed");
     } finally {
@@ -98,7 +102,11 @@ function bindEvents() {
     }
   });
 
-  state.els.printBackBtn.addEventListener("click", closePrintDialog);
+  state.els.printBackBtn.addEventListener("click", function() {
+    closePrintDialog();
+    moveFocusToInput(state.els.barcodeInput);
+  });
+  
   state.els.torchBtn.addEventListener("click", async function () {
     state.els.torchBtn.disabled = true;
     try {
@@ -111,6 +119,7 @@ function bindEvents() {
   state.els.closestSearchBackBtn.addEventListener("click", function () {
     if (!state.isClosestSearchLoading) {
       closeClosestSearchDialog();
+      moveFocusToInput(state.els.barcodeInput);
     }
   });
 
@@ -238,17 +247,23 @@ function bindEvents() {
       selectEntireInputValue(event);
     });
   }
+  
   state.els.quantityInput.addEventListener("input", function () {
     state.els.quantityInput.value = sanitizeEditableQuantity(state.els.quantityInput.value);
   });
+  
   state.els.quantityInput.addEventListener("keydown", async function (event) {
     if (event.key !== "Enter") return;
     event.preventDefault();
     await addCurrentBarcodeWithQuantity();
+    moveFocusToInput(state.els.barcodeInput);
   });
+  
   state.els.addBarcodeBtn.addEventListener("click", async function () {
     await addCurrentBarcodeWithQuantity();
+    moveFocusToInput(state.els.barcodeInput);
   });
+  
   state.els.quantityPad.addEventListener("click", async function (event) {
     const keyButton = event.target.closest("[data-key]");
     if (!keyButton) {
@@ -259,6 +274,10 @@ function bindEvents() {
       return;
     }
     await handleQuantityPadInput(key);
+    
+    if (key.toLowerCase() === "enter" || key.toLowerCase() === "add") {
+      moveFocusToInput(state.els.barcodeInput);
+    }
   });
 
   state.els.cameraSelect.addEventListener("change", async function () {
@@ -273,7 +292,11 @@ function bindEvents() {
   });
 
   state.els.settingsBtn.addEventListener("click", openSettingsDialog);
-  state.els.closeSettingsBtn.addEventListener("click", closeSettingsDialog);
+  
+  state.els.closeSettingsBtn.addEventListener("click", function() {
+    closeSettingsDialog();
+    moveFocusToInput(state.els.barcodeInput);
+  });
 
   state.els.loginSettingsBtn.addEventListener("click", async function () {
     const values = {
@@ -325,34 +348,42 @@ function bindEvents() {
   state.els.settingsDialog.addEventListener("click", function (event) {
     if (event.target === state.els.settingsDialog) {
       closeSettingsDialog();
+      moveFocusToInput(state.els.barcodeInput);
     }
   });
 
   state.els.confirmDialogOkBtn.addEventListener("click", function () {
     const action = state.pendingConfirmAction;
     closeConfirmDialog();
+    moveFocusToInput(state.els.barcodeInput);
     if (action) {
       action();
     }
   });
 
-  state.els.confirmDialogCancelBtn.addEventListener("click", closeConfirmDialog);
+  state.els.confirmDialogCancelBtn.addEventListener("click", function() {
+    closeConfirmDialog();
+    moveFocusToInput(state.els.barcodeInput);
+  });
 
   state.els.confirmDialog.addEventListener("click", function (event) {
     if (event.target === state.els.confirmDialog) {
       closeConfirmDialog();
+      moveFocusToInput(state.els.barcodeInput);
     }
   });
 
   state.els.printDialog.addEventListener("click", function (event) {
     if (event.target === state.els.printDialog) {
       closePrintDialog();
+      moveFocusToInput(state.els.barcodeInput);
     }
   });
 
   state.els.closestSearchDialog.addEventListener("click", function (event) {
     if (event.target === state.els.closestSearchDialog && !state.isClosestSearchLoading) {
       closeClosestSearchDialog();
+      moveFocusToInput(state.els.barcodeInput);
     }
   });
 
@@ -370,7 +401,10 @@ function bindEvents() {
     }
   });
 
-  state.els.historyEditBackBtn.addEventListener("click", closeHistoryEditDialog);
+  state.els.historyEditBackBtn.addEventListener("click", function() {
+    closeHistoryEditDialog();
+    moveFocusToInput(state.els.barcodeInput);
+  });
 
   state.els.historyEditSPriceInput.addEventListener("input", refreshHistoryEditDiscountPrice);
   state.els.historyEditSDiscountInput.addEventListener("input", refreshHistoryEditDiscountPrice);
@@ -398,6 +432,7 @@ function bindEvents() {
   state.els.historyEditDialog.addEventListener("click", function (event) {
     if (event.target === state.els.historyEditDialog) {
       closeHistoryEditDialog();
+      moveFocusToInput(state.els.barcodeInput);
     }
   });
 
@@ -406,6 +441,7 @@ function bindEvents() {
       setPreviewActive(true);
     }
   };
+  
   state.els.cameraPreview.addEventListener("loadeddata", markPreviewAsLive);
   state.els.cameraPreview.addEventListener("canplay", markPreviewAsLive);
   state.els.cameraPreview.addEventListener("playing", markPreviewAsLive);
