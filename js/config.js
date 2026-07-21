@@ -19,6 +19,7 @@ const CONFIG = {
     roiStorageKey: "web_barcode_scanner_roi",
     productInfoSlideStorageKey: "web_barcode_scanner_pi_slide",
     inputModeStorageKey: "web_barcode_scanner_input_mode",
+    scrollLockStorageKey: "web_barcode_scanner_scroll_lock",
     scanIntervalMs: 240,
     mobileScanIntervalMs: 170,
     iosScanIntervalMs: 130,
