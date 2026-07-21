@@ -22,6 +22,7 @@ async function init() {
   renderHistory();
   bindEvents();
   loadRoiState();
+  state.manualScrollLocked = loadScrollLockState();  // ← ADD THIS
   applyRoiBoxStyle();
   initRoiResize();
   initProductInfoSlider();
@@ -30,6 +31,8 @@ async function init() {
   document.body.classList.toggle("mode-scanner", state.inputMode === "scanner");
   state.els.barcodeInput.inputMode = state.inputMode === "scanner" ? "none" : "numeric";
   updateInputModeSwitchUi();
+  updateLockScreenScrollButton();  // ← ADD THIS - to show the button state on startup
+
 
   loginAndRefreshCookie(savedSettings).catch(function (error) {
     const message = error.message || "Cookie refresh failed.";
