@@ -144,16 +144,16 @@ function toggleScreenScrollLock() {
     const restoreY = state.manualScrollLockY || 0;
     state.manualScrollLockY = 0;
     window.scrollTo(0, restoreY);
+    saveScrollLockState(false, 0);  // ← UPDATE THIS
   } else {
     state.manualScrollLockY = window.scrollY || window.pageYOffset || 0;
     document.body.style.top = `-${state.manualScrollLockY}px`;
     document.body.classList.add("is-scroll-locked");
     state.manualScrollLocked = true;
+    saveScrollLockState(true, state.manualScrollLockY);  // ← UPDATE THIS
   }
-  saveScrollLockState(state.manualScrollLocked);  // ← ADD THIS LINE
   updateLockScreenScrollButton();
 }
-
 
 function showApiLoader() {
   state.pendingApiRequests += 1;
