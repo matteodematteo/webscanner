@@ -197,3 +197,12 @@ async function loginAndRefreshCookie(settingsOverride) {
   return cookie;
 }
 
+function saveScrollLockState(isLocked) {
+  localStorage.setItem(CONFIG.scrollLockStorageKey, isLocked ? "true" : "false");
+}
+
+
+function loadScrollLockState() {
+  const saved = localStorage.getItem(CONFIG.scrollLockStorageKey);
+  return saved === "true";
+}
