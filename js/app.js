@@ -22,7 +22,9 @@ async function init() {
   renderHistory();
   bindEvents();
   loadRoiState();
-  state.manualScrollLocked = loadScrollLockState();  // ← ADD THIS
+  const scrollLockState = loadScrollLockState();  // ← CHANGE THIS
+  state.manualScrollLocked = scrollLockState.isLocked;
+  state.manualScrollLockY = scrollLockState.position;
   applyRoiBoxStyle();
   initRoiResize();
   initProductInfoSlider();
@@ -31,8 +33,13 @@ async function init() {
   document.body.classList.toggle("mode-scanner", state.inputMode === "scanner");
   state.els.barcodeInput.inputMode = state.inputMode === "scanner" ? "none" : "numeric";
   updateInputModeSwitchUi();
-  updateLockScreenScrollButton();  // ← ADD THIS - to show the button state on startup
-
+  updateLockScreenScrollButton();
+  if (state.manualScrollLocked && state.manualScrollLockY) {
+    window.setTimeout(function () {
+    document.body.style.top = `-${state.manualScrollLockY}px`;
+    document.body.classList.add("is-scroll-locked");
+  }, 100);
+}
 
   loginAndRefreshCookie(savedSettings).catch(function (error) {
     const message = error.message || "Cookie refresh failed.";
