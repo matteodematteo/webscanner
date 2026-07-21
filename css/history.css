@@ -72,6 +72,10 @@
     background: rgba(20, 28, 36, 0.04);
     color: var(--muted);
     text-align: center;
+    min-height: 140px;  /* ← ADD THIS LINE */
+    display: flex;      /* ← ADD THIS (optional, centers text vertically) */
+    align-items: center; /* ← ADD THIS (optional, centers text vertically) */
+    justify-content: center; /* ← ADD THIS (optional, centers text vertically) */
   }
 
   .history-item {
