@@ -197,12 +197,28 @@ async function loginAndRefreshCookie(settingsOverride) {
   return cookie;
 }
 
-function saveScrollLockState(isLocked) {
-  localStorage.setItem(CONFIG.scrollLockStorageKey, isLocked ? "true" : "false");
+function saveScrollLockState(isLocked, position) {
+  const payload = {
+    isLocked: Boolean(isLocked),
+    position: Number(position) || 0
+  };
+  localStorage.setItem(CONFIG.scrollLockStorageKey, JSON.stringify(payload));
 }
 
 
 function loadScrollLockState() {
-  const saved = localStorage.getItem(CONFIG.scrollLockStorageKey);
-  return saved === "true";
+  try {
+    const raw = localStorage.getItem(CONFIG.scrollLockStorageKey);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === "object") {
+      return {
+        isLocked: Boolean(parsed.isLocked),
+        position: Number(parsed.position) || 0
+      };
+    }
+    // Fallback in case an older version stored a plain "true"/"false" string.
+    return { isLocked: raw === "true", position: 0 };
+  } catch {
+    return { isLocked: false, position: 0 };
+  }
 }
