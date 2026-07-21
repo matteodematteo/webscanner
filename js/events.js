@@ -43,7 +43,7 @@ function bindEvents() {
     }
     openConfirmDialog("Delete the selected barcode from the list?", clearSelectedHistory);
   });
-  moveFocusToInput(state.els.barcodeInput);
+
   state.els.clearAllBtn.addEventListener("click", function () {
     if (state.history.length === 0) {
       return;
