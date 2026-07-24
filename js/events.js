@@ -447,6 +447,24 @@ function bindEvents() {
     }
   });
 
+  // Native <dialog> elements can also be dismissed with the Escape key,
+  // which fires a "close" event directly and bypasses every click handler
+  // above. Catch that path too so focus always returns to barcodeInput,
+  // no matter how the dialog was closed. moveFocusToInput() alone won't
+  // pop the keyboard because barcodeInput keeps inputmode="none" until
+  // the user explicitly pointerdowns on it (see above).
+  [
+    state.els.settingsDialog,
+    state.els.confirmDialog,
+    state.els.printDialog,
+    state.els.closestSearchDialog,
+    state.els.historyEditDialog
+  ].forEach(function (dialogEl) {
+    dialogEl.addEventListener("close", function () {
+      moveFocusToInput(state.els.barcodeInput);
+    });
+  });
+
   const markPreviewAsLive = function () {
     if (!document.hidden) {
       setPreviewActive(true);
