@@ -232,6 +232,21 @@ function moveFocusToInput(input, options) {
   const shouldOpenKeyboard = Boolean(options?.openKeyboard);
   const isIOSFocus = Boolean(state.isIOS);
 
+  if (!shouldOpenKeyboard) {
+    // Programmatic focus (dialog close, mode switch, etc.) must never pop
+    // the on-screen keyboard. Force inputmode="none" right before focusing
+    // so any stale value left on the attribute - e.g. setInputMode() in
+    // input-mode.js sets inputMode to "numeric" for phone mode - can't
+    // cause the keyboard to appear here. A real user tap on the input
+    // (pointerdown, see events.js) removes this attribute again, which is
+    // what restores normal keyboard behavior for actual typing.
+    try {
+      input.setAttribute("inputmode", "none");
+    } catch {
+      // Ignore attribute errors.
+    }
+  }
+
   if (isIOSFocus) {
     try {
       input.focus();
@@ -254,4 +269,3 @@ function moveFocusToInput(input, options) {
     input.focus();
   }
 }
-
