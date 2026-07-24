@@ -589,6 +589,7 @@ async function saveHistoryEditorChanges() {
 
   if (hasNoChanges) {
     closeHistoryEditDialog();
+    moveFocusToInput(state.els.barcodeInput);
     return;
   }
 
@@ -598,6 +599,7 @@ async function saveHistoryEditorChanges() {
     });
     setStatus(`Saved quantity for ${currentItem.barcode}`);
     closeHistoryEditDialog();
+    moveFocusToInput(state.els.barcodeInput);
     return;
   }
 
@@ -742,5 +744,5 @@ async function saveHistoryEditorChanges() {
   setStatus(`Saved ${updatedItem.barcode}`);
   showToast("Saved successfully");
   closeHistoryEditDialog();
+  moveFocusToInput(state.els.barcodeInput);
 }
-
