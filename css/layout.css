@@ -19,6 +19,7 @@
     overscroll-behavior: contain;
     padding-right: 4px;
     padding-bottom: 140px;  /* ← ADD THIS - height of one record */
+    touch-action: pan-y;
 
   }
 
@@ -75,6 +76,7 @@
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    touch-action: pan-x;
   }
 
   .pi-slider::-webkit-scrollbar {
