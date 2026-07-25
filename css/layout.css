@@ -269,6 +269,8 @@
     right: 0;
     width: 100%;
     overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: none;
   }
 
   .dialog-actions {
@@ -283,5 +285,3 @@
     font: inherit;
     touch-action: manipulation;
   }
-
-  
