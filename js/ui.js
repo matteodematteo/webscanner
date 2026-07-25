@@ -148,11 +148,14 @@ function isInsideScrollableWhileLocked(target) {
   //    (dialogs.css: .closest-search-results { overflow-y: auto })
   //  - the closestSearchDialog / historyEditDialog cards themselves, which
   //    are position:fixed with their own overflow-y: auto (dialogs.css)
+  //  - the product-info horizontal slider (.pi-slider), a horizontal swipe
+  //    carousel that's independent of vertical page scroll and should
+  //    always stay slidable regardless of the lock state
   // Note: dialogs in this app are plain <div class="dialog-backdrop">
   // elements, not native <dialog> tags, so a "dialog" tag selector would
   // never match here.
   return Boolean(target.closest(
-    ".is-locked-scroll, .closest-search-results, #closestSearchDialog .dialog-card, #historyEditDialog .dialog-card"
+    ".is-locked-scroll, .closest-search-results, #closestSearchDialog .dialog-card, #historyEditDialog .dialog-card, .pi-slider"
   ));
 }
 
