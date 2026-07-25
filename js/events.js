@@ -346,6 +346,16 @@ function bindEvents() {
     toggleScreenScrollLock();
   });
 
+  // Actively block the gestures that drive native scrolling (including
+  // touches started at the screen edges) whenever state.manualScrollLocked
+  // is true. Must be non-passive so preventDefault() actually takes effect,
+  // and must be bound here - unconditionally, on every init - rather than
+  // only inside toggleScreenScrollLock(), so a lock restored from storage
+  // on app startup is enforced immediately, not just after the user taps
+  // the lock button again.
+  document.addEventListener("touchmove", preventScrollWhileLocked, { passive: false });
+  document.addEventListener("wheel", preventScrollWhileLocked, { passive: false });
+
   state.els.inputModeSwitch.addEventListener("click", function (event) {
     const btn = event.target.closest(".input-mode-option");
     if (!btn) {
