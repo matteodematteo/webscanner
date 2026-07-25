@@ -136,6 +136,42 @@ function updateLockScreenScrollButton() {
 }
 
 
+function isInsideScrollableWhileLocked(target) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  // Elements that are allowed to keep scrolling internally even while the
+  // page-level scroll lock is engaged:
+  //  - the main history list, but only once "is-locked-scroll" is toggled
+  //    on it (see updateLockScreenScrollButton / layout.css)
+  //  - the closest-search results list, which scrolls independently
+  //    (dialogs.css: .closest-search-results { overflow-y: auto })
+  //  - the closestSearchDialog / historyEditDialog cards themselves, which
+  //    are position:fixed with their own overflow-y: auto (dialogs.css)
+  // Note: dialogs in this app are plain <div class="dialog-backdrop">
+  // elements, not native <dialog> tags, so a "dialog" tag selector would
+  // never match here.
+  return Boolean(target.closest(
+    ".is-locked-scroll, .closest-search-results, #closestSearchDialog .dialog-card, #historyEditDialog .dialog-card"
+  ));
+}
+
+
+function preventScrollWhileLocked(event) {
+  if (!state.manualScrollLocked) {
+    return;
+  }
+  if (isInsideScrollableWhileLocked(event.target)) {
+    return;
+  }
+  // touchmove/wheel is what actually drives native scrolling/rubber-band,
+  // including gestures started at the screen edges where there's no
+  // interactive element to "catch" the touch. Blocking it here is what
+  // makes the lock hold, regardless of the CSS position-fixed trick above.
+  event.preventDefault();
+}
+
+
 function toggleScreenScrollLock() {
   if (state.manualScrollLocked) {
     state.manualScrollLocked = false;
