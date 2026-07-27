@@ -319,6 +319,8 @@ async function handleClosestSearchSelection(index) {
       } else {
         state.els.quantityInput.value = sanitizeEditableQuantity(state.els.quantityInput.value);
       }
+      // Sync product details to every history row with this barcode.
+      syncHistoryRowsWithRecord(state.currentProductRecord, barcode);
     }
     closeClosestSearchDialog();
     setStatus(`Selected ${barcode}`);
