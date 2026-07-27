@@ -296,7 +296,6 @@ async function fetchProductInfo(barcode, options) {
   const comparisonQty = sanitizeQuantity(lookupOptions.comparisonQty);
   const lookupSequence = state.lookupSequence + 1;
   state.lookupSequence = lookupSequence;
-  // Always stash barcode in history first when requested (works offline too).
   const createdHistoryId = lookupOptions.addToHistoryBeforeLookup ? addHistoryItem(code, comparisonQty) : "";
 
   setStatus("Requesting product info...");
@@ -319,7 +318,7 @@ async function fetchProductInfo(barcode, options) {
       throw createNoExactMatchError();
     }
 
-    // Product info first (no discount yet).
+    // Product info first (discount filled later in background).
     renderProductData({
       product: parsedProduct?.product || parsedProduct,
       sale: null
@@ -331,10 +330,12 @@ async function fetchProductInfo(barcode, options) {
       } else {
         addHistoryRecord(state.currentProductRecord, code, comparisonQty);
       }
+      // Sync name/cost/price/discount to EVERY history row with this barcode.
+      syncHistoryRowsWithRecord(state.currentProductRecord, code);
     }
     setStatus("Product info loaded");
 
-    // Always request discount in background and fill UI/history when ready.
+    // Always request discount in background; update UI + all matching history rows.
     fetchDiscountInfoThroughProxy(code, cookie)
       .then(function (discountResponseText) {
         let parsedDiscount = null;
@@ -351,11 +352,8 @@ async function fetchProductInfo(barcode, options) {
           comparisonQty
         );
 
-        if (createdHistoryId) {
-          updateHistoryItem(createdHistoryId, updatedRecord);
-        } else {
-          syncHistoryRowsWithRecord(updatedRecord, code);
-        }
+        // Push product + discount fields to all rows with this barcode (qty preserved per row).
+        syncHistoryRowsWithRecord(updatedRecord, code);
 
         if (lookupSequence === state.lookupSequence && String(state.els.barcodeInput.value || "").trim() === code) {
           renderProductData({
@@ -393,7 +391,7 @@ async function fetchProductInfo(barcode, options) {
       return "no-match";
     }
 
-    // Offline / network failure: barcode already in history if addToHistoryBeforeLookup was true.
+    // Offline / network failure: keep barcode in history.
     if (!createdHistoryId && lookupOptions.persistToHistory) {
       addHistoryItem(code, comparisonQty);
     }
