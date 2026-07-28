@@ -307,8 +307,7 @@
   <script>
     window.__html5QrReadyPromise = new Promise(function (resolve) {
       var script = document.createElement("script");
-      script.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
-      script.onload = resolve;
+      script.src = "js/html5-qrcode.min.js";      script.onload = resolve;
       script.onerror = resolve;
       document.head.appendChild(script);
     });
