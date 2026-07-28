@@ -1,10 +1,10 @@
 "use strict";
 
-/* Application bootstrap and initialization — Version B (fast start) */
+/* Application bootstrap — offline-safe, fast start */
 
 async function init() {
-  // Short non-blocking wait so Html5Qrcode can start loading; do not block UI for long.
-  waitForHtml5QrReady(isIOSDevice() ? 2500 : 1200).catch(function () {});
+  // Do not block UI waiting for the scanner library (works offline if file is local).
+  waitForHtml5QrReady(isIOSDevice() ? 2000 : 800).catch(function () {});
 
   state.els = queryElements();
   requireElements(state.els);
@@ -23,9 +23,17 @@ async function init() {
   renderHistory();
   bindEvents();
 
-  // Fixed ROI (no resize handle) — always 80% centered.
   state.roi = { width: 0.8, height: 0.8 };
-  applyRoiBoxStyle();
+  if (typeof applyRoiBoxStyle === "function") {
+    applyRoiBoxStyle();
+  }
+  // Keep resize if present (older camera.js); ignore if removed.
+  if (typeof loadRoiState === "function") {
+    try { loadRoiState(); } catch (e) {}
+  }
+  if (typeof initRoiResize === "function") {
+    try { initRoiResize(); } catch (e) {}
+  }
 
   initProductInfoSlider();
 
@@ -45,7 +53,7 @@ async function init() {
     }, 80);
   }
 
-  // Cookie refresh in background — never blocks the UI.
+  // Cookie refresh never blocks camera.
   loginAndRefreshCookie(savedSettings).catch(function (error) {
     const message = error.message || "Cookie refresh failed.";
     saveCookieState(state.authCookie || "", `Cookie refresh failed: ${message}`);
@@ -57,6 +65,7 @@ async function init() {
     return;
   }
 
+  // Only disable for real hardware limits — NOT for network / library.
   const hardwareIssue = getCameraHardwareIssue();
   if (hardwareIssue) {
     setStatus(hardwareIssue);
@@ -66,10 +75,10 @@ async function init() {
     return;
   }
 
-  // Camera starts only when user taps "Start Scanning" (Version B).
+  // Always keep Start Scanning enabled offline.
+  state.els.scanBtn.disabled = false;
   setStatus("Ready — tap Start Scanning");
   setPreviewActive(false);
-  // Pre-enumerate devices in background (no permission needed for labels on most browsers).
   refreshDevices(readSavedCameraId()).catch(function () {});
 }
 
@@ -79,12 +88,19 @@ if (document.readyState === "loading") {
       if (state.els?.statusText) {
         setStatus(error.message || "The app could not start");
       }
+      // Never leave the main button dead after a failed init.
+      if (state.els?.scanBtn) {
+        state.els.scanBtn.disabled = false;
+      }
     });
   });
 } else {
   init().catch(function (error) {
     if (state.els?.statusText) {
       setStatus(error.message || "The app could not start");
+    }
+    if (state.els?.scanBtn) {
+      state.els.scanBtn.disabled = false;
     }
   });
 }
