@@ -83,7 +83,7 @@ async function createDetector() {
 
   try {
     if (!window.Html5Qrcode) {
-      await waitForHtml5QrReady(2000);
+      await waitForHtml5QrReady(1500);
     }
     if (!window.Html5Qrcode) {
       return null;
@@ -103,7 +103,7 @@ async function createDetector() {
 
 
 function supportsConfiguredScannerEngine() {
-  return Boolean(getPonyfillDetectorClass() || window.__ponyfillReadyPromise);
+  return Boolean(window.Html5Qrcode);
 }
 
 /** Camera preview only: HTTPS + getUserMedia. Does not require BarcodeDetector (Safari needs a polyfill). */
@@ -710,10 +710,46 @@ function drawDetectionFrame(mode) {
 }
 
 
-/* Fixed ROI (Version B) — no resize handle, always 80% centered. */
+const ROI_MIN_RATIO = 0.12;
+
+const ROI_MAX_RATIO = 1;
+
+
+function loadRoiState() {
+  try {
+    const raw = localStorage.getItem(CONFIG.roiStorageKey);
+    if (!raw) {
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    const width = Number(parsed?.width);
+    const height = Number(parsed?.height);
+    if (Number.isFinite(width) && width >= ROI_MIN_RATIO && width <= ROI_MAX_RATIO) {
+      state.roi.width = width;
+    }
+    if (Number.isFinite(height) && height >= ROI_MIN_RATIO && height <= ROI_MAX_RATIO) {
+      state.roi.height = height;
+    }
+  } catch {
+    // Ignore corrupt/missing saved ROI size and keep the default.
+  }
+}
+
+
+function saveRoiState() {
+  try {
+    localStorage.setItem(CONFIG.roiStorageKey, JSON.stringify({
+      width: state.roi.width,
+      height: state.roi.height
+    }));
+  } catch {
+    // Ignore storage failures (e.g. private browsing quota).
+  }
+}
+
 
 function applyRoiBoxStyle() {
-  const roiBox = state.els?.roiBox;
+  const roiBox = state.els.roiBox;
   if (!roiBox) {
     return;
   }
@@ -722,6 +758,102 @@ function applyRoiBoxStyle() {
   roiBox.style.top = `${roi.top * 100}%`;
   roiBox.style.width = `${roi.width * 100}%`;
   roiBox.style.height = `${roi.height * 100}%`;
+}
+
+
+function initRoiResize() {
+  const handle = state.els.roiResizeHandle;
+  const container = state.els.previewFrame;
+  if (!handle || !container) {
+    return;
+  }
+
+  handle.addEventListener("pointerdown", function (event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = container.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      return;
+    }
+
+    state.roiDrag = {
+      pointerId: event.pointerId,
+      startWidth: state.roi.width,
+      startHeight: state.roi.height
+    };
+
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignore browsers that do not support pointer capture here.
+    }
+  });
+
+  handle.addEventListener("pointermove", function (event) {
+    const drag = state.roiDrag;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const rect = container.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const pointerX = event.clientX - rect.left;
+    const pointerY = event.clientY - rect.top;
+
+    // The handle sits at the box's bottom-right corner. Since the box is
+    // always centered, distance from the container center to the pointer
+    // is the box's half-width/half-height — resizing grows/shrinks the
+    // box symmetrically in all directions, keeping it centered live.
+    let widthRatio = ((pointerX - centerX) / rect.width) * 2;
+    let heightRatio = ((pointerY - centerY) / rect.height) * 2;
+
+    widthRatio = Math.min(ROI_MAX_RATIO, Math.max(ROI_MIN_RATIO, widthRatio));
+    heightRatio = Math.min(ROI_MAX_RATIO, Math.max(ROI_MIN_RATIO, heightRatio));
+
+    state.roi.width = widthRatio;
+    state.roi.height = heightRatio;
+    applyRoiBoxStyle();
+  });
+
+  function endDrag(event) {
+    const drag = state.roiDrag;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    state.roiDrag = null;
+
+    const sizeChanged =
+      Math.abs(state.roi.width - drag.startWidth) > 0.005 ||
+      Math.abs(state.roi.height - drag.startHeight) > 0.005;
+
+    if (sizeChanged) {
+      saveRoiState();
+      restartCameraForRoiResize();
+    }
+  }
+
+  handle.addEventListener("pointerup", endDrag);
+  handle.addEventListener("pointercancel", endDrag);
+}
+
+
+async function restartCameraForRoiResize() {
+  if (!state.isCameraRunning) {
+    return;
+  }
+
+  const deviceId = state.activeDeviceId;
+  const wasScanning = state.isScanning;
+
+  setStatus("Adjusting scan area...");
+  stopScanning(true);
+  await startCamera(deviceId);
+
+  if (wasScanning) {
+    await startScanning();
+  }
 }
 
 
@@ -1261,16 +1393,19 @@ function schedulePreviewWarmStart() {
 
 
 async function startScanning() {
+  // Camera preview works fully offline (getUserMedia needs no network).
   if (!state.isCameraRunning) {
     await startCamera(state.activeDeviceId);
   }
 
   if (state.isScanning) return;
 
-  await waitForHtml5QrReady(isIOSDevice() ? 3000 : 1500);
+  await waitForHtml5QrReady(isIOSDevice() ? 2000 : 1000);
   if (!(await createDetector())) {
-    setStatus("Barcode scanner library did not load. Check connection and refresh the page.");
-    showToast("Scanner not ready");
+    // Keep preview live; only barcode decode needs the library file.
+    setStatus("Camera on. Scanner library missing — add js/html5-qrcode.min.js");
+    showToast("Scanner library not loaded");
+    updateScanButton();
     return;
   }
 
@@ -1285,7 +1420,6 @@ async function startScanning() {
   cleanupScanTimer();
   await runScanLoop();
 }
-
 
 function stopScanning(keepStatusMessage) {
   cleanupScanTimer();
