@@ -643,6 +643,10 @@ async function saveHistoryEditorChanges() {
         addResponse = null;
       }
 
+      if (addResponse?.msg !== "新增商品成功！") {
+        throw new Error(addResponse?.msg || "Add product failed");
+      }
+
       const addedProduct = normalizeProductData(addResponse?.product || addResponse);
       updatedItem = normalizeHistoryItem({
         ...currentItem,
@@ -663,7 +667,23 @@ async function saveHistoryEditorChanges() {
     }
   } else {
     state.els.historyEditSaveNote.textContent = "Saving changes...";
-    await fetchUpdateItemThroughProxy(payload, cookie);
+    try {
+      const updateResponseText = await fetchUpdateItemThroughProxy(payload, cookie);
+      let updateResponse = null;
+      try {
+        updateResponse = updateResponseText ? JSON.parse(updateResponseText) : null;
+      } catch {
+        updateResponse = null;
+      }
+
+      if (updateResponse?.msg !== "更新商品成功！") {
+        throw new Error(updateResponse?.msg || "Update product failed");
+      }
+    } catch (error) {
+      showToast("Update product failed");
+      error.toastShown = true;
+      throw error;
+    }
     updatedItem = normalizeHistoryItem({
       ...currentItem,
       goods_id: payload.id,
