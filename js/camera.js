@@ -3,12 +3,16 @@
 /* Camera preview, scanning, ROI, and torch */
 
 async function waitForHtml5QrReady(timeoutMs) {
-  if (!window.__html5QrReadyPromise) {
+  if (typeof window.ensureHtml5QrLoaded !== "function") {
     return;
   }
 
+  // Kicks off the (idempotent) lazy load if it hasn't started yet, then
+  // waits for it up to timeoutMs.
+  const readyPromise = window.ensureHtml5QrLoaded();
+
   await Promise.race([
-    window.__html5QrReadyPromise.catch(function () {
+    readyPromise.catch(function () {
       // Ignore lazy scanner bootstrap failures here.
     }),
     new Promise(function (resolve) {
@@ -1473,4 +1477,3 @@ async function handleBarcodeLookup(options) {
     return "error";
   }
 }
-
