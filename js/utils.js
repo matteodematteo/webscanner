@@ -2,6 +2,25 @@
 
 /* Device detection and formatting helpers */
 
+// Runs `fn` once the browser is idle (falls back to a short setTimeout on
+// browsers without requestIdleCallback, e.g. Safari/iOS). Used to push
+// non-essential init work (secondary UI setup, background library warm-up)
+// off the critical "first paint / interactive" path.
+function scheduleIdleWork(fn, timeout) {
+  if (typeof fn !== "function") {
+    return;
+  }
+  const runner = window.requestIdleCallback || function (callback) {
+    window.setTimeout(callback, 1);
+  };
+  try {
+    runner(fn, { timeout: timeout || 1500 });
+  } catch {
+    window.setTimeout(fn, 1);
+  }
+}
+
+
 function detectMobileUi() {
   const width = window.innerWidth || screen.width || 0;
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") || width <= 768;
@@ -116,4 +135,3 @@ function normalizeDecimalInput(value) {
 function trimTrailingZeros(value) {
   return numberFromValue(value).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }
-
