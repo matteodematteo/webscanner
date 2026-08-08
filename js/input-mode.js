@@ -75,8 +75,10 @@ async function handleQuantityPadInput(key) {
 }
 
 
-function setQuantityEntryMode(unlocked) {
-  state.isQuantityEntryUnlocked = Boolean(unlocked);
+function setQuantityEntryMode(unlocked, options) {
+  const nextUnlocked = Boolean(unlocked);
+  const skipPersist = Boolean(options?.skipPersistIfUnchanged) && state.isQuantityEntryUnlocked === nextUnlocked;
+  state.isQuantityEntryUnlocked = nextUnlocked;
   if (state.els?.quantityInput) {
     if (state.isQuantityEntryUnlocked) {
       state.els.quantityInput.value = "";
@@ -85,12 +87,20 @@ function setQuantityEntryMode(unlocked) {
     }
   }
   updateEntryModeControls();
+
+  // Skip the localStorage read + write entirely when the value already
+  // matches what's on disk (e.g. the initial call from init(), which is
+  // just re-applying the value it was just loaded from).
+  if (skipPersist) {
+    return;
+  }
+
+  const baseSettings = options?.baseSettings || readSavedSettings();
   saveSettings({
-    ...readSavedSettings(),
+    ...baseSettings,
     displayMode: state.displayMode,
     quantityEntryUnlocked: state.isQuantityEntryUnlocked
   }, { silent: true });
-
 }
 
 
@@ -296,4 +306,3 @@ async function setInputMode(mode, options) {
 
   moveFocusToInput(state.els.barcodeInput);
 }
-
