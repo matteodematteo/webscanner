@@ -8,7 +8,18 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Web Scanner" />
   <title>Web Barcode Scanner</title>
-  <link rel="stylesheet" href="css/app.css" />
+  <!-- Linked directly (not via app.css's @import chain) so all seven files
+       are discovered and fetched in parallel with the HTML parse, instead
+       of the browser needing to download+parse app.css first before it can
+       even discover it needs these — @import is render-blocking and
+       serialized, costing a full extra network round trip on first paint. -->
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/scanner.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/history.css" />
+  <link rel="stylesheet" href="css/dialogs.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
 </head>
 <body>
   <main class="app-shell">
@@ -307,13 +318,23 @@
   <!-- html5-qrcode: single decoding engine used for both iOS and Android (no native BarcodeDetector dependency). -->
   <div id="html5QrScanHost" class="visually-hidden"></div>
   <script>
-    window.__html5QrReadyPromise = new Promise(function (resolve) {
-      var script = document.createElement("script");
-      script.src = "js/html5-qrcode.min.js";
-      script.onload = resolve;
-      script.onerror = resolve;
-      document.head.appendChild(script);
-    });
+    // Lazy loader: the ~375KB scanner library is only fetched once something
+    // actually needs it (either app.js warming it up in idle time, or the
+    // user tapping "Start Scanning"), instead of competing with the app
+    // shell's own scripts/styles for bandwidth on every page load.
+    window.__html5QrReadyPromise = null;
+    window.ensureHtml5QrLoaded = function () {
+      if (!window.__html5QrReadyPromise) {
+        window.__html5QrReadyPromise = new Promise(function (resolve) {
+          var script = document.createElement("script");
+          script.src = "js/html5-qrcode.min.js";
+          script.onload = resolve;
+          script.onerror = resolve;
+          document.head.appendChild(script);
+        });
+      }
+      return window.__html5QrReadyPromise;
+    };
   </script>
   <script src="js/config.js?v=53" defer></script>
   <script src="js/state.js?v=53" defer></script>
