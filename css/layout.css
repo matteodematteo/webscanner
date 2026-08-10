@@ -18,8 +18,9 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     padding-right: 4px;
-    padding-bottom: 140px;  /* ← ADD THIS - height of one record */
+    padding-bottom: 140px;
     touch-action: pan-y;
+    scroll-padding-bottom: 140px;
 
   }
 
