@@ -1,87 +1,142 @@
 "use strict";
 
-/* DOM element queries and field caching */
+/* DOM element queries and field caching — split into critical (on-boot)
+   and deferred (lazy-loaded on first access) buckets to avoid paying the
+   cost of 70+ getElementById calls before the browser can paint. */
 
-function queryElements() {
+// ─── Critical elements (queried once, immediately on init) ──────────────────
+function queryCriticalElements() {
   return {
-    barcodeInput: document.getElementById("barcodeInput"),
-    addBarcodeBtn: document.getElementById("addBarcodeBtn"),
-    cameraBadge: document.getElementById("cameraBadge"),
-    cameraPreview: document.getElementById("cameraPreview"),
-    cameraPreviewQuagga: document.getElementById("cameraPreviewQuagga"),
-    cameraSelect: document.getElementById("cameraSelect"),
-    productInfoSlider: document.getElementById("productInfoSlider"),
-    productInfoTrack: document.getElementById("productInfoTrack"),
-    productInfoDots: document.getElementById("productInfoDots"),
-    apiLoader: document.getElementById("apiLoader"),
-    clearAllBtn: document.getElementById("clearAllBtn"),
-    clearBarcodeBtn: document.getElementById("clearBarcodeBtn"),
-    closestSearchBackBtn: document.getElementById("closestSearchBackBtn"),
-    closestSearchDialog: document.getElementById("closestSearchDialog"),
-    closestSearchList: document.getElementById("closestSearchList"),
-    closestSearchStatus: document.getElementById("closestSearchStatus"),
-    closestSearchTitle: document.getElementById("closestSearchTitle"),
-    clearSelectedBtn: document.getElementById("clearSelectedBtn"),
-    confirmDialog: document.getElementById("confirmDialog"),
-    confirmDialogCancelBtn: document.getElementById("confirmDialogCancelBtn"),
-    confirmDialogOkBtn: document.getElementById("confirmDialogOkBtn"),
-    confirmDialogText: document.getElementById("confirmDialogText"),
-    captureCanvas: document.getElementById("captureCanvas"),
-    closeSettingsBtn: document.getElementById("closeSettingsBtn"),
-    entryModeBtn: document.getElementById("entryModeBtn"),
-    entryModeIcon: document.getElementById("entryModeIcon"),
-    historyEmpty: document.getElementById("historyEmpty"),
-    historyEditBackBtn: document.getElementById("historyEditBackBtn"),
-    historyEditBarcodeInput: document.getElementById("historyEditBarcodeInput"),
-    historyEditDialog: document.getElementById("historyEditDialog"),
-    historyEditDiscountPriceInput: document.getElementById("historyEditDiscountPriceInput"),
-    historyEditIdInput: document.getElementById("historyEditIdInput"),
-    historyEditItalianNameInput: document.getElementById("historyEditItalianNameInput"),
-    historyEditPPriceInput: document.getElementById("historyEditPPriceInput"),
-    historyEditQtyInput: document.getElementById("historyEditQtyInput"),
-    historyEditSaveBtn: document.getElementById("historyEditSaveBtn"),
-    historyEditSaveNote: document.getElementById("historyEditSaveNote"),
-    historyEditSDiscountInput: document.getElementById("historyEditSDiscountInput"),
-    historyEditSPriceInput: document.getElementById("historyEditSPriceInput"),
-    historyCountBadge: document.getElementById("historyCountBadge"),
-    historyList: document.getElementById("historyList"),
-    loginInput: document.getElementById("loginInput"),
-    loginSettingsBtn: document.getElementById("loginSettingsBtn"),
-    passwordInput: document.getElementById("passwordInput"),
-    printBackBtn: document.getElementById("printBackBtn"),
-    printBigBtn: document.getElementById("printBigBtn"),
-    printBtn: document.getElementById("printBtn"),
-    printDialog: document.getElementById("printDialog"),
-    printStickerBtn: document.getElementById("printStickerBtn"),
-    productInfoSection: document.getElementById("productInfoSection"),
-    previewFrame: document.getElementById("previewFrame"),
+    barcodeInput:       document.getElementById("barcodeInput"),
+    scanBtn:            document.getElementById("scanBtn"),
+    previewFrame:       document.getElementById("previewFrame"),
+    cameraPreview:      document.getElementById("cameraPreview"),
+    cameraPreviewQuagga:document.getElementById("cameraPreviewQuagga"),
+    cameraSelect:       document.getElementById("cameraSelect"),
+    statusText:         document.getElementById("statusText"),
+    torchBtn:           document.getElementById("torchBtn"),
+    historyList:        document.getElementById("historyList"),
+    historyEmpty:       document.getElementById("historyEmpty"),
+    historyCountBadge:  document.getElementById("historyCountBadge"),
+    clearAllBtn:        document.getElementById("clearAllBtn"),
+    clearSelectedBtn:   document.getElementById("clearSelectedBtn"),
+    sendTxtBtn:         document.getElementById("sendTxtBtn"),
+    printBtn:           document.getElementById("printBtn"),
+    entryModeBtn:       document.getElementById("entryModeBtn"),
+    entryModeIcon:      document.getElementById("entryModeIcon"),
+    quantityInput:      document.getElementById("quantityInput"),
+    quantityPad:        document.getElementById("quantityPad"),
+    quantityPadCard:    document.getElementById("quantityPadCard"),
+    addBarcodeBtn:      document.getElementById("addBarcodeBtn"),
+    searchBarcodeBtn:   document.getElementById("searchBarcodeBtn"),
+    clearBarcodeBtn:    document.getElementById("clearBarcodeBtn"),
+    captureCanvas:      document.getElementById("captureCanvas"),
+    apiLoader:          document.getElementById("apiLoader"),
+    toast:              document.getElementById("toast"),
+    lockScreenScrollBtn:document.getElementById("lockscreenscroll"),
+    inputModeSwitch:    document.getElementById("inputModeSwitch"),
     previewPlaceholder: document.getElementById("previewPlaceholder"),
-    quantityInput: document.getElementById("quantityInput"),
-    quantityPad: document.getElementById("quantityPad"),
-    quantityPadCard: document.getElementById("quantityPadCard"),
-    refreshCookieBtn: document.getElementById("refreshCookieBtn"),
-    lockScreenScrollBtn: document.getElementById("lockscreenscroll"),
-    inputModeSwitch: document.getElementById("inputModeSwitch"),
-    resolutionBadge: document.getElementById("resolutionBadge"),
-    roiBox: document.getElementById("roiBox"),
-    scanBtn: document.getElementById("scanBtn"),
-    searchBarcodeBtn: document.getElementById("searchBarcodeBtn"),
-    sendTxtBtn: document.getElementById("sendTxtBtn"),
-    settingsBtn: document.getElementById("settingsBtn"),
-    settingsDialog: document.getElementById("settingsDialog"),
-    settingsSaveNote: document.getElementById("settingsSaveNote"),
-    shopKeyInput: document.getElementById("shopKeyInput"),
-    statusText: document.getElementById("statusText"),
-    toast: document.getElementById("toast"),
-    torchBtn: document.getElementById("torchBtn")
+    cameraBadge:        document.getElementById("cameraBadge"),
+    resolutionBadge:    document.getElementById("resolutionBadge"),
+    roiBox:             document.getElementById("roiBox"),
+    productInfoSection: document.getElementById("productInfoSection"),
+    productInfoSlider:  document.getElementById("productInfoSlider"),
+    productInfoTrack:   document.getElementById("productInfoTrack"),
+    productInfoDots:    document.getElementById("productInfoDots"),
   };
 }
 
 
+// ─── Deferred elements (lazy-loaded on first access via getters) ─────────────
+var _deferredEls = null;
+
+function getDeferredElements() {
+  if (_deferredEls) return _deferredEls;
+  _deferredEls = {
+    // Dialogs
+    settingsDialog:              document.getElementById("settingsDialog"),
+    confirmDialog:               document.getElementById("confirmDialog"),
+    confirmDialogCancelBtn:      document.getElementById("confirmDialogCancelBtn"),
+    confirmDialogOkBtn:          document.getElementById("confirmDialogOkBtn"),
+    confirmDialogText:           document.getElementById("confirmDialogText"),
+    closestSearchDialog:         document.getElementById("closestSearchDialog"),
+    closestSearchList:           document.getElementById("closestSearchList"),
+    closestSearchStatus:         document.getElementById("closestSearchStatus"),
+    closestSearchTitle:          document.getElementById("closestSearchTitle"),
+    closestSearchBackBtn:        document.getElementById("closestSearchBackBtn"),
+    printDialog:                 document.getElementById("printDialog"),
+    printBigBtn:                 document.getElementById("printBigBtn"),
+    printStickerBtn:             document.getElementById("printStickerBtn"),
+    printBackBtn:                document.getElementById("printBackBtn"),
+    historyEditDialog:           document.getElementById("historyEditDialog"),
+    historyEditBackBtn:          document.getElementById("historyEditBackBtn"),
+    historyEditBarcodeInput:     document.getElementById("historyEditBarcodeInput"),
+    historyEditDiscountPriceInput:document.getElementById("historyEditDiscountPriceInput"),
+    historyEditIdInput:          document.getElementById("historyEditIdInput"),
+    historyEditItalianNameInput: document.getElementById("historyEditItalianNameInput"),
+    historyEditPPriceInput:      document.getElementById("historyEditPPriceInput"),
+    historyEditQtyInput:         document.getElementById("historyEditQtyInput"),
+    historyEditSaveBtn:          document.getElementById("historyEditSaveBtn"),
+    historyEditSaveNote:         document.getElementById("historyEditSaveNote"),
+    historyEditSDiscountInput:   document.getElementById("historyEditSDiscountInput"),
+    historyEditSPriceInput:      document.getElementById("historyEditSPriceInput"),
+    historyEditBackBtn:          document.getElementById("historyEditBackBtn"),
+    // Settings panel
+    closeSettingsBtn:   document.getElementById("closeSettingsBtn"),
+    loginSettingsBtn:   document.getElementById("loginSettingsBtn"),
+    loginInput:         document.getElementById("loginInput"),
+    passwordInput:      document.getElementById("passwordInput"),
+    shopKeyInput:       document.getElementById("shopKeyInput"),
+    settingsSaveNote:   document.getElementById("settingsSaveNote"),
+    refreshCookieBtn:   document.getElementById("refreshCookieBtn"),
+  };
+  return _deferredEls;
+}
+
+
+// ─── Proxy that merges critical + deferred transparently ─────────────────────
+// All existing code that reads `state.els.someProperty` continues to work
+// without changes.  Critical properties are served directly; any unknown key
+// falls through to getDeferredElements() so the dialog / settings elements
+// are only queried on first real use.
+function buildElsProxy(criticalEls) {
+  return new Proxy(criticalEls, {
+    get: function (target, prop) {
+      if (prop in target) {
+        return target[prop];
+      }
+      var deferred = getDeferredElements();
+      if (prop in deferred) {
+        return deferred[prop];
+      }
+      return undefined;
+    },
+    set: function (target, prop, value) {
+      if (prop in target) {
+        target[prop] = value;
+      } else {
+        getDeferredElements()[prop] = value;
+      }
+      return true;
+    }
+  });
+}
+
+
+// ─── Public API (keeps backward-compat with app.js callers) ─────────────────
+function queryElements() {
+  var criticalEls = queryCriticalElements();
+  return buildElsProxy(criticalEls);
+}
+
+
 function requireElements(els) {
-  const missing = Object.entries(els).filter(([, value]) => !value).map(([key]) => key);
+  // Only validate critical elements at startup; deferred ones are optional
+  // until actually needed (they will throw naturally when accessed if missing).
+  var criticalKeys = Object.keys(queryCriticalElements());
+  var missing = criticalKeys.filter(function (key) { return !els[key]; });
   if (missing.length > 0) {
-    throw new Error(`Missing DOM elements: ${missing.join(", ")}`);
+    throw new Error("Missing DOM elements: " + missing.join(", "));
   }
 }
 
