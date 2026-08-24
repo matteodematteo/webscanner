@@ -76,6 +76,41 @@
     touch-action: none;
   }
 
+  .roi-handle {
+    position: absolute;
+    right: -12px;
+    bottom: -12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent, #bf5a31);
+    border: 2.5px solid #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    cursor: se-resize;
+    pointer-events: auto !important;
+    touch-action: none;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 120ms ease;
+  }
+
+  .roi-handle:active {
+    transform: scale(1.2);
+    background: var(--accent-strong, #a34a26);
+  }
+
+  .roi-handle::after {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid #ffffff;
+    border-bottom: 2px solid #ffffff;
+    margin-top: -2px;
+    margin-left: -2px;
+  }
+
   .scan-line {
     top: 14%;
     bottom: auto;
