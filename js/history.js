@@ -2,6 +2,50 @@
 
 /* Barcode history list and editing */
 
+// Max items rendered synchronously during init. The rest are deferred to
+// idle time so a large list doesn't block first paint.
+var HISTORY_INITIAL_BATCH = 25;
+
+// Build a single history <article> DOM node for the given item/index.
+function buildHistoryArticle(item, index) {
+  const article = document.createElement("article");
+  article.className = "history-item";
+  if (index === state.selectedHistoryIndex) {
+    article.classList.add("is-selected");
+  }
+  const primary = document.createElement("div");
+  primary.className = "history-primary";
+  primary.innerHTML = `<span class="history-code">${escapeHtml(item.barcode || "")}</span><span class="history-qty">Qty ${escapeHtml(String(item.comparison_qty || 1))}</span>`;
+
+  const name = document.createElement("div");
+  name.className = "history-name";
+  name.textContent = item.italian_name || "No name loaded";
+
+  const meta = document.createElement("div");
+  meta.className = "history-meta";
+  const priceClass = isHistoryPriceDiscounted(item) ? "history-price is-discount" : "history-price";
+  meta.innerHTML = `<span>Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>Price: <span class="${priceClass}">${escapeHtml(getHistoryDisplayPrice(item))}</span></span>`;
+
+  const footer = document.createElement("div");
+  footer.className = "history-footer";
+  footer.appendChild(meta);
+
+  const detailButton = document.createElement("button");
+  detailButton.className = "btn btn-muted history-detail-btn";
+  detailButton.type = "button";
+  detailButton.textContent = "Detail";
+  detailButton.dataset.action = "detail";
+  detailButton.dataset.index = String(index);
+  footer.appendChild(detailButton);
+
+  article.appendChild(primary);
+  article.appendChild(name);
+  article.appendChild(footer);
+  article.dataset.index = String(index);
+  article.setAttribute("tabindex", "0");
+  return article;
+}
+
 function renderHistory() {
   state.els.clearAllBtn.disabled = state.history.length === 0;
   state.els.sendTxtBtn.disabled = state.history.length === 0;
@@ -18,49 +62,31 @@ function renderHistory() {
     return;
   }
 
+  // Render the first batch synchronously so the user sees items immediately.
+  const initialCount = Math.min(state.history.length, HISTORY_INITIAL_BATCH);
   const fragment = document.createDocumentFragment();
-  for (let index = 0; index < state.history.length; index += 1) {
-    const item = state.history[index];
-    const article = document.createElement("article");
-    article.className = "history-item";
-    if (index === state.selectedHistoryIndex) {
-      article.classList.add("is-selected");
-    }
-    const primary = document.createElement("div");
-    primary.className = "history-primary";
-    primary.innerHTML = `<span class="history-code">${escapeHtml(item.barcode || "")}</span><span class="history-qty">Qty ${escapeHtml(String(item.comparison_qty || 1))}</span>`;
-
-    const name = document.createElement("div");
-    name.className = "history-name";
-    name.textContent = item.italian_name || "No name loaded";
-
-    const meta = document.createElement("div");
-    meta.className = "history-meta";
-    const priceClass = isHistoryPriceDiscounted(item) ? "history-price is-discount" : "history-price";
-    meta.innerHTML = `<span>Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>Price: <span class="${priceClass}">${escapeHtml(getHistoryDisplayPrice(item))}</span></span>`;
-
-    const footer = document.createElement("div");
-    footer.className = "history-footer";
-    footer.appendChild(meta);
-
-    const detailButton = document.createElement("button");
-    detailButton.className = "btn btn-muted history-detail-btn";
-    detailButton.type = "button";
-    detailButton.textContent = "Detail";
-    detailButton.dataset.action = "detail";
-    detailButton.dataset.index = String(index);
-    footer.appendChild(detailButton);
-
-    article.appendChild(primary);
-    article.appendChild(name);
-    article.appendChild(footer);
-    article.dataset.index = String(index);
-    article.setAttribute("tabindex", "0");
-    fragment.appendChild(article);
+  for (let index = 0; index < initialCount; index += 1) {
+    fragment.appendChild(buildHistoryArticle(state.history[index], index));
   }
 
   state.els.clearSelectedBtn.disabled = state.selectedHistoryIndex < 0;
   state.els.historyList.replaceChildren(fragment);
+
+  // Append remaining items in idle time — avoids blocking paint on large lists.
+  if (state.history.length > initialCount) {
+    scheduleIdleWork(function () {
+      // Guard: if renderHistory() was called again while we were waiting, the
+      // list has already been replaced — nothing to append.
+      if (state.els.historyList.children.length !== initialCount) {
+        return;
+      }
+      const remaining = document.createDocumentFragment();
+      for (let index = initialCount; index < state.history.length; index += 1) {
+        remaining.appendChild(buildHistoryArticle(state.history[index], index));
+      }
+      state.els.historyList.appendChild(remaining);
+    }, 200);
+  }
 }
 
 
