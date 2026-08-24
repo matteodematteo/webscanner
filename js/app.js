@@ -37,24 +37,19 @@ async function init() {
   renderHistory();
   bindEvents();
 
+  // Restore saved ROI size from localStorage and apply to UI immediately
   state.roi = { width: 0.8, height: 0.8 };
+  if (typeof loadRoiState === "function") {
+    try { loadRoiState(); } catch (e) {}
+  }
+  if (typeof applyRoiBoxStyle === "function") {
+    try { applyRoiBoxStyle(); } catch (e) {}
+  }
+  if (typeof initRoiResize === "function") {
+    try { initRoiResize(); } catch (e) {}
+  }
 
-  // Secondary visual setup (ROI drag handle, product-info slider dots) isn't
-  // needed for the app to be usable — the ROI box and slider already render
-  // correctly from CSS/markup defaults. Push it past the browser's first
-  // paint / idle point so it doesn't compete with getting the scan button
-  // interactive.
   scheduleIdleWork(function () {
-    if (typeof applyRoiBoxStyle === "function") {
-      try { applyRoiBoxStyle(); } catch (e) {}
-    }
-    // Keep resize if present (older camera.js); ignore if removed.
-    if (typeof loadRoiState === "function") {
-      try { loadRoiState(); } catch (e) {}
-    }
-    if (typeof initRoiResize === "function") {
-      try { initRoiResize(); } catch (e) {}
-    }
     initProductInfoSlider();
   });
 
@@ -111,25 +106,16 @@ async function init() {
 
   // Always keep Start Scanning enabled offline.
   state.els.scanBtn.disabled = false;
-  setStatus("Ready — tap Start Scanning");
-  setPreviewActive(false);
 
-  // ── Optimization #5: Defer camera enumeration when a saved ID exists ──────
-  // enumerateDevices() can take 30-80 ms. If we already have a saved camera
-  // ID, skip the synchronous call and schedule enumeration in idle time so
-  // the scan button becomes interactive immediately.  On first run (no saved
-  // ID) we still enumerate eagerly so the camera selector is populated.
   const savedCameraId = readSavedCameraId();
   if (savedCameraId) {
-    // Pre-populate active device from storage; enumerate in the background.
     state.activeDeviceId = savedCameraId;
-    scheduleIdleWork(function () {
-      refreshDevices(savedCameraId).catch(function () {});
-    }, 150);
-  } else {
-    // First run — enumerate synchronously so the user can pick a camera.
-    refreshDevices("").catch(function () {});
   }
+
+  // Automatically start camera scanning at screen initialization
+  startScanning().catch(function (error) {
+    setStatus(error.message || "Ready — tap Start Scanning");
+  });
 }
 
 if (document.readyState === "loading") {
