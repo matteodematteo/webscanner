@@ -91,6 +91,19 @@
       position: absolute; border: 2px solid rgba(255,255,255,.92); border-radius: 24px;
       box-shadow: 0 0 0 999px rgba(6,10,14,.24); pointer-events: none; touch-action: none;
     }
+    .roi-handle {
+      position: absolute; right: -12px; bottom: -12px; width: 32px; height: 32px;
+      border-radius: 50%; background: var(--accent, #bf5a31); border: 2.5px solid #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,.45); cursor: se-resize;
+      pointer-events: auto !important; touch-action: none; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 120ms ease;
+    }
+    .roi-handle:active { transform: scale(1.2); background: var(--accent-strong, #a34a26); }
+    .roi-handle::after {
+      content: ""; width: 7px; height: 7px; border-right: 2px solid #fff;
+      border-bottom: 2px solid #fff; margin-top: -2px; margin-left: -2px;
+    }
     .scan-line {
       top: 14%; bottom: auto; height: 3px; left: 14%; right: 14%; border-radius: 999px;
       background: linear-gradient(90deg, transparent, rgba(255,175,141,.96), transparent);
@@ -626,19 +639,19 @@
       return window.__html5QrReadyPromise;
     };
   </script>
-  <script src="js/config.js?v=55" defer></script>
-  <script src="js/state.js?v=55" defer></script>
-  <script src="js/dom.js?v=55" defer></script>
-  <script src="js/utils.js?v=55" defer></script>
-  <script src="js/ui.js?v=55" defer></script>
-  <script src="js/settings.js?v=55" defer></script>
-  <script src="js/input-mode.js?v=55" defer></script>
-  <script src="js/product.js?v=55" defer></script>
-  <script src="js/api.js?v=55" defer></script>
-  <script src="js/closest-search.js?v=55" defer></script>
-  <script src="js/history.js?v=55" defer></script>
-  <script src="js/camera.js?v=55" defer></script>
-  <script src="js/events.js?v=55" defer></script>
-  <script src="js/app.js?v=55" defer></script>
+  <script src="js/config.js?v=57" defer></script>
+  <script src="js/state.js?v=57" defer></script>
+  <script src="js/dom.js?v=57" defer></script>
+  <script src="js/utils.js?v=57" defer></script>
+  <script src="js/ui.js?v=57" defer></script>
+  <script src="js/settings.js?v=57" defer></script>
+  <script src="js/input-mode.js?v=57" defer></script>
+  <script src="js/product.js?v=57" defer></script>
+  <script src="js/api.js?v=57" defer></script>
+  <script src="js/closest-search.js?v=57" defer></script>
+  <script src="js/history.js?v=57" defer></script>
+  <script src="js/camera.js?v=57" defer></script>
+  <script src="js/events.js?v=57" defer></script>
+  <script src="js/app.js?v=57" defer></script>
 </body>
 </html>
