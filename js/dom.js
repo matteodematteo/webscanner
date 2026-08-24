@@ -39,6 +39,7 @@ function queryCriticalElements() {
     cameraBadge:        document.getElementById("cameraBadge"),
     resolutionBadge:    document.getElementById("resolutionBadge"),
     roiBox:             document.getElementById("roiBox"),
+    roiResizeHandle:    document.getElementById("roiResizeHandle"),
     productInfoSection: document.getElementById("productInfoSection"),
     productInfoSlider:  document.getElementById("productInfoSlider"),
     productInfoTrack:   document.getElementById("productInfoTrack"),
