@@ -10,9 +10,20 @@ async function init() {
   state.captureContext = state.els.captureCanvas?.getContext("2d", { alpha: false }) || null;
   cacheResultFieldElements();
 
-  const savedSettings = readSavedSettings();
+  // ── Optimization #4: Parallelize independent localStorage reads ───────────
+  // All storage reads that don't depend on each other are kicked off together
+  // so the JS engine can interleave them instead of serialising every read.
+  // loginAndRefreshCookie still runs *after* because it needs savedSettings.
+  const [savedSettings, scrollLockState] = await Promise.all([
+    Promise.resolve().then(readSavedSettings),
+    Promise.resolve().then(loadScrollLockState)
+  ]);
+
+  // These three reads are synchronous but cheap; run them alongside the
+  // parallel block above so they're logically grouped.
   loadCookieState();
   loadHistoryState();
+
   fillSettingsForm(savedSettings);
   applyDisplayMode();
   // This is the value we just loaded from storage, so applying it here is
@@ -47,6 +58,7 @@ async function init() {
     initProductInfoSlider();
   });
 
+  // ── Optimization #7: Reduce scanner warm-up delay from 2-3s → 500ms ──────
   // Warm the (large, ~375KB) scanner decoding library in the background once
   // the browser is idle, so it's already loaded by the time the user taps
   // "Start Scanning" — without delaying first paint or competing with the
@@ -57,14 +69,14 @@ async function init() {
     if (typeof window.ensureHtml5QrLoaded === "function") {
       window.ensureHtml5QrLoaded().catch(function () {});
     }
-  }, isIOSDevice() ? 3000 : 2000);
+  }, 500);
 
   state.inputMode = loadInputMode();
   document.body.classList.toggle("mode-scanner", state.inputMode === "scanner");
   state.els.barcodeInput.inputMode = state.inputMode === "scanner" ? "none" : "numeric";
   updateInputModeSwitchUi();
 
-  const scrollLockState = loadScrollLockState();
+  // ── Use the already-loaded scrollLockState (Optimization #4) ─────────────
   state.manualScrollLocked = scrollLockState.isLocked;
   state.manualScrollLockY = scrollLockState.position;
   updateLockScreenScrollButton();
@@ -101,7 +113,23 @@ async function init() {
   state.els.scanBtn.disabled = false;
   setStatus("Ready — tap Start Scanning");
   setPreviewActive(false);
-  refreshDevices(readSavedCameraId()).catch(function () {});
+
+  // ── Optimization #5: Defer camera enumeration when a saved ID exists ──────
+  // enumerateDevices() can take 30-80 ms. If we already have a saved camera
+  // ID, skip the synchronous call and schedule enumeration in idle time so
+  // the scan button becomes interactive immediately.  On first run (no saved
+  // ID) we still enumerate eagerly so the camera selector is populated.
+  const savedCameraId = readSavedCameraId();
+  if (savedCameraId) {
+    // Pre-populate active device from storage; enumerate in the background.
+    state.activeDeviceId = savedCameraId;
+    scheduleIdleWork(function () {
+      refreshDevices(savedCameraId).catch(function () {});
+    }, 150);
+  } else {
+    // First run — enumerate synchronously so the user can pick a camera.
+    refreshDevices("").catch(function () {});
+  }
 }
 
 if (document.readyState === "loading") {
