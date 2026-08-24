@@ -82,6 +82,7 @@ function getDeferredElements() {
     historyEditSPriceInput:      document.getElementById("historyEditSPriceInput"),
     historyEditBackBtn:          document.getElementById("historyEditBackBtn"),
     // Settings panel
+    settingsBtn:        document.getElementById("settingsBtn"),
     closeSettingsBtn:   document.getElementById("closeSettingsBtn"),
     loginSettingsBtn:   document.getElementById("loginSettingsBtn"),
     loginInput:         document.getElementById("loginInput"),
