@@ -97,7 +97,7 @@ function closeSettingsDialog() {
 
 
 function lockPageScroll() {
-  if (document.body.classList.contains("is-dialog-open")) {
+  if (state.manualScrollLocked || document.body.classList.contains("is-dialog-open")) {
     return;
   }
 
@@ -108,6 +108,9 @@ function lockPageScroll() {
 
 
 function unlockPageScroll() {
+  if (state.manualScrollLocked) {
+    return;
+  }
   if (!document.body.classList.contains("is-dialog-open")) {
     return;
   }
@@ -140,20 +143,6 @@ function isInsideScrollableWhileLocked(target) {
   if (!(target instanceof Element)) {
     return false;
   }
-  // Elements that are allowed to keep scrolling internally even while the
-  // page-level scroll lock is engaged:
-  //  - the main history list, but only once "is-locked-scroll" is toggled
-  //    on it (see updateLockScreenScrollButton / layout.css)
-  //  - the closest-search results list, which scrolls independently
-  //    (dialogs.css: .closest-search-results { overflow-y: auto })
-  //  - the closestSearchDialog / historyEditDialog cards themselves, which
-  //    are position:fixed with their own overflow-y: auto (dialogs.css)
-  //  - the product-info horizontal slider (.pi-slider), a horizontal swipe
-  //    carousel that's independent of vertical page scroll and should
-  //    always stay slidable regardless of the lock state
-  // Note: dialogs in this app are plain <div class="dialog-backdrop">
-  // elements, not native <dialog> tags, so a "dialog" tag selector would
-  // never match here.
   return Boolean(target.closest(
     ".is-locked-scroll, .closest-search-results, #closestSearchDialog .dialog-card, #historyEditDialog .dialog-card, .pi-slider"
   ));
@@ -167,10 +156,6 @@ function preventScrollWhileLocked(event) {
   if (isInsideScrollableWhileLocked(event.target)) {
     return;
   }
-  // touchmove/wheel is what actually drives native scrolling/rubber-band,
-  // including gestures started at the screen edges where there's no
-  // interactive element to "catch" the touch. Blocking it here is what
-  // makes the lock hold, regardless of the CSS position-fixed trick above.
   event.preventDefault();
 }
 
@@ -180,16 +165,15 @@ function toggleScreenScrollLock() {
     state.manualScrollLocked = false;
     document.body.classList.remove("is-scroll-locked");
     document.body.style.top = "";
-    const restoreY = state.manualScrollLockY || 0;
     state.manualScrollLockY = 0;
-    window.scrollTo(0, restoreY);
-    saveScrollLockState(false, 0);  // ← UPDATE THIS
+    saveScrollLockState(false, 0);
   } else {
-    state.manualScrollLockY = window.scrollY || window.pageYOffset || 0;
-    document.body.style.top = `-${state.manualScrollLockY}px`;
+    window.scrollTo(0, 0);
+    state.manualScrollLockY = 0;
+    document.body.style.top = "0px";
     document.body.classList.add("is-scroll-locked");
     state.manualScrollLocked = true;
-    saveScrollLockState(true, state.manualScrollLockY);  // ← UPDATE THIS
+    saveScrollLockState(true, 0);
   }
   updateLockScreenScrollButton();
 }
