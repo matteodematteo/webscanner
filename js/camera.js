@@ -1396,6 +1396,26 @@ function schedulePreviewWarmStart() {
 }
 
 
+function clearScanTimeoutTimer() {
+  if (state.scanTimeoutTimer) {
+    window.clearTimeout(state.scanTimeoutTimer);
+    state.scanTimeoutTimer = 0;
+  }
+}
+
+
+function startScanTimeoutTimer() {
+  clearScanTimeoutTimer();
+  state.scanTimeoutTimer = window.setTimeout(function () {
+    if (state.isScanning) {
+      stopScanning();
+      setStatus("Scanning auto-stopped (10s timeout)");
+      showToast("Scan auto-stopped after 10s");
+    }
+  }, 10000);
+}
+
+
 async function startScanning() {
   // Camera preview works fully offline (getUserMedia needs no network).
   if (!state.isCameraRunning) {
@@ -1415,6 +1435,7 @@ async function startScanning() {
 
   scheduleFocusRefresh(state.track);
   state.isScanning = true;
+  startScanTimeoutTimer();
   updateScanButton();
   updateModePill();
   setStatus("Scanning started");
@@ -1426,6 +1447,7 @@ async function startScanning() {
 }
 
 function stopScanning(keepStatusMessage) {
+  clearScanTimeoutTimer();
   cleanupScanTimer();
   state.isScanning = false;
   state.pendingConfirmCode = "";
