@@ -73,13 +73,12 @@ async function init() {
 
   // ── Use the already-loaded scrollLockState (Optimization #4) ─────────────
   state.manualScrollLocked = scrollLockState.isLocked;
-  state.manualScrollLockY = scrollLockState.position;
+  state.manualScrollLockY = 0;
   updateLockScreenScrollButton();
-  if (state.manualScrollLocked && state.manualScrollLockY) {
-    window.setTimeout(function () {
-      document.body.style.top = `-${state.manualScrollLockY}px`;
-      document.body.classList.add("is-scroll-locked");
-    }, 80);
+  if (state.manualScrollLocked) {
+    window.scrollTo(0, 0);
+    document.body.style.top = "0px";
+    document.body.classList.add("is-scroll-locked");
   }
 
   // Cookie refresh never blocks camera.
