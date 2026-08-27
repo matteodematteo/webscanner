@@ -184,6 +184,9 @@
       flex: 0 0 72px; width: 72px; min-width: 72px; align-self: stretch;
       padding: 0 8px; font-size: .7rem;
     }
+    .sales-period-btn.has-period {
+      color: #fff7f2; background: #136f63; border-color: #136f63;
+    }
     .pi-dots { display: flex; justify-content: center; align-items: center; gap: 5px; margin-top: 4px; line-height: 0; }
     .pi-dot {
       width: 5px; height: 5px; padding: 0; border: none; border-radius: 50%;
@@ -290,6 +293,10 @@
     .field-card[hidden] { display: none; }
     .field-value.is-discount { color: #b42318; font-weight: 800; }
     #field_disc_cost, #field_disc_iva, #field_discount_percent { color: var(--text); font-weight: 700; }
+
+    .sales-period-dialog-card { display: grid; gap: 12px; align-content: start; }
+    .sales-period-grid { display: grid; gap: 10px; }
+    .sales-period-status { color: var(--danger); }
 
     /* ── visually-hidden utility (used throughout) ────────────────────────── */
     .visually-hidden {
