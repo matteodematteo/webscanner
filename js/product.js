@@ -52,6 +52,9 @@ function clearResultFields() {
   if (compactSavedField) {
     compactSavedField.textContent = "";
   }
+  if (typeof clearSalesData === "function") {
+    clearSalesData();
+  }
   state.currentProductRecord = null;
   setDiscountVisibility();
   setLegacyDiscountVisibility(false);
@@ -297,6 +300,9 @@ async function fetchProductInfo(barcode, options) {
   const lookupSequence = state.lookupSequence + 1;
   state.lookupSequence = lookupSequence;
   const createdHistoryId = lookupOptions.addToHistoryBeforeLookup ? addHistoryItem(code, comparisonQty) : "";
+  if (typeof startSalesPerformanceLookup === "function") {
+    startSalesPerformanceLookup(code);
+  }
 
   setStatus("Requesting product info...");
   try {
@@ -403,4 +409,3 @@ async function fetchProductInfo(barcode, options) {
     return "offline";
   }
 }
-
