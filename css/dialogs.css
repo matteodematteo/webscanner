@@ -73,6 +73,20 @@
     touch-action: pan-y;
   }
 
+  .closest-search-loading {
+    gap: 10px;
+    flex-direction: column;
+  }
+
+  .closest-search-loader {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(20, 28, 36, 0.14);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: api-loader-spin 700ms linear infinite;
+  }
+
   .closest-search-item {
     display: grid;
     grid-template-columns: minmax(0, 85fr) minmax(76px, 15fr);
