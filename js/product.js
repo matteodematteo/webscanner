@@ -32,7 +32,7 @@ function shouldFallbackToClosestSearch(normalizedProduct, barcode, allowClosestS
 }
 
 
-function clearResultFields() {
+function clearResultFields(options) {
   for (let index = 0; index < CONFIG.resultFields.length; index += 1) {
     const key = CONFIG.resultFields[index];
     const element = state.fieldEls[key];
@@ -52,7 +52,7 @@ function clearResultFields() {
   if (compactSavedField) {
     compactSavedField.textContent = "";
   }
-  if (typeof clearSalesData === "function") {
+  if (!options?.keepSales && typeof clearSalesData === "function") {
     clearSalesData();
   }
   state.currentProductRecord = null;

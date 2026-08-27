@@ -400,6 +400,38 @@ function bindDeferredEvents() {
     }
   });
 
+  state.els.salesPeriodBtn.addEventListener("click", function () {
+    openSalesPeriodDialog();
+  });
+
+  state.els.salesPeriodApplyBtn.addEventListener("click", function () {
+    if (applySalesPeriod(state.els.salesPeriodStartInput.value, state.els.salesPeriodEndInput.value)) {
+      closeSalesPeriodDialog();
+      moveFocusToInput(state.els.barcodeInput);
+    }
+  });
+
+  state.els.salesPeriodAllBtn.addEventListener("click", function () {
+    if (applySalesPeriod("", "")) {
+      state.els.salesPeriodStartInput.value = "";
+      state.els.salesPeriodEndInput.value = "";
+      closeSalesPeriodDialog();
+      moveFocusToInput(state.els.barcodeInput);
+    }
+  });
+
+  state.els.salesPeriodBackBtn.addEventListener("click", function () {
+    closeSalesPeriodDialog();
+    moveFocusToInput(state.els.barcodeInput);
+  });
+
+  state.els.salesPeriodDialog.addEventListener("click", function (event) {
+    if (event.target === state.els.salesPeriodDialog) {
+      closeSalesPeriodDialog();
+      moveFocusToInput(state.els.barcodeInput);
+    }
+  });
+
   state.els.closestSearchDialog.addEventListener("click", function (event) {
     if (event.target === state.els.closestSearchDialog && !state.isClosestSearchLoading) {
       closeClosestSearchDialog();
@@ -463,6 +495,7 @@ function bindDeferredEvents() {
     state.els.settingsDialog,
     state.els.confirmDialog,
     state.els.printDialog,
+    state.els.salesPeriodDialog,
     state.els.closestSearchDialog,
     state.els.historyEditDialog
   ].forEach(function (dialogEl) {
@@ -532,4 +565,3 @@ function bindEvents() {
     }
   }, 100);
 }
-

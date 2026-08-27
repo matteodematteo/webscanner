@@ -97,6 +97,32 @@
     min-height: 1.25em;
   }
 
+  .sales-field-value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 1.25em;
+  }
+
+  .sales-loader {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(20, 28, 36, 0.14);
+    border-top-color: var(--accent);
+    animation: api-loader-spin 700ms linear infinite;
+  }
+
+  .sales-loader[hidden] {
+    display: none;
+  }
+
+  .sales-period-btn.has-period {
+    color: #fff7f2;
+    background: #136f63;
+    border-color: #136f63;
+  }
+
   .field-card[hidden] {
     display: none;
   }

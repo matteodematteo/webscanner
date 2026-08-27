@@ -311,7 +311,7 @@ async function handleClosestSearchSelection(index) {
   try {
     const selectedData = await loadProductAndDiscountResponse(barcode);
     state.els.barcodeInput.value = barcode;
-    clearResultFields();
+    clearResultFields({ keepSales: true });
     renderProductData({
       product: selectedData.product,
       sale: selectedData.sale

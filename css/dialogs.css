@@ -45,10 +45,20 @@
   }
 
   .closest-search-dialog-card,
-  .detail-popup-card {
+  .detail-popup-card,
+  .sales-period-dialog-card {
     display: grid;
     gap: 12px;
     align-content: start;
+  }
+
+  .sales-period-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .sales-period-status {
+    color: var(--danger);
   }
 
   .closest-search-status:empty {

@@ -76,6 +76,7 @@ function isAnyDialogOpen() {
     els?.settingsDialog?.classList.contains("is-open") ||
     els?.confirmDialog?.classList.contains("is-open") ||
     els?.printDialog?.classList.contains("is-open") ||
+    els?.salesPeriodDialog?.classList.contains("is-open") ||
     els?.closestSearchDialog?.classList.contains("is-open") ||
     els?.historyEditDialog?.classList.contains("is-open")
   );
@@ -144,7 +145,7 @@ function isInsideScrollableWhileLocked(target) {
     return false;
   }
   return Boolean(target.closest(
-    ".is-locked-scroll, .closest-search-results, #closestSearchDialog .dialog-card, #historyEditDialog .dialog-card, .pi-slider"
+    ".is-locked-scroll, .closest-search-results, #salesPeriodDialog .dialog-card, #closestSearchDialog .dialog-card, #historyEditDialog .dialog-card, .pi-slider"
   ));
 }
 
