@@ -73,9 +73,17 @@
     touch-action: pan-y;
   }
 
-  .closest-search-loading {
-    gap: 10px;
-    flex-direction: column;
+  .closest-search-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.76rem;
+  }
+
+  .closest-search-progress[hidden] {
+    display: none;
   }
 
   .closest-search-loader {
