@@ -62,7 +62,11 @@ function clearResultFields(options) {
 
 
 function setResultField(key, value) {
-  const normalizedValue = value === undefined || value === null ? "" : String(value);
+  let normalizedValue = value === undefined || value === null ? "" : String(value);
+  if (key === "create_time") {
+    // The ERP appends a millisecond placeholder (`.0`) to saved timestamps.
+    normalizedValue = normalizedValue.replace(/\.0$/, "");
+  }
   const element = state.fieldEls[key];
   if (element) {
     element.textContent = normalizedValue;
