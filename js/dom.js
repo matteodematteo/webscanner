@@ -44,6 +44,9 @@ function queryCriticalElements() {
     productInfoSlider:  document.getElementById("productInfoSlider"),
     productInfoTrack:   document.getElementById("productInfoTrack"),
     productInfoDots:    document.getElementById("productInfoDots"),
+    salesQuantityField: document.getElementById("field_sales_quantity"),
+    salesQuantityLoader:document.getElementById("salesQuantityLoader"),
+    salesPeriodBtn:     document.getElementById("salesPeriodBtn"),
   };
 }
 
@@ -69,6 +72,13 @@ function getDeferredElements() {
     printBigBtn:                 document.getElementById("printBigBtn"),
     printStickerBtn:             document.getElementById("printStickerBtn"),
     printBackBtn:                document.getElementById("printBackBtn"),
+    salesPeriodDialog:           document.getElementById("salesPeriodDialog"),
+    salesPeriodStartInput:       document.getElementById("salesPeriodStartInput"),
+    salesPeriodEndInput:         document.getElementById("salesPeriodEndInput"),
+    salesPeriodApplyBtn:         document.getElementById("salesPeriodApplyBtn"),
+    salesPeriodAllBtn:           document.getElementById("salesPeriodAllBtn"),
+    salesPeriodBackBtn:          document.getElementById("salesPeriodBackBtn"),
+    salesPeriodStatus:           document.getElementById("salesPeriodStatus"),
     historyEditDialog:           document.getElementById("historyEditDialog"),
     historyEditBackBtn:          document.getElementById("historyEditBackBtn"),
     historyEditBarcodeInput:     document.getElementById("historyEditBarcodeInput"),
@@ -150,4 +160,3 @@ function cacheResultFieldElements() {
     state.fieldEls[key] = document.getElementById(`field_${key}`);
   }
 }
-
