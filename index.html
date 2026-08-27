@@ -297,7 +297,7 @@
     }
     .toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-    /* ── FAB (settings button visible before dialogs.css loads) ───────────── */
+    /* ── FAB ─────────────────────────────────────────────────────────────── */
     .fab {
       position: fixed; bottom: max(24px,env(safe-area-inset-bottom));
       right: max(20px,env(safe-area-inset-right)); z-index: 18;
@@ -311,17 +311,12 @@
     .fab svg { width: 22px; height: 22px; color: #fff; }
   </style>
 
-  <!-- Non-critical sheets: load asynchronously, swap to rel=stylesheet after paint.
-       history, dialogs, and responsive styles are not needed before first render. -->
-  <link rel="preload" href="css/history.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
-  <link rel="preload" href="css/dialogs.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
-  <link rel="preload" href="css/responsive.css" as="style" onload="this.onload=null;this.rel='stylesheet'" />
-  <!-- Fallback for browsers that don't support preload onload trick -->
-  <noscript>
-    <link rel="stylesheet" href="css/history.css" />
-    <link rel="stylesheet" href="css/dialogs.css" />
-    <link rel="stylesheet" href="css/responsive.css" />
-  </noscript>
+  <!-- These sheets affect the visible page geometry. Keep them render-blocking so
+       browsers paint the completed interface once instead of restyling sections
+       progressively on a slow connection. -->
+  <link rel="stylesheet" href="css/history.css" />
+  <link rel="stylesheet" href="css/dialogs.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
 
 </head>
 <body>
@@ -628,11 +623,13 @@
     window.__html5QrReadyPromise = null;
     window.ensureHtml5QrLoaded = function () {
       if (!window.__html5QrReadyPromise) {
-        window.__html5QrReadyPromise = new Promise(function (resolve) {
+        window.__html5QrReadyPromise = new Promise(function (resolve, reject) {
           var script = document.createElement("script");
           script.src = "js/html5-qrcode.min.js";
           script.onload = resolve;
-          script.onerror = resolve;
+          script.onerror = function () {
+            reject(new Error("Scanner library is not available offline yet."));
+          };
           document.head.appendChild(script);
         });
       }
