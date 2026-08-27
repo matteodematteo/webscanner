@@ -1,6 +1,6 @@
 // Offline app shell. All paths are resolved against the service worker scope
 // so installs work both at the domain root and from a deployed subfolder.
-const CACHE_NAME = 'webscanner-v6';
+const CACHE_NAME = 'webscanner-v7';
 const APP_SHELL_URL = new URL('index.html', self.registration.scope).toString();
 const CACHEABLE_DESTINATIONS = new Set(['script', 'style', 'document', 'image', 'font']);
 const ASSETS_TO_CACHE = [
@@ -14,21 +14,21 @@ const ASSETS_TO_CACHE = [
   'css/dialogs.css',
   'css/responsive.css',
   'js/html5-qrcode.min.js',
-  'js/config.js?v=61',
-  'js/state.js?v=61',
-  'js/dom.js?v=61',
-  'js/utils.js?v=61',
-  'js/ui.js?v=61',
-  'js/settings.js?v=61',
-  'js/input-mode.js?v=61',
-  'js/product.js?v=61',
-  'js/api.js?v=61',
-  'js/sales.js?v=61',
-  'js/closest-search.js?v=61',
-  'js/history.js?v=61',
-  'js/camera.js?v=61',
-  'js/events.js?v=61',
-  'js/app.js?v=61'
+  'js/config.js?v=62',
+  'js/state.js?v=62',
+  'js/dom.js?v=62',
+  'js/utils.js?v=62',
+  'js/ui.js?v=62',
+  'js/settings.js?v=62',
+  'js/input-mode.js?v=62',
+  'js/product.js?v=62',
+  'js/api.js?v=62',
+  'js/sales.js?v=62',
+  'js/closest-search.js?v=62',
+  'js/history.js?v=62',
+  'js/camera.js?v=62',
+  'js/events.js?v=62',
+  'js/app.js?v=62'
 ].map((url) => new URL(url, self.registration.scope).toString());
 
 self.addEventListener('install', (event) => {
