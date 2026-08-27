@@ -23,14 +23,41 @@ function formatSalesDateForRequest(value) {
 }
 
 
-function parseSalesDate(value) {
+function formatSalesEndDateForRequest(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  if (text.length === 10) {
+    return `${text} 23:59:59`;
+  }
+  return text.replace("T", " ") + (text.length === 16 ? ":59" : "");
+}
+
+
+function parseSalesDate(value, endOfDay) {
   const text = String(value || "").trim();
   if (!text) {
     return null;
   }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const dateOnly = new Date(`${text}T00:00:00`);
+    if (Number.isNaN(dateOnly.getTime())) {
+      return null;
+    }
+    if (endOfDay) {
+      dateOnly.setHours(23, 59, 59, 999);
+    }
+    return dateOnly;
+  }
   const normalized = text.replace(" ", "T").replace(/\.0+$/, "");
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+
+function hasSalesQuantityField(item) {
+  return Boolean(item && typeof item === "object" && Object.prototype.hasOwnProperty.call(item, "quantity"));
 }
 
 
@@ -41,14 +68,32 @@ function extractSalesRows(payload) {
   if (!payload || typeof payload !== "object") {
     return [];
   }
-  if (Array.isArray(payload.rows)) {
-    return payload.rows;
-  }
-  if (Array.isArray(payload.data)) {
-    return payload.data;
-  }
-  if (Array.isArray(payload.list)) {
-    return payload.list;
+
+  const queue = [payload];
+  while (queue.length > 0) {
+    const item = queue.shift();
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    if (Array.isArray(item)) {
+      if (item.length === 0 || item.some(hasSalesQuantityField)) {
+        return item;
+      }
+      continue;
+    }
+
+    const values = Object.values(item);
+    for (let index = 0; index < values.length; index += 1) {
+      const value = values[index];
+      if (Array.isArray(value)) {
+        if (value.length === 0 || value.some(hasSalesQuantityField)) {
+          return value;
+        }
+      } else if (value && typeof value === "object") {
+        queue.push(value);
+      }
+    }
   }
   return [];
 }
@@ -61,8 +106,8 @@ function getSalesTotalCount(payload) {
 
 
 function isSalesRowInSelectedPeriod(row) {
-  const beginDate = parseSalesDate(state.salesBeginDate);
-  const endDate = parseSalesDate(state.salesEndDate);
+  const beginDate = parseSalesDate(state.salesBeginDate, false);
+  const endDate = parseSalesDate(state.salesEndDate, true);
   if (!beginDate && !endDate) {
     return true;
   }
@@ -81,11 +126,23 @@ function isSalesRowInSelectedPeriod(row) {
 }
 
 
+function getSalesRowQuantity(row) {
+  const rawQuantity = row?.quantity;
+  if (typeof rawQuantity === "string") {
+    const normalized = rawQuantity.trim().replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const parsed = Number(rawQuantity);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+
 function sumSalesQuantity(rows) {
   return rows
     .filter(isSalesRowInSelectedPeriod)
     .reduce(function (total, row) {
-      return total + numberFromValue(row?.quantity);
+      return total + getSalesRowQuantity(row);
     }, 0);
 }
 
@@ -126,7 +183,7 @@ function clearSalesData() {
 
 async function fetchSalesPerformancePage(code, cookie, page, rows) {
   const beginDate = formatSalesDateForRequest(state.salesBeginDate);
-  const endDate = formatSalesDateForRequest(state.salesEndDate);
+  const endDate = formatSalesEndDateForRequest(state.salesEndDate);
   const proxyEndpoint = String(CONFIG.salesPerformanceProxyEndpoint || "").trim();
 
   if (proxyEndpoint) {
