@@ -287,6 +287,9 @@ async function handleClosestSearchSelection(index) {
 
   if (state.isQuantityEntryUnlocked) {
     state.els.barcodeInput.value = barcode;
+    if (typeof startSalesPerformanceLookup === "function") {
+      startSalesPerformanceLookup(barcode);
+    }
     closeClosestSearchDialog();
     setStatus(`Selected ${barcode}. Tap Enter / Add to send request.`);
     moveFocusToInput(state.els.quantityInput);
@@ -301,6 +304,9 @@ async function handleClosestSearchSelection(index) {
   const pendingComparisonQty = state.closestSearchPendingHistoryId
     ? state.history.find((item) => item.id === state.closestSearchPendingHistoryId)?.comparison_qty || 1
     : 1;
+  if (typeof startSalesPerformanceLookup === "function") {
+    startSalesPerformanceLookup(barcode);
+  }
 
   try {
     const selectedData = await loadProductAndDiscountResponse(barcode);
@@ -336,4 +342,3 @@ async function handleClosestSearchSelection(index) {
     throw error;
   }
 }
-
