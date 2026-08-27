@@ -24,7 +24,7 @@ async function fetchClosestSearchResults(barcode) {
       Accept: "application/json, text/plain, */*",
       "Content-Type": "application/json"
     }
-  });
+  }, { trackLoader: false });
 
   if (!response.ok) {
     throw new Error(`Closest search request failed with status ${response.status}`);
@@ -182,7 +182,16 @@ function renderClosestSearchResults() {
   if (state.closestSearchResults.length === 0) {
     const emptyMessage = document.createElement("p");
     emptyMessage.className = "history-empty";
-    emptyMessage.textContent = "No similar products found.";
+    if (state.isClosestSearchLoading) {
+      emptyMessage.classList.add("closest-search-loading");
+      const loader = document.createElement("span");
+      loader.className = "closest-search-loader";
+      loader.setAttribute("aria-hidden", "true");
+      emptyMessage.appendChild(loader);
+      emptyMessage.appendChild(document.createTextNode("Searching for similar products..."));
+    } else {
+      emptyMessage.textContent = "No similar products found.";
+    }
     state.els.closestSearchList.replaceChildren(emptyMessage);
     return;
   }
