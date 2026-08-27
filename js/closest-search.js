@@ -24,7 +24,7 @@ async function fetchClosestSearchResults(barcode) {
       Accept: "application/json, text/plain, */*",
       "Content-Type": "application/json"
     }
-  });
+  }, { trackLoader: false });
 
   if (!response.ok) {
     throw new Error(`Closest search request failed with status ${response.status}`);
@@ -175,6 +175,9 @@ function collectClosestSearchResults(rawData) {
 
 
 function renderClosestSearchResults() {
+  if (state.els.closestSearchProgress) {
+    state.els.closestSearchProgress.hidden = !state.isClosestSearchLoading;
+  }
   if (!state.els.closestSearchList) {
     return;
   }
@@ -182,7 +185,11 @@ function renderClosestSearchResults() {
   if (state.closestSearchResults.length === 0) {
     const emptyMessage = document.createElement("p");
     emptyMessage.className = "history-empty";
-    emptyMessage.textContent = "No similar products found.";
+    if (state.isClosestSearchLoading) {
+      emptyMessage.textContent = "Searching for similar products...";
+    } else {
+      emptyMessage.textContent = "No similar products found.";
+    }
     state.els.closestSearchList.replaceChildren(emptyMessage);
     return;
   }
@@ -266,6 +273,9 @@ function closeClosestSearchDialog() {
   state.isClosestSearchLoading = false;
   state.els.closestSearchBackBtn.disabled = false;
   state.els.closestSearchStatus.textContent = "";
+  if (state.els.closestSearchProgress) {
+    state.els.closestSearchProgress.hidden = true;
+  }
   state.els.closestSearchDialog.classList.remove("is-open");
   state.els.closestSearchDialog.setAttribute("aria-hidden", "true");
   window.setTimeout(function () {
@@ -309,12 +319,14 @@ async function handleClosestSearchSelection(index) {
   }
 
   try {
-    const selectedData = await loadProductAndDiscountResponse(barcode);
+    // Product data is the critical response: render it as soon as it arrives.
+    // Discount is best-effort and is applied in a follow-up request below.
+    const selectedData = await loadProductInfoResponse(barcode);
     state.els.barcodeInput.value = barcode;
     clearResultFields({ keepSales: true });
     renderProductData({
-      product: selectedData.product,
-      sale: selectedData.sale
+      product: selectedData.raw?.product || selectedData.raw,
+      sale: null
     });
     if (state.currentProductRecord) {
       state.currentProductRecord.comparison_qty = pendingComparisonQty;
@@ -328,6 +340,36 @@ async function handleClosestSearchSelection(index) {
       // Sync product details to every history row with this barcode.
       syncHistoryRowsWithRecord(state.currentProductRecord, barcode);
     }
+
+    // Do not hold the selection dialog (or product UI) open for discount data.
+    fetchDiscountInfoThroughProxy(barcode, selectedData.cookie)
+      .then(function (discountResponseText) {
+        let parsedDiscount = null;
+        try {
+          parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
+        } catch {
+          parsedDiscount = null;
+        }
+
+        const updatedRecord = buildHistoryItemFromLookupData(
+          selectedData.raw?.product || selectedData.raw,
+          parsedDiscount,
+          barcode,
+          pendingComparisonQty
+        );
+        syncHistoryRowsWithRecord(updatedRecord, barcode);
+
+        if (String(state.els.barcodeInput.value || "").trim() === barcode) {
+          renderProductData({
+            product: selectedData.raw?.product || selectedData.raw,
+            sale: parsedDiscount
+          });
+        }
+      })
+      .catch(function () {
+        // Product data is already visible; discount is optional.
+      });
+
     closeClosestSearchDialog();
     setStatus(`Selected ${barcode}`);
     if (state.isQuantityEntryUnlocked) {
