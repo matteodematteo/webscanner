@@ -179,6 +179,11 @@
     .pi-row .field-card { min-width: 0; }
     .pi-w-60 { width: 60%; } .pi-w-40 { width: 40%; } .pi-w-70 { width: 70%; }
     .pi-w-30 { width: 30%; } .pi-w-50 { width: 50%; } .pi-w-33 { flex: 1 1 0; }
+    .sales-summary-row #field_create_time_card, .sales-summary-row #field_sales_quantity_card { flex: 1 1 0; }
+    .sales-period-btn {
+      flex: 0 0 72px; width: 72px; min-width: 72px; align-self: stretch;
+      padding: 0 8px; font-size: .7rem;
+    }
     .pi-dots { display: flex; justify-content: center; align-items: center; gap: 5px; margin-top: 4px; line-height: 0; }
     .pi-dot {
       width: 5px; height: 5px; padding: 0; border: none; border-radius: 50%;
@@ -275,6 +280,13 @@
       text-transform: uppercase; letter-spacing: .06em;
     }
     .field-value { font-size: .8rem; font-weight: 700; line-height: 1.28; word-break: break-word; min-height: 1.25em; }
+    .sales-field-value { display: flex; align-items: center; gap: 6px; min-height: 1.25em; }
+    .sales-loader {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid rgba(20,28,36,.14); border-top-color: var(--accent);
+      animation: api-loader-spin 700ms linear infinite;
+    }
+    .sales-loader[hidden] { display: none; }
     .field-card[hidden] { display: none; }
     .field-value.is-discount { color: #b42318; font-weight: 800; }
     #field_disc_cost, #field_disc_iva, #field_discount_percent { color: var(--text); font-weight: 700; }
@@ -400,8 +412,10 @@
               <div class="field-card pi-w-70" id="field_italian_name_card"><label for="field_italian_name">Italian Name</label><div class="field-value" id="field_italian_name"></div></div>
               <div class="field-card pi-w-30" id="field_spec_card"><label for="field_spec">Spec</label><div class="field-value" id="field_spec"></div></div>
             </div>
-            <div class="pi-row">
+            <div class="pi-row sales-summary-row">
               <div class="field-card pi-w-50" id="field_create_time_card"><label for="field_create_time">Saved</label><div class="field-value" id="field_create_time"></div></div>
+              <div class="field-card pi-w-33" id="field_sales_quantity_card"><label for="field_sales_quantity">Sales</label><div class="field-value sales-field-value"><span id="field_sales_quantity"></span><span class="sales-loader" id="salesQuantityLoader" hidden></span></div></div>
+              <button class="btn btn-muted sales-period-btn pi-w-17" id="salesPeriodBtn" type="button">Period</button>
             </div>
           </div>
         </div>
@@ -549,6 +563,28 @@
     </div>
   </div>
 
+  <div class="dialog-backdrop" id="salesPeriodDialog" aria-hidden="true">
+    <div class="dialog-card sales-period-dialog-card" role="dialog" aria-modal="true" aria-labelledby="salesPeriodTitle">
+      <h2 id="salesPeriodTitle">Sales Period</h2>
+      <div class="sales-period-grid">
+        <label class="detail-popup-field">
+          <span>Start</span>
+          <input class="input" id="salesPeriodStartInput" type="datetime-local" />
+        </label>
+        <label class="detail-popup-field">
+          <span>End</span>
+          <input class="input" id="salesPeriodEndInput" type="datetime-local" />
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn btn-primary" id="salesPeriodApplyBtn" type="button">Apply</button>
+        <button class="btn btn-muted" id="salesPeriodAllBtn" type="button">All</button>
+        <button class="btn btn-muted" id="salesPeriodBackBtn" type="button">Back</button>
+      </div>
+      <div class="save-note sales-period-status" id="salesPeriodStatus" aria-live="polite"></div>
+    </div>
+  </div>
+
   <div class="dialog-backdrop" id="closestSearchDialog" aria-hidden="true">
     <div class="dialog-card closest-search-dialog-card" role="dialog" aria-modal="true" aria-labelledby="closestSearchTitle">
       <h2 id="closestSearchTitle">Closest Matches</h2>
@@ -636,19 +672,20 @@
       return window.__html5QrReadyPromise;
     };
   </script>
-  <script src="js/config.js?v=58" defer></script>
-  <script src="js/state.js?v=58" defer></script>
-  <script src="js/dom.js?v=58" defer></script>
-  <script src="js/utils.js?v=58" defer></script>
-  <script src="js/ui.js?v=58" defer></script>
-  <script src="js/settings.js?v=58" defer></script>
-  <script src="js/input-mode.js?v=58" defer></script>
-  <script src="js/product.js?v=58" defer></script>
-  <script src="js/api.js?v=58" defer></script>
-  <script src="js/closest-search.js?v=58" defer></script>
-  <script src="js/history.js?v=58" defer></script>
-  <script src="js/camera.js?v=58" defer></script>
-  <script src="js/events.js?v=58" defer></script>
-  <script src="js/app.js?v=58" defer></script>
+  <script src="js/config.js?v=59" defer></script>
+  <script src="js/state.js?v=59" defer></script>
+  <script src="js/dom.js?v=59" defer></script>
+  <script src="js/utils.js?v=59" defer></script>
+  <script src="js/ui.js?v=59" defer></script>
+  <script src="js/settings.js?v=59" defer></script>
+  <script src="js/input-mode.js?v=59" defer></script>
+  <script src="js/product.js?v=59" defer></script>
+  <script src="js/api.js?v=59" defer></script>
+  <script src="js/sales.js?v=59" defer></script>
+  <script src="js/closest-search.js?v=59" defer></script>
+  <script src="js/history.js?v=59" defer></script>
+  <script src="js/camera.js?v=59" defer></script>
+  <script src="js/events.js?v=59" defer></script>
+  <script src="js/app.js?v=59" defer></script>
 </body>
 </html>
