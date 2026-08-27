@@ -115,6 +115,20 @@
   .pi-w-50 { width: 50%; }
   .pi-w-33 { flex: 1 1 0; }
 
+  .sales-summary-row #field_create_time_card,
+  .sales-summary-row #field_sales_quantity_card {
+    flex: 1 1 0;
+  }
+
+  .sales-period-btn {
+    flex: 0 0 72px;
+    width: 72px;
+    min-width: 72px;
+    align-self: stretch;
+    padding: 0 8px;
+    font-size: 0.7rem;
+  }
+
   .pi-dots {
     display: flex;
     justify-content: center;
