@@ -2,6 +2,15 @@
 
 /* Shared application state */
 
+function getSalesPeriodDate(daysAgo) {
+    const date = new Date();
+    date.setDate(date.getDate() - daysAgo);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
 const state = {
     els: null,
     stream: null,
@@ -58,8 +67,8 @@ const state = {
     salesLookupSequence: 0,
     salesBarcode: "",
     salesRows: [],
-    salesBeginDate: "",
-    salesEndDate: "",
+    salesBeginDate: getSalesPeriodDate(29),
+    salesEndDate: getSalesPeriodDate(0),
     isSalesLoading: false,
     historyEditSuccessTimer: 0,
     historyEditCloseTimer: 0,
