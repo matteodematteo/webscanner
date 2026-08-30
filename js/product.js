@@ -131,7 +131,10 @@ function normalizeProductData(rawData) {
     if (!item || typeof item !== "object") continue;
 
     if (item.goods_code || item.italian_name || item.real_inventory) {
-      return item;
+      return {
+        ...item,
+        create_time: item.store_time || item.create_time
+      };
     }
 
     const values = Object.values(item);
@@ -311,6 +314,19 @@ async function fetchProductInfo(barcode, options) {
   setStatus("Requesting product info...");
   try {
     const cookie = await getCookieForRequests();
+    // Start the optional requests as soon as the shared session is ready.
+    // Only the product response below is awaited for the first render.
+    const discountPromise = fetchDiscountInfoThroughProxy(code, cookie)
+      .then(function (responseText) {
+        try {
+          return responseText ? JSON.parse(responseText) : null;
+        } catch {
+          return null;
+        }
+      })
+      .catch(function () {
+        return null;
+      });
     const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
 
     let parsedProduct;
@@ -346,15 +362,7 @@ async function fetchProductInfo(barcode, options) {
     setStatus("Product info loaded");
 
     // Always request discount in background; update UI + all matching history rows.
-    fetchDiscountInfoThroughProxy(code, cookie)
-      .then(function (discountResponseText) {
-        let parsedDiscount = null;
-        try {
-          parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
-        } catch {
-          parsedDiscount = null;
-        }
-
+    discountPromise.then(function (parsedDiscount) {
         const updatedRecord = buildHistoryItemFromLookupData(
           parsedProduct?.product || parsedProduct,
           parsedDiscount,
@@ -371,9 +379,6 @@ async function fetchProductInfo(barcode, options) {
             sale: parsedDiscount
           });
         }
-      })
-      .catch(function () {
-        // Discount is best-effort; product already shown.
       });
     return "exact";
   } catch (error) {

@@ -2,12 +2,21 @@
 
 /* API and proxy network requests */
 
-async function apiFetch(url, options) {
-  showApiLoader();
+// Product, discount, and sales lookups can start together. Share one cookie
+// refresh promise so a missing session does not trigger duplicate login calls.
+let cookieRequestPromise = null;
+
+async function apiFetch(url, options, loaderOptions) {
+  const trackLoader = loaderOptions?.trackLoader !== false;
+  if (trackLoader) {
+    showApiLoader();
+  }
   try {
     return await fetch(url, options);
   } finally {
-    hideApiLoader();
+    if (trackLoader) {
+      hideApiLoader();
+    }
   }
 }
 
@@ -44,7 +53,7 @@ async function fetchDiscountInfoThroughProxy(code, cookie) {
       Accept: "application/json, text/plain, */*",
       "Content-Type": "application/json"
     }
-  });
+  }, { trackLoader: false });
 
   if (!response.ok) {
     throw new Error(`Discount proxy request failed with status ${response.status}`);
@@ -109,7 +118,12 @@ async function fetchAddProductThroughProxy(payload, cookie) {
 async function getCookieForRequests() {
   let cookie = state.authCookie;
   if (!cookie) {
-    cookie = await loginAndRefreshCookie();
+    if (!cookieRequestPromise) {
+      cookieRequestPromise = loginAndRefreshCookie().finally(function () {
+        cookieRequestPromise = null;
+      });
+    }
+    cookie = await cookieRequestPromise;
   }
   return cookie;
 }
@@ -191,4 +205,3 @@ async function loadProductAndDiscountResponse(barcode) {
     hasDiscount: hasVisibleDiscount
   };
 }
-
