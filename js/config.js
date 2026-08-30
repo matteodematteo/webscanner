@@ -8,7 +8,6 @@ const CONFIG = {
     infoProxyEndpoint: "https://lgkillergetinfo.mattoteo96.workers.dev/",
     closestSearchProxyEndpoint: "https://lgkillerclosestsearch.mattoteo96.workers.dev/",
     discountProxyEndpoint: "https://lgkillerdiscountinfo.mattoteo96.workers.dev/",
-    salesPerformanceEndpoint: "https://lgerp.cc/sellAccountCode/findGoodsAnalyze",
     // Set this to the deployed Cloudflare Worker URL (see cloudflare/sales-performance-proxy.js).
     salesPerformanceProxyEndpoint: "",
     updateProxyEndpoint: "https://lgkillerupdate.mattoteo96.workers.dev/",

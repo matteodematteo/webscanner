@@ -181,45 +181,24 @@ async function fetchSalesPerformance(code, cookie) {
   const proxyEndpoint = String(CONFIG.salesPerformanceProxyEndpoint || "").trim();
   const rows = Math.max(1, Number(CONFIG.salesPerformanceRows || 500) || 500);
 
-  if (proxyEndpoint) {
-    const response = await fetch(proxyEndpoint, {
-      method: "POST",
-      body: JSON.stringify({
-        goodsCode: code,
-        barcode: code,
-        cookie: cookie,
-        beginDate: beginDate,
-        endDate: endDate,
-        page: 1,
-        rows: rows
-      }),
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Sales request failed with status ${response.status}`);
-    }
-    return response.text();
+  if (!proxyEndpoint) {
+    throw new Error("Sales performance Cloudflare Worker endpoint is not configured.");
   }
 
-  const url = new URL(CONFIG.salesPerformanceEndpoint);
-  url.searchParams.set("goodsCode", code);
-  url.searchParams.set("person", "");
-  url.searchParams.set("operator", "");
-  url.searchParams.set("beginDate", beginDate);
-  url.searchParams.set("endDate", endDate);
-  url.searchParams.set("page", "1");
-  url.searchParams.set("rows", String(rows));
-
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    credentials: "include",
+  const response = await fetch(proxyEndpoint, {
+    method: "POST",
+    body: JSON.stringify({
+      goodsCode: code,
+      barcode: code,
+      cookie: cookie,
+      beginDate: beginDate,
+      endDate: endDate,
+      page: 1,
+      rows: rows
+    }),
     headers: {
-      Accept: "application/json, text/javascript, */*; q=0.01",
-      "X-Requested-With": "XMLHttpRequest"
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json"
     }
   });
 
