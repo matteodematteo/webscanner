@@ -175,6 +175,9 @@ function collectClosestSearchResults(rawData) {
 
 
 function renderClosestSearchResults() {
+  if (state.els.closestSearchProgress) {
+    state.els.closestSearchProgress.hidden = !state.isClosestSearchLoading;
+  }
   if (!state.els.closestSearchList) {
     return;
   }
@@ -183,12 +186,7 @@ function renderClosestSearchResults() {
     const emptyMessage = document.createElement("p");
     emptyMessage.className = "history-empty";
     if (state.isClosestSearchLoading) {
-      emptyMessage.classList.add("closest-search-loading");
-      const loader = document.createElement("span");
-      loader.className = "closest-search-loader";
-      loader.setAttribute("aria-hidden", "true");
-      emptyMessage.appendChild(loader);
-      emptyMessage.appendChild(document.createTextNode("Searching for similar products..."));
+      emptyMessage.textContent = "Searching for similar products...";
     } else {
       emptyMessage.textContent = "No similar products found.";
     }
@@ -275,6 +273,9 @@ function closeClosestSearchDialog() {
   state.isClosestSearchLoading = false;
   state.els.closestSearchBackBtn.disabled = false;
   state.els.closestSearchStatus.textContent = "";
+  if (state.els.closestSearchProgress) {
+    state.els.closestSearchProgress.hidden = true;
+  }
   state.els.closestSearchDialog.classList.remove("is-open");
   state.els.closestSearchDialog.setAttribute("aria-hidden", "true");
   window.setTimeout(function () {

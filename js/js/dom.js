@@ -65,6 +65,7 @@ function getDeferredElements() {
     confirmDialogText:           document.getElementById("confirmDialogText"),
     closestSearchDialog:         document.getElementById("closestSearchDialog"),
     closestSearchList:           document.getElementById("closestSearchList"),
+    closestSearchProgress:       document.getElementById("closestSearchProgress"),
     closestSearchStatus:         document.getElementById("closestSearchStatus"),
     closestSearchTitle:          document.getElementById("closestSearchTitle"),
     closestSearchBackBtn:        document.getElementById("closestSearchBackBtn"),

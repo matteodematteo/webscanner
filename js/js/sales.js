@@ -99,12 +99,6 @@ function extractSalesRows(payload) {
 }
 
 
-function getSalesTotalCount(payload) {
-  const total = Number(payload?.total ?? payload?.recordsTotal ?? payload?.count);
-  return Number.isFinite(total) && total > 0 ? total : 0;
-}
-
-
 function isSalesRowInSelectedPeriod(row) {
   const beginDate = parseSalesDate(state.salesBeginDate, false);
   const endDate = parseSalesDate(state.salesEndDate, true);
@@ -181,10 +175,11 @@ function clearSalesData() {
 }
 
 
-async function fetchSalesPerformancePage(code, cookie, page, rows) {
+async function fetchSalesPerformance(code, cookie) {
   const beginDate = formatSalesDateForRequest(state.salesBeginDate);
   const endDate = formatSalesEndDateForRequest(state.salesEndDate);
   const proxyEndpoint = String(CONFIG.salesPerformanceProxyEndpoint || "").trim();
+  const rows = Math.max(1, Number(CONFIG.salesPerformanceRows || 500) || 500);
 
   if (proxyEndpoint) {
     const response = await fetch(proxyEndpoint, {
@@ -195,7 +190,7 @@ async function fetchSalesPerformancePage(code, cookie, page, rows) {
         cookie: cookie,
         beginDate: beginDate,
         endDate: endDate,
-        page: page,
+        page: 1,
         rows: rows
       }),
       headers: {
@@ -216,7 +211,7 @@ async function fetchSalesPerformancePage(code, cookie, page, rows) {
   url.searchParams.set("operator", "");
   url.searchParams.set("beginDate", beginDate);
   url.searchParams.set("endDate", endDate);
-  url.searchParams.set("page", String(page));
+  url.searchParams.set("page", "1");
   url.searchParams.set("rows", String(rows));
 
   const response = await fetch(url.toString(), {
@@ -237,30 +232,15 @@ async function fetchSalesPerformancePage(code, cookie, page, rows) {
 
 async function loadSalesPerformanceRows(code) {
   const cookie = await getCookieForRequests();
-  const rowsPerPage = Math.max(1, Number(CONFIG.salesPerformanceRows || 500) || 500);
-  const maxPages = 20;
-  const allRows = [];
-  let totalCount = 0;
-
-  for (let page = 1; page <= maxPages; page += 1) {
-    const responseText = await fetchSalesPerformancePage(code, cookie, page, rowsPerPage);
-    let parsed;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      throw new Error("Sales response was not valid JSON.");
-    }
-
-    const pageRows = extractSalesRows(parsed);
-    totalCount = totalCount || getSalesTotalCount(parsed);
-    allRows.push(...pageRows);
-
-    if (pageRows.length < rowsPerPage || (totalCount > 0 && allRows.length >= totalCount)) {
-      break;
-    }
+  const responseText = await fetchSalesPerformance(code, cookie);
+  let parsed;
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    throw new Error("Sales response was not valid JSON.");
   }
 
-  return allRows;
+  return extractSalesRows(parsed);
 }
 
 

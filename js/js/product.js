@@ -48,7 +48,7 @@ function clearResultFields(options) {
   if (compactInventoryField) {
     compactInventoryField.textContent = "";
   }
-  const compactSavedField = document.getElementById("field_create_time_compact");
+  const compactSavedField = document.getElementById("field_store_time_compact");
   if (compactSavedField) {
     compactSavedField.textContent = "";
   }
@@ -63,7 +63,7 @@ function clearResultFields(options) {
 
 function setResultField(key, value) {
   let normalizedValue = value === undefined || value === null ? "" : String(value);
-  if (key === "create_time") {
+  if (key === "store_time") {
     // The ERP appends a millisecond placeholder (`.0`) to saved timestamps.
     normalizedValue = normalizedValue.replace(/\.0$/, "");
   }
@@ -85,8 +85,8 @@ function setResultField(key, value) {
     }
     return;
   }
-  if (key === "create_time") {
-    const compactSavedField = document.getElementById("field_create_time_compact");
+  if (key === "store_time") {
+    const compactSavedField = document.getElementById("field_store_time_compact");
     if (compactSavedField) {
       compactSavedField.textContent = normalizedValue;
     }

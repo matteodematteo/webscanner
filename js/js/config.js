@@ -48,7 +48,7 @@ const CONFIG = {
       "id",
       "goods_code",
       "italian_name",
-      "create_time",
+      "store_time",
       "p_price",
       "s_price",
       "real_inventory",
