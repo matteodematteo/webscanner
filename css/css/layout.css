@@ -115,10 +115,10 @@
   .pi-w-50 { width: 50%; }
   .pi-w-33 { flex: 1 1 0; }
 
-  .sales-summary-row #field_create_time_card { flex: 1.15 1 0; }
+  .sales-summary-row #field_store_time_card { flex: 1.15 1 0; }
   .sales-summary-row #field_sales_quantity_card { flex: 0.85 1 0; }
 
-  .sales-summary-row #field_create_time {
+  .sales-summary-row #field_store_time {
     white-space: nowrap;
   }
 

@@ -73,6 +73,28 @@
     touch-action: pan-y;
   }
 
+  .closest-search-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.76rem;
+  }
+
+  .closest-search-progress[hidden] {
+    display: none;
+  }
+
+  .closest-search-loader {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(20, 28, 36, 0.14);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: api-loader-spin 700ms linear infinite;
+  }
+
   .closest-search-item {
     display: grid;
     grid-template-columns: minmax(0, 85fr) minmax(76px, 15fr);
