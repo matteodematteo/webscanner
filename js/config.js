@@ -9,7 +9,7 @@ const CONFIG = {
     closestSearchProxyEndpoint: "https://lgkillerclosestsearch.mattoteo96.workers.dev/",
     discountProxyEndpoint: "https://lgkillerdiscountinfo.mattoteo96.workers.dev/",
     // Set this to the deployed Cloudflare Worker URL (see cloudflare/sales-performance-proxy.js).
-    salesPerformanceProxyEndpoint: "",
+    salesPerformanceProxyEndpoint: "https://salesperformance.mattoteo96.workers.dev/",
     updateProxyEndpoint: "https://lgkillerupdate.mattoteo96.workers.dev/",
     addProductProxyEndpoint: "https://lgkilleraddproduct.mattoteo96.workers.dev/",
     sendTxtEndpoint: "https://withered-base-e090.mattoteo96.workers.dev/",
