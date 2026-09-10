@@ -148,7 +148,7 @@ function clearResumePreviewTimer() {
 
 function scheduleQuickPreviewResumeCheck() {
   clearResumePreviewTimer();
-  if (document.hidden) {
+  if (document.hidden || state.cameraStartPromise) {
     return;
   }
 
@@ -162,7 +162,7 @@ function scheduleQuickPreviewResumeCheck() {
 
 
 async function ensurePreviewReadyAfterForeground() {
-  if (document.hidden || state.inputMode === "scanner" || state.isRecoveringPreview) {
+  if (document.hidden || state.cameraStartPromise || state.inputMode === "scanner" || state.isRecoveringPreview) {
     return;
   }
 
@@ -414,8 +414,9 @@ function resolvePreferredDeviceId(devices, preferredDeviceId) {
 }
 
 
-async function refreshDevices(preferredDeviceId) {
+async function refreshDevices(preferredDeviceId, expectedStream) {
   const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+  if (expectedStream && state.stream !== expectedStream) return;
   const devices = mediaDevices.filter((device) => device.kind === "videoinput");
 
   state.devices = devices;
@@ -962,43 +963,19 @@ async function startCameraStream(preferredCameraId, activeVideoConfig) {
   state.els.cameraPreview.muted = true;
   state.els.cameraPreview.setAttribute("playsinline", "");
   state.els.cameraPreview.srcObject = stream;
-  await waitForVideoReadiness(state.els.cameraPreview);
+  // play() resolves when playback starts; no separate metadata timeout needed.
   await state.els.cameraPreview.play();
-  await applyTrackEnhancements(track, activeVideoConfig);
-  scheduleFocusRefresh(track);
-  await refreshDevices(state.activeDeviceId);
-}
-
-
-function waitForVideoReadiness(video) {
-  if (!video) {
-    return Promise.resolve();
-  }
-
-  if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-    return Promise.resolve();
-  }
-
-  return new Promise(function (resolve) {
-    let settled = false;
-    function finish() {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      video.removeEventListener("loadedmetadata", finish);
-      video.removeEventListener("loadeddata", finish);
-      resolve();
-    }
-
-    video.addEventListener("loadedmetadata", finish, { once: true });
-    video.addEventListener("loadeddata", finish, { once: true });
-    window.setTimeout(finish, isIOSDevice() ? 900 : 400);
+  requestFocusRefresh(track).catch(() => {});
+  refreshDevices(state.activeDeviceId, stream).catch(() => {
+    // Device labels are optional; a working camera must not wait for them.
   });
 }
 
 
 async function requestFocusRefresh(track) {
+  // Leave iPhone autofocus to the camera. Reapplying focus constraints can
+  // visibly change framing while the first scan is starting.
+  if (isIOSDevice()) return;
   if (!track?.getCapabilities || !track.applyConstraints || track.readyState === "ended") {
     return;
   }
@@ -1026,7 +1003,8 @@ async function requestFocusRefresh(track) {
 
 function scheduleFocusRefresh(track) {
   clearFocusRefreshTimers();
-  const delays = isIOSDevice() ? [150, 700, 1600] : [120, 500, 1200];
+  if (isIOSDevice()) return;
+  const delays = [120, 500, 1200];
   for (let index = 0; index < delays.length; index += 1) {
     const timerId = window.setTimeout(function () {
       requestFocusRefresh(track).catch(() => {
@@ -1035,46 +1013,6 @@ function scheduleFocusRefresh(track) {
     }, delays[index]);
     state.focusRefreshTimers.push(timerId);
   }
-}
-
-
-async function applyTrackEnhancements(track, activeVideoConfig) {
-  if (!track?.getCapabilities || !track.applyConstraints) return;
-  if (isIOSDevice()) {
-    await requestFocusRefresh(track);
-    return;
-  }
-
-  const baseVideoConfig = activeVideoConfig?.video || getActiveVideoConfig().video;
-  const baseConstraints = {};
-
-  if (baseVideoConfig?.width) {
-    baseConstraints.width = baseVideoConfig.width;
-  }
-  if (baseVideoConfig?.height) {
-    baseConstraints.height = baseVideoConfig.height;
-  }
-  if (baseVideoConfig?.aspectRatio) {
-    baseConstraints.aspectRatio = baseVideoConfig.aspectRatio;
-  }
-  if (baseVideoConfig?.frameRate) {
-    baseConstraints.frameRate = baseVideoConfig.frameRate;
-  }
-  if (baseVideoConfig?.resizeMode) {
-    baseConstraints.resizeMode = baseVideoConfig.resizeMode;
-  }
-
-  if (Object.keys(baseConstraints).length > 0) {
-    try {
-      await track.applyConstraints(baseConstraints);
-    } catch {
-      // Ignore base resolution requests that are not supported by this device.
-    }
-  }
-
-  const capabilities = track.getCapabilities();
-  if (!capabilities) return;
-  await requestFocusRefresh(track);
 }
 
 
@@ -1179,9 +1117,9 @@ async function startCamera(deviceId) {
     await stopTracks();
 
     const activeVideoConfig = getActiveVideoConfig();
-    await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
-    const hasLabels = state.devices.some((device) => device.label);
-    const preferredCameraId = deviceId || (hasLabels ? state.activeDeviceId : "");
+    // Use the saved camera directly, or let the browser choose a rear camera.
+    // Enumerate labeled devices only after the stream has started.
+    const preferredCameraId = deviceId || state.activeDeviceId || readSavedCameraId();
     await startCameraStream(preferredCameraId, activeVideoConfig);
 
     if (state.inputMode === "scanner" || !state.track || state.track.readyState === "ended") {
@@ -1244,6 +1182,9 @@ function startScanTimeoutTimer() {
 
 
 async function startScanning() {
+  if (state.isScanning || state.inputMode === "scanner") return;
+  // Attach the rejection handler immediately while camera permission is pending.
+  const detectorReady = createDetector().then(() => null, (error) => error);
   // Camera preview works fully offline (getUserMedia needs no network).
   if (!state.isCameraRunning) {
     await startCamera(state.activeDeviceId);
@@ -1254,7 +1195,8 @@ async function startScanning() {
   const session = ++state.scanSession;
   setStatus("Loading scanner...");
   try {
-    await createDetector();
+    const error = await detectorReady;
+    if (error) throw error;
   } catch (error) {
     if (session === state.scanSession) setStatus(error.message || "Scanner unavailable. Tap Start Scanning to retry.");
     return;
@@ -1287,9 +1229,6 @@ function stopScanning(keepStatusMessage) {
 
 
 async function handleMainButton() {
-  if (!state.isCameraRunning) {
-    await startCamera(state.activeDeviceId);
-  }
 
   if (state.isScanning) {
     stopScanning();

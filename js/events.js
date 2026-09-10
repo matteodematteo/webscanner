@@ -532,12 +532,14 @@ function bindDeferredEvents() {
     }
   });
 
-  window.addEventListener("pageshow", function () {
-    scheduleQuickPreviewResumeCheck();
+  window.addEventListener("pageshow", function (event) {
+    if (event.persisted) scheduleQuickPreviewResumeCheck();
   });
 
   window.addEventListener("focus", function () {
-    scheduleQuickPreviewResumeCheck();
+    // iOS permission prompts and keyboard focus are not foreground resumes.
+    // visibilitychange handles returning to the app.
+    if (!state.isIOS) scheduleQuickPreviewResumeCheck();
   });
 
   if (navigator.mediaDevices?.addEventListener) {

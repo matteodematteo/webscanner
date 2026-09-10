@@ -33,9 +33,9 @@ const ASSETS_TO_CACHE = [
   'js/sales.js?v=69',
   'js/closest-search.js?v=69',
   'js/history.js?v=70',
-  'js/camera.js?v=69',
-  'js/events.js?v=69',
-  'js/app.js?v=69'
+  'js/camera.js?v=72',
+  'js/events.js?v=72',
+  'js/app.js?v=71'
 ].map((url) => new URL(url, self.registration.scope).toString());
 
 self.addEventListener('install', (event) => {
@@ -70,6 +70,21 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Versioned decoder files are immutable. Reuse them without downloading the
+  // WASM binary again while the camera is starting on every repeat visit.
+  const requestUrl = new URL(event.request.url);
+  if (event.request.method === 'GET' && ASSETS_TO_CACHE.includes(requestUrl.href) &&
+      requestUrl.pathname.includes('/vendor/zxing-wasm/')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+      const response = await fetch(event.request);
+      if (response.ok) await cache.put(event.request, response.clone());
+      return response;
+    })());
+    return;
+  }
   // Stale-while-revalidate for navigations too: serve the cached app shell
   // instantly (no network round-trip on the critical "app becomes visible"
   // path), then silently refetch in the background so the next load picks

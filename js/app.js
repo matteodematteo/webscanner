@@ -34,7 +34,7 @@ async function init() {
     baseSettings: savedSettings
   });
   clearResultFields();
-  renderHistory();
+  scheduleIdleWork(renderHistory);
   bindEvents();
 
   // Restore saved ROI size from localStorage and apply to UI immediately
@@ -53,18 +53,6 @@ async function init() {
     initProductInfoSlider();
   });
 
-  // Warm the local ZXing worker after the shell is ready.
-  scheduleIdleWork(function () {
-    if (typeof window.ensureZXingLoaded === "function") {
-      window.ensureZXingLoaded().catch(function () {});
-    }
-    if ("serviceWorker" in navigator && window.isSecureContext) {
-      navigator.serviceWorker.register("sw.js").catch(function () {
-        // Scanning remains available when offline installation is unavailable.
-      });
-    }
-  }, 500);
-
   state.inputMode = loadInputMode();
   document.body.classList.toggle("mode-scanner", state.inputMode === "scanner");
   state.els.barcodeInput.inputMode = state.inputMode === "scanner" ? "none" : "numeric";
@@ -80,13 +68,21 @@ async function init() {
     document.body.classList.add("is-scroll-locked");
   }
 
-  // Cookie refresh never blocks camera.
-  loginAndRefreshCookie(savedSettings).catch(function (error) {
-    const message = error.message || "Cookie refresh failed.";
-    saveCookieState(state.authCookie || "", `Cookie refresh failed: ${message}`);
-  });
+  // Keep authentication and offline precaching out of scanner startup.
+  function finishStartup() {
+    scheduleIdleWork(function () {
+      loginAndRefreshCookie(savedSettings).catch(function (error) {
+        const message = error.message || "Cookie refresh failed.";
+        saveCookieState(state.authCookie || "", `Cookie refresh failed: ${message}`);
+      });
+      if ("serviceWorker" in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      }
+    });
+  }
 
   if (state.inputMode === "scanner") {
+    finishStartup();
     setStatus("Scanner mode: use an external scanner");
     moveFocusToInput(state.els.barcodeInput);
     return;
@@ -95,6 +91,7 @@ async function init() {
   // Only disable for real hardware limits — NOT for network / library.
   const hardwareIssue = getCameraHardwareIssue();
   if (hardwareIssue) {
+    finishStartup();
     setStatus(hardwareIssue);
     state.els.scanBtn.disabled = true;
     state.els.cameraSelect.disabled = true;
@@ -113,7 +110,7 @@ async function init() {
   // Automatically start camera scanning at screen initialization
   startScanning().catch(function (error) {
     setStatus(error.message || "Ready — tap Start Scanning");
-  });
+  }).finally(finishStartup);
 }
 
 if (document.readyState === "loading") {
