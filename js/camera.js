@@ -2,26 +2,6 @@
 
 /* Camera preview, scanning, ROI, and torch */
 
-async function waitForHtml5QrReady(timeoutMs) {
-  if (typeof window.ensureHtml5QrLoaded !== "function") {
-    return;
-  }
-
-  // Kicks off the (idempotent) lazy load if it hasn't started yet, then
-  // waits for it up to timeoutMs.
-  const readyPromise = window.ensureHtml5QrLoaded();
-
-  await Promise.race([
-    readyPromise.catch(function () {
-      // Ignore lazy scanner bootstrap failures here.
-    }),
-    new Promise(function (resolve) {
-      window.setTimeout(resolve, timeoutMs);
-    })
-  ]);
-}
-
-
 function setActivePreviewEngine(engine) {
   if (state.els?.cameraPreview) {
     state.els.cameraPreview.hidden = false;
@@ -54,63 +34,20 @@ function getActiveStreamTrackFromPreview() {
 }
 
 
-const HTML5_QR_FORMAT_MAP = {
-  ean_13: "EAN_13",
-  ean_8: "EAN_8",
-  upc_a: "UPC_A",
-  upc_e: "UPC_E",
-  code_128: "CODE_128",
-  code_39: "CODE_39",
-  codabar: "CODABAR",
-  itf: "ITF"
+const ZXING_FORMAT_MAP = {
+  ean_13: "EAN13", ean_8: "EAN8", upc_a: "UPCA", upc_e: "UPCE",
+  code_128: "Code128", code_39: "Code39", codabar: "Codabar", itf: "ITF"
 };
 
-
-function getHtml5QrFormats() {
-  const SupportedFormats = window.Html5QrcodeSupportedFormats;
-  if (!SupportedFormats) {
-    return [];
-  }
-  return CONFIG.detectorFormats
-    .map(function (format) {
-      const enumKey = HTML5_QR_FORMAT_MAP[format];
-      return enumKey && SupportedFormats[enumKey] !== undefined ? SupportedFormats[enumKey] : null;
-    })
-    .filter(function (value) {
-      return value !== null;
-    });
-}
-
-
 async function createDetector() {
-  if (state.detector) return state.detector;
-
-  try {
-    if (!window.Html5Qrcode) {
-      await waitForHtml5QrReady(1500);
-    }
-    if (!window.Html5Qrcode) {
-      return null;
-    }
-
-    const formats = getHtml5QrFormats();
-    state.detector = new window.Html5Qrcode("html5QrScanHost", {
-      verbose: false,
-      formatsToSupport: formats.length ? formats : undefined,
-      useBarCodeDetectorIfSupported: true
-    });
-    return state.detector;
-  } catch {
-    return null;
-  }
+  return window.ensureZXingLoaded();
 }
-
 
 function supportsConfiguredScannerEngine() {
-  return Boolean(window.Html5Qrcode);
+  return typeof window.ensureZXingLoaded === "function";
 }
 
-/** Camera preview only: HTTPS + getUserMedia. Does not require BarcodeDetector (Safari needs a polyfill). */
+/** Camera preview only: HTTPS + getUserMedia. ZXing WASM handles decoding on both Android and iOS. */
 
 function getCameraHardwareIssue() {
   if (!window.isSecureContext) {
@@ -176,7 +113,6 @@ function cleanupScanTimer() {
     state.scanAnimationFrame = 0;
   }
   state.isScanLoopScheduled = false;
-  state.isScanInFlight = false;
 }
 
 
@@ -226,7 +162,7 @@ function scheduleQuickPreviewResumeCheck() {
 
 
 async function ensurePreviewReadyAfterForeground() {
-  if (document.hidden || state.isRecoveringPreview) {
+  if (document.hidden || state.inputMode === "scanner" || state.isRecoveringPreview) {
     return;
   }
 
@@ -249,7 +185,7 @@ async function ensurePreviewReadyAfterForeground() {
     window.setTimeout(resolve, 320);
   });
 
-  if (document.hidden || state.isRecoveringPreview) {
+  if (document.hidden || state.inputMode === "scanner" || state.isRecoveringPreview) {
     return;
   }
 
@@ -325,6 +261,7 @@ function startPreviewWatchdog() {
 
 
 async function stopTracks() {
+  stopScanning(true);
   stopPreviewWatchdog();
   clearFocusRefreshTimers();
   state.isCameraRunning = false;
@@ -416,34 +353,6 @@ function scoreVideoDevice(device, index) {
   const label = String(device?.label || "");
   let score = 0;
 
-  if (isIOSDevice()) {
-    if (/超广角|ultra.?wide/i.test(label)) {
-      score += 260;
-    }
-    if (/双广角|dual.?wide/i.test(label)) {
-      score += 220;
-    }
-    if (/后置相机|back camera|rear camera/i.test(label)) {
-      score += 180;
-    }
-    if (/后置双镜头|dual camera/i.test(label)) {
-      score += 120;
-    }
-    if (/三镜头|triple/i.test(label)) {
-      score -= 140;
-    }
-    if (/长焦|tele/i.test(label)) {
-      score -= 220;
-    }
-    if (/前置|front|user|true.?depth|facetime/i.test(label)) {
-      score -= 260;
-    }
-    if (!label && index === 0) {
-      score -= 30;
-    }
-    return score;
-  }
-
   if (/back camera|rear camera/i.test(label)) {
     score += 140;
   }
@@ -501,14 +410,6 @@ function resolvePreferredDeviceId(devices, preferredDeviceId) {
     return device.deviceId === preferredDeviceId;
   });
 
-  if (
-    isIOSDevice() &&
-    preferredDevice &&
-    isLikelyProblematicIOSCameraLabel(preferredDevice.label)
-  ) {
-    return chooseBestDefaultDevice(devices);
-  }
-
   return preferredDevice?.deviceId || chooseBestDefaultDevice(devices);
 }
 
@@ -563,14 +464,6 @@ async function handleDetectedCode(detectedText) {
       });
       state.els.quantityInput.value = sanitizeEditableQuantity(state.els.quantityInput.value);
 
-      if (state.isIOS) {
-        window.setTimeout(function () {
-          moveFocusToInput(state.els.quantityInput);
-          selectEntireInputValue({ target: state.els.quantityInput });
-        }, 80);
-      } else {
-        moveFocusToInput(state.els.quantityInput);
-      }
       return;
     }
     await fetchProductInfo(code);
@@ -664,7 +557,7 @@ function getRoiCropRect(videoWidth, videoHeight) {
 function drawDetectionFrame(mode) {
   const video = state.els.cameraPreview;
   const canvas = state.els.captureCanvas;
-  const context = state.captureContext || canvas.getContext("2d", { alpha: false });
+  const context = state.captureContext || canvas.getContext("2d", { alpha: false, willReadFrequently: true });
   const videoWidth = video.videoWidth || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
   const videoHeight = video.videoHeight || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
   let sx = 0;
@@ -697,7 +590,7 @@ function drawDetectionFrame(mode) {
     }
   }
 
-  const maxOutputSize = 1080;
+  const maxOutputSize = 1920;
   const scale = Math.min(1, maxOutputSize / Math.max(sw, sh));
   const outputWidth = Math.max(1, Math.round(sw * scale));
   const outputHeight = Math.max(1, Math.round(sh * scale));
@@ -834,7 +727,7 @@ function initRoiResize() {
 
     if (sizeChanged) {
       saveRoiState();
-      restartCameraForRoiResize();
+      // The next frame uses the new ROI without restarting or moving the preview.
     }
   }
 
@@ -843,72 +736,12 @@ function initRoiResize() {
 }
 
 
-async function restartCameraForRoiResize() {
-  if (!state.isCameraRunning) {
-    return;
-  }
-
-  const deviceId = state.activeDeviceId;
-  const wasScanning = state.isScanning;
-
-  setStatus("Adjusting scan area...");
-  stopScanning(true);
-  await startCamera(deviceId);
-
-  if (wasScanning) {
-    await startScanning();
-  }
-}
-
-
-function normalizeDetectedText(result) {
-  return String(
-    result?.rawValue ||
-    result?.rawValueString ||
-    result?.decodedText ||
-    result?.codeResult?.code ||
-    result?.value ||
-    result ||
-    ""
-  ).trim();
-}
-
-
-function canvasToImageFile(canvas) {
-  return new Promise(function (resolve, reject) {
-    canvas.toBlob(function (blob) {
-      if (!blob) {
-        reject(new Error("Canvas produced no image data"));
-        return;
-      }
-      resolve(new File([blob], "frame.jpg", { type: "image/jpeg" }));
-    }, "image/jpeg", 0.85);
-  });
-}
-
-
 async function detectBarcodeInFrame() {
   const detector = await createDetector();
-  if (!detector) {
-    return "";
-  }
-
-  const detectionCropModes = getDetectionCropModes();
-  for (let index = 0; index < detectionCropModes.length; index += 1) {
-    const mode = detectionCropModes[index];
-    const canvas = drawDetectionFrame(mode);
-    try {
-      const file = await canvasToImageFile(canvas);
-      const result = await detector.scanFile(file, false);
-      const detectedText = normalizeDetectedText(result);
-      if (detectedText) {
-        return detectedText;
-      }
-    } catch {
-      // Ignore a single failed crop and continue with the next one.
-    }
-  }
-  return "";
+  const canvas = drawDetectionFrame("roi");
+  const context = state.captureContext || canvas.getContext("2d", { willReadFrequently: true });
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  return detector.detect(image, CONFIG.detectorFormats.map((format) => ZXING_FORMAT_MAP[format]).filter(Boolean));
 }
 
 
@@ -925,10 +758,11 @@ function waitForFreshVideoFrame(video) {
           return;
         }
         settled = true;
+        video.cancelVideoFrameCallback?.(callbackId);
         resolve();
       }, state.isIOS ? 55 : 35);
 
-      video.requestVideoFrameCallback(function () {
+      const callbackId = video.requestVideoFrameCallback(function () {
         if (settled) {
           return;
         }
@@ -987,14 +821,16 @@ function confirmAcrossFrames(detectedText) {
 }
 
 
-async function captureAttempt() {
+async function captureAttempt(session) {
   const video = state.els.cameraPreview;
   if (!state.isCameraRunning || !state.track || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     return false;
   }
 
   await waitForFreshVideoFrame(video);
+  if (session !== state.scanSession || !state.isScanning || document.hidden) return false;
   const detectedText = await detectBarcodeInFrame();
+  if (session !== state.scanSession || !state.isScanning || document.hidden) return false;
 
   if (!detectedText) {
     confirmAcrossFrames("");
@@ -1033,50 +869,36 @@ function scheduleScanCallback(callback, delayMs) {
 
 
 async function runScanLoop() {
-  if (!state.isScanning || state.isScanLoopScheduled) {
-    return;
-  }
-
+  if (!state.isScanning || state.isScanLoopScheduled) return;
+  const session = state.scanSession;
   state.isScanLoopScheduled = true;
-  scheduleScanCallback(function () {
+  scheduleScanCallback(async function () {
+    if (session !== state.scanSession) return;
     state.isScanLoopScheduled = false;
-    if (!state.isScanning || state.isScanInFlight) {
-      if (state.isScanning) {
-        runScanLoop().catch(() => {
-          // Ignore transient reschedule issues.
-        });
-      }
+    if (!state.isScanning) return;
+    if (state.isScanInFlight || document.hidden) {
+      runScanLoop();
       return;
     }
-
-    (async function () {
-      state.isScanInFlight = true;
-      try {
-        const detected = await captureAttempt();
-        if (!detected && state.isScanning) {
-          runScanLoop().catch(() => {
-            // Ignore transient reschedule issues.
-          });
-        }
-      } catch {
-        setStatus("Scanning had a temporary read error");
-        if (state.isScanning) {
-          runScanLoop().catch(() => {
-            // Ignore transient reschedule issues.
-          });
-        }
-      } finally {
-        state.isScanInFlight = false;
+    state.isScanInFlight = true;
+    try {
+      await captureAttempt(session);
+    } catch (error) {
+      if (session === state.scanSession) {
+        stopScanning(true);
+        setStatus(error.message || "Scanner failed. Tap Start Scanning to retry.");
       }
-    }()).catch(() => {
-      // Ignore transient async scan loop issues.
-    });
+    } finally {
+      state.isScanInFlight = false;
+      if (session === state.scanSession && state.isScanning) runScanLoop();
+    }
   }, getScanLoopIntervalMs());
 }
 
 
-async function startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig) {
-  setActivePreviewEngine("ponyfill");
+async function startCameraStream(preferredCameraId, activeVideoConfig) {
+  setActivePreviewEngine("zxing-wasm");
+  const session = state.scanSession;
 
   const constraints = {
     audio: false,
@@ -1115,16 +937,30 @@ async function startCameraWithPonyfillDetector(preferredCameraId, activeVideoCon
     constraints.video.facingMode = { ideal: requestedVideo?.facingMode?.ideal || "environment" };
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (error) {
+    if (!["OverconstrainedError", "NotFoundError"].includes(error.name)) throw error;
+    // Stale camera IDs and strict resolution limits must not block camera access.
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: { ideal: "environment" } } });
+  }
+  if (session !== state.scanSession || state.inputMode === "scanner") {
+    stream.getTracks().forEach((track) => track.stop());
+    throw new DOMException("Camera start canceled", "AbortError");
+  }
   const track = stream.getVideoTracks()[0] || null;
 
   state.stream = stream;
   state.track = track;
   state.scanner = { stream: stream };
-  state.scannerEngine = "ponyfill";
+  state.scannerEngine = "zxing-wasm";
   state.activeDeviceId = track?.getSettings?.().deviceId || preferredCameraId || state.activeDeviceId;
   saveCameraId(state.activeDeviceId);
 
+  state.els.cameraPreview.muted = true;
+  state.els.cameraPreview.setAttribute("playsinline", "");
   state.els.cameraPreview.srcObject = stream;
   await waitForVideoReadiness(state.els.cameraPreview);
   await state.els.cameraPreview.play();
@@ -1174,14 +1010,6 @@ async function requestFocusRefresh(track) {
     advanced.push({ focusMode: "continuous" });
   } else if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("single-shot")) {
     advanced.push({ focusMode: "single-shot" });
-  }
-
-  if (!isIOSDevice() && capabilities.zoom && typeof capabilities.zoom.max === "number") {
-    const minZoom = typeof capabilities.zoom.min === "number" ? capabilities.zoom.min : 1;
-    const desiredZoom = capabilities.zoom.max >= 1.4 ? Math.max(minZoom, 1.1) : minZoom;
-    if (desiredZoom > minZoom) {
-      advanced.push({ zoom: desiredZoom });
-    }
   }
 
   if (advanced.length === 0) {
@@ -1352,17 +1180,12 @@ async function startCamera(deviceId) {
 
     const activeVideoConfig = getActiveVideoConfig();
     await refreshDevices(deviceId || state.activeDeviceId || readSavedCameraId());
-    const preferredCameraId = deviceId || state.activeDeviceId || chooseBestDefaultDevice(state.devices);
-    await startCameraWithPonyfillDetector(preferredCameraId, activeVideoConfig);
+    const hasLabels = state.devices.some((device) => device.label);
+    const preferredCameraId = deviceId || (hasLabels ? state.activeDeviceId : "");
+    await startCameraStream(preferredCameraId, activeVideoConfig);
 
-    if (isIOSDevice() && !state.iosWarmRestartDone) {
-      state.iosWarmRestartDone = true;
-      const restartDeviceId = state.activeDeviceId || preferredCameraId;
-      await new Promise(function (resolve) {
-        window.setTimeout(resolve, 220);
-      });
-      await stopTracks();
-      await startCameraWithPonyfillDetector(restartDeviceId, activeVideoConfig);
+    if (state.inputMode === "scanner" || !state.track || state.track.readyState === "ended") {
+      throw new DOMException("Camera start canceled", "AbortError");
     }
 
     state.isCameraRunning = true;
@@ -1379,6 +1202,10 @@ async function startCamera(deviceId) {
   state.cameraStartPromise = startPromise;
   try {
     await startPromise;
+  } catch (error) {
+    await stopTracks();
+    setPreviewActive(false);
+    throw error;
   } finally {
     if (state.cameraStartPromise === startPromise) {
       state.cameraStartPromise = null;
@@ -1424,14 +1251,15 @@ async function startScanning() {
 
   if (state.isScanning) return;
 
-  await waitForHtml5QrReady(isIOSDevice() ? 2000 : 1000);
-  if (!(await createDetector())) {
-    // Keep preview live; only barcode decode needs the library file.
-    setStatus("Camera on. Scanner library missing — add js/html5-qrcode.min.js");
-    showToast("Scanner library not loaded");
-    updateScanButton();
+  const session = ++state.scanSession;
+  setStatus("Loading scanner...");
+  try {
+    await createDetector();
+  } catch (error) {
+    if (session === state.scanSession) setStatus(error.message || "Scanner unavailable. Tap Start Scanning to retry.");
     return;
   }
+  if (session !== state.scanSession || state.inputMode === "scanner") return;
 
   scheduleFocusRefresh(state.track);
   state.isScanning = true;
@@ -1439,14 +1267,12 @@ async function startScanning() {
   updateScanButton();
   updateModePill();
   setStatus("Scanning started");
-  if (await captureAttempt()) {
-    return;
-  }
   cleanupScanTimer();
   await runScanLoop();
 }
 
 function stopScanning(keepStatusMessage) {
+  state.scanSession += 1;
   clearScanTimeoutTimer();
   cleanupScanTimer();
   state.isScanning = false;

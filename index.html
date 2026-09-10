@@ -2,11 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#131a22" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Web Scanner" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
   <title>Web Barcode Scanner</title>
   <!-- ─── Optimization #6: Critical CSS inlined — zero render-blocking network
        round-trips for the above-the-fold shell (base + scanner + layout +
@@ -330,6 +333,11 @@
     }
     .fab:hover { transform: scale(1.06); }
     .fab svg { width: 22px; height: 22px; color: #fff; }
+    /* 16px controls prevent iOS focus zoom; manual pinch zoom stays available. */
+    @media (pointer: coarse) {
+      input.input, textarea.textarea, select.select, #cameraSelect { font-size: 16px; }
+    }
+    html { overflow-anchor: none; }
   </style>
 
   <!-- These sheets affect the visible page geometry. Keep them render-blocking so
@@ -662,43 +670,21 @@
   </div>
 
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
-  <!-- html5-qrcode: single decoding engine used for both iOS and Android (no native BarcodeDetector dependency). -->
-  <div id="html5QrScanHost" class="visually-hidden"></div>
-  <script>
-    // Lazy loader: the ~375KB scanner library is only fetched once something
-    // actually needs it (either app.js warming it up in idle time, or the
-    // user tapping "Start Scanning"), instead of competing with the app
-    // shell's own scripts/styles for bandwidth on every page load.
-    window.__html5QrReadyPromise = null;
-    window.ensureHtml5QrLoaded = function () {
-      if (!window.__html5QrReadyPromise) {
-        window.__html5QrReadyPromise = new Promise(function (resolve, reject) {
-          var script = document.createElement("script");
-          script.src = "js/html5-qrcode.min.js";
-          script.onload = resolve;
-          script.onerror = function () {
-            reject(new Error("Scanner library is not available offline yet."));
-          };
-          document.head.appendChild(script);
-        });
-      }
-      return window.__html5QrReadyPromise;
-    };
-  </script>
-  <script src="js/config.js?v=68" defer></script>
-  <script src="js/state.js?v=65" defer></script>
-  <script src="js/dom.js?v=65" defer></script>
-  <script src="js/utils.js?v=65" defer></script>
-  <script src="js/ui.js?v=65" defer></script>
-  <script src="js/settings.js?v=65" defer></script>
-  <script src="js/input-mode.js?v=65" defer></script>
-  <script src="js/product.js?v=66" defer></script>
-  <script src="js/api.js?v=65" defer></script>
-  <script src="js/sales.js?v=66" defer></script>
-  <script src="js/closest-search.js?v=65" defer></script>
-  <script src="js/history.js?v=65" defer></script>
-  <script src="js/camera.js?v=65" defer></script>
-  <script src="js/events.js?v=65" defer></script>
-  <script src="js/app.js?v=65" defer></script>
+  <script src="js/zxing-scanner.js?v=69" defer></script>
+  <script src="js/config.js?v=69" defer></script>
+  <script src="js/state.js?v=69" defer></script>
+  <script src="js/dom.js?v=69" defer></script>
+  <script src="js/utils.js?v=69" defer></script>
+  <script src="js/ui.js?v=69" defer></script>
+  <script src="js/settings.js?v=69" defer></script>
+  <script src="js/input-mode.js?v=69" defer></script>
+  <script src="js/product.js?v=69" defer></script>
+  <script src="js/api.js?v=69" defer></script>
+  <script src="js/sales.js?v=69" defer></script>
+  <script src="js/closest-search.js?v=69" defer></script>
+  <script src="js/history.js?v=70" defer></script>
+  <script src="js/camera.js?v=69" defer></script>
+  <script src="js/events.js?v=69" defer></script>
+  <script src="js/app.js?v=69" defer></script>
 </body>
 </html>

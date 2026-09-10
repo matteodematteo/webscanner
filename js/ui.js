@@ -166,12 +166,12 @@ function toggleScreenScrollLock() {
     state.manualScrollLocked = false;
     document.body.classList.remove("is-scroll-locked");
     document.body.style.top = "";
+    window.scrollTo(0, state.manualScrollLockY);
     state.manualScrollLockY = 0;
     saveScrollLockState(false, 0);
   } else {
-    window.scrollTo(0, 0);
-    state.manualScrollLockY = 0;
-    document.body.style.top = "0px";
+    state.manualScrollLockY = window.scrollY || 0;
+    document.body.style.top = `-${state.manualScrollLockY}px`;
     document.body.classList.add("is-scroll-locked");
     state.manualScrollLocked = true;
     saveScrollLockState(true, 0);
@@ -237,7 +237,7 @@ function selectEntireInputValue(event) {
     try {
       target.focus({ preventScroll: true });
     } catch {
-      target.focus();
+      // Do not fall back to focus that scrolls the page.
     }
     try {
       target.setSelectionRange(0, target.value.length);
@@ -254,8 +254,10 @@ function moveFocusToInput(input, options) {
   }
 
   const shouldOpenKeyboard = Boolean(options?.openKeyboard);
-  const isIOSFocus = Boolean(state.isIOS);
-
+  if (!shouldOpenKeyboard && state.inputMode !== "scanner" &&
+      (input === state.els.barcodeInput || input === state.els.quantityInput)) {
+    return;
+  }
   if (!shouldOpenKeyboard) {
     // Programmatic focus (dialog close, mode switch, etc.) must never pop
     // the on-screen keyboard. Force inputmode="none" right before focusing
@@ -271,25 +273,9 @@ function moveFocusToInput(input, options) {
     }
   }
 
-  if (isIOSFocus) {
-    try {
-      input.focus();
-    } catch {
-      // Ignore focus errors.
-    }
-    if (shouldOpenKeyboard) {
-      try {
-        input.click();
-      } catch {
-        // Ignore click errors.
-      }
-    }
-    return;
-  }
-
   try {
     input.focus({ preventScroll: true });
   } catch {
-    input.focus();
+    // Do not fall back to focus that scrolls the page.
   }
 }

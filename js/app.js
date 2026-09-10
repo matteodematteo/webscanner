@@ -7,7 +7,7 @@ async function init() {
   requireElements(state.els);
   state.isIOS = isIOSDevice();
   state.isMobileUi = detectMobileUi();
-  state.captureContext = state.els.captureCanvas?.getContext("2d", { alpha: false }) || null;
+  state.captureContext = state.els.captureCanvas?.getContext("2d", { alpha: false, willReadFrequently: true }) || null;
   cacheResultFieldElements();
 
   // ── Optimization #4: Parallelize independent localStorage reads ───────────
@@ -53,16 +53,15 @@ async function init() {
     initProductInfoSlider();
   });
 
-  // ── Optimization #7: Reduce scanner warm-up delay from 2-3s → 500ms ──────
-  // Warm the (large, ~375KB) scanner decoding library in the background once
-  // the browser is idle, so it's already loaded by the time the user taps
-  // "Start Scanning" — without delaying first paint or competing with the
-  // app shell's own scripts for bandwidth on slow connections. This never
-  // blocks init: startScanning() will lazily trigger the same load itself
-  // if the user scans before this fires.
+  // Warm the local ZXing worker after the shell is ready.
   scheduleIdleWork(function () {
-    if (typeof window.ensureHtml5QrLoaded === "function") {
-      window.ensureHtml5QrLoaded().catch(function () {});
+    if (typeof window.ensureZXingLoaded === "function") {
+      window.ensureZXingLoaded().catch(function () {});
+    }
+    if ("serviceWorker" in navigator && window.isSecureContext) {
+      navigator.serviceWorker.register("sw.js").catch(function () {
+        // Scanning remains available when offline installation is unavailable.
+      });
     }
   }, 500);
 
@@ -76,8 +75,8 @@ async function init() {
   state.manualScrollLockY = 0;
   updateLockScreenScrollButton();
   if (state.manualScrollLocked) {
-    window.scrollTo(0, 0);
-    document.body.style.top = "0px";
+    state.manualScrollLockY = window.scrollY || 0;
+    document.body.style.top = `-${state.manualScrollLockY}px`;
     document.body.classList.add("is-scroll-locked");
   }
 

@@ -1,11 +1,15 @@
 // Offline app shell. All paths are resolved against the service worker scope
 // so installs work both at the domain root and from a deployed subfolder.
-const CACHE_NAME = 'webscanner-v10';
+const CACHE_NAME = 'webscanner-v12';
 const APP_SHELL_URL = new URL('index.html', self.registration.scope).toString();
 const CACHEABLE_DESTINATIONS = new Set(['script', 'style', 'document', 'image', 'font']);
 const ASSETS_TO_CACHE = [
   './',
   'index.html',
+  'manifest.webmanifest',
+  'apple-touch-icon.png',
+  'icon-192.png',
+  'icon-512.png',
   'css/base.css',
   'css/scanner.css',
   'css/layout.css',
@@ -13,22 +17,25 @@ const ASSETS_TO_CACHE = [
   'css/history.css',
   'css/dialogs.css',
   'css/responsive.css',
-  'js/html5-qrcode.min.js',
-  'js/config.js?v=65',
-  'js/state.js?v=65',
-  'js/dom.js?v=65',
-  'js/utils.js?v=65',
-  'js/ui.js?v=65',
-  'js/settings.js?v=65',
-  'js/input-mode.js?v=65',
-  'js/product.js?v=65',
-  'js/api.js?v=65',
-  'js/sales.js?v=65',
-  'js/closest-search.js?v=65',
-  'js/history.js?v=65',
-  'js/camera.js?v=65',
-  'js/events.js?v=65',
-  'js/app.js?v=65'
+  'js/zxing-scanner.js?v=69',
+  'js/zxing-worker.js?v=69',
+  'js/vendor/zxing-wasm/3.1.2/reader.js',
+  'js/vendor/zxing-wasm/3.1.2/zxing_reader.wasm',
+  'js/config.js?v=69',
+  'js/state.js?v=69',
+  'js/dom.js?v=69',
+  'js/utils.js?v=69',
+  'js/ui.js?v=69',
+  'js/settings.js?v=69',
+  'js/input-mode.js?v=69',
+  'js/product.js?v=69',
+  'js/api.js?v=69',
+  'js/sales.js?v=69',
+  'js/closest-search.js?v=69',
+  'js/history.js?v=70',
+  'js/camera.js?v=69',
+  'js/events.js?v=69',
+  'js/app.js?v=69'
 ].map((url) => new URL(url, self.registration.scope).toString());
 
 self.addEventListener('install', (event) => {
@@ -56,7 +63,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
-      keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+      keys.filter((k) => k.startsWith('webscanner-') && k !== CACHE_NAME).map((k) => caches.delete(k))
     ))
   );
   self.clients.claim();
@@ -95,7 +102,7 @@ self.addEventListener('fetch', (event) => {
         // Cache same-origin app resources that may be needed offline.
         try {
           const requestUrl = new URL(event.request.url);
-          if (requestUrl.origin === location.origin && resp && resp.ok && CACHEABLE_DESTINATIONS.has(event.request.destination)) {
+          if (requestUrl.origin === location.origin && resp && resp.ok && (CACHEABLE_DESTINATIONS.has(event.request.destination) || ASSETS_TO_CACHE.includes(requestUrl.href))) {
             const copy = resp.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           }
@@ -103,7 +110,7 @@ self.addEventListener('fetch', (event) => {
           // ignore
         }
         return resp;
-      }).catch(() => cached || caches.match(APP_SHELL_URL));
+      }).catch(() => cached || Response.error());
 
       // Serve cached immediately if we have it; otherwise wait on network.
       return cached || networkFetch;

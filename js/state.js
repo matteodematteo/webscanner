@@ -22,6 +22,7 @@ const state = {
     scannerEngine: "",
     isCameraRunning: false,
     isScanning: false,
+    scanSession: 0,
     torchOn: false,
     scanTimer: 0,
     scanTimeoutTimer: 0,
