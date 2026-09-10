@@ -10,8 +10,9 @@ frames confirm a capture, then the existing product lookup runs. Stop, camera
 switch, and restart invalidate pending results. The existing 10-second scan
 timeout remains in place.
 
-Camera zoom is never requested. Continuous autofocus is requested where the
-camera exposes it. Saved camera selections are respected. Resizing the scan
+Camera zoom is never requested. On Android, continuous autofocus is requested where the
+camera exposes it. On iPhone, the app leaves native autofocus alone and does
+not apply or schedule focus constraints. Saved camera selections are respected. Resizing the scan
 box does not restart the camera. Phone-mode capture does not focus an input;
 mobile controls use 16px text to avoid focus zoom. Manual pinch zoom remains
 available. The scroll-lock button preserves the current page position.
@@ -45,3 +46,22 @@ Verified in headless Chromium with a mobile viewport:
 Physical Android and iPhone cameras have not been tested. Check rear-camera
 focus at different distances, small/glossy labels, low light, rotation,
 background/resume, camera selection, and torch on representative devices.
+
+## Startup optimization
+
+Camera access and WASM initialization run concurrently. The saved camera is
+requested directly; device labels load after playback begins. Playback uses
+`video.play()` without a separate metadata wait, and resolution constraints
+are applied only in the initial camera request. Optional focus controls do not
+block startup. Authentication and service-worker registration run afterward.
+Versioned decoder assets use the offline cache without background re-downloads.
+
+Run `node tests/scanner-startup.cjs` to verify concurrent initialization and
+that scanning waits for both dependencies. Real phone startup timings still
+need measurement; camera permission, hardware and first-load network latency
+can dominate the total.
+
+On iPhone, window focus and initial pageshow no longer trigger camera recovery.
+Actual foreground returns and frozen-stream recovery remain supported. Recovery
+checks are skipped while camera startup is in progress. The camera fallback is
+only used if the initial camera request fails, never to replace a working stream.
