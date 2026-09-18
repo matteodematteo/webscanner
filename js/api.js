@@ -201,6 +201,7 @@ async function loadProductAndDiscountResponse(barcode) {
     cookie: cookie,
     product: normalizedProduct,
     sale: parsedDiscount,
+    saleDiscount: discountFields.saleDiscount,
     discountPrice: hasVisibleDiscount ? discountFields.discountPrice : "",
     hasDiscount: hasVisibleDiscount
   };

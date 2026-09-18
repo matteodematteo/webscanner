@@ -23,9 +23,9 @@ const CONFIG = {
     productInfoSlideStorageKey: "web_barcode_scanner_pi_slide",
     inputModeStorageKey: "web_barcode_scanner_input_mode",
     scrollLockStorageKey: "web_barcode_scanner_scroll_lock",
-    scanIntervalMs: 80,
-    mobileScanIntervalMs: 80,
-    iosScanIntervalMs: 80,
+    scanIntervalMs: 16,
+    mobileScanIntervalMs: 16,
+    iosScanIntervalMs: 16,
     duplicateScanCooldownMs: 600,
     previewWatchIntervalMs: 3500,
     previewStallThreshold: 2,
@@ -41,7 +41,7 @@ const CONFIG = {
       "codabar",
       "itf"
     ],
-    detectionCropModes: ["roi"],
+    detectionCropModes: ["expanded", "visible"],
     resultFields: [
       "id",
       "goods_code",

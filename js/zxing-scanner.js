@@ -6,7 +6,7 @@
   let worker = null;
   let pending = null;
   let sequence = 0;
-  const workerUrl = new URL("zxing-worker.js?v=69", document.currentScript.src);
+  const workerUrl = new URL("zxing-worker.js?v=74", document.currentScript.src);
 
   window.ensureZXingLoaded = function () {
     if (readyPromise) return readyPromise;
@@ -40,7 +40,7 @@
           initialized = true;
           clearTimeout(timer);
           resolve({
-            detect(image, formats) {
+            detect(image, formats, options = {}) {
               if (!worker) return Promise.reject(new Error("Scanner stopped. Please retry."));
               if (pending) return Promise.reject(new Error("A frame is already being decoded"));
               return new Promise((resolveFrame, rejectFrame) => {
@@ -49,7 +49,7 @@
                   timer: setTimeout(() => fail(new Error("Scanner read timed out. Please retry.")), 10000) };
                 try {
                   worker.postMessage({ id, buffer: image.data.buffer, width: image.width,
-                    height: image.height, formats }, [image.data.buffer]);
+                    height: image.height, formats, thorough: options.thorough !== false }, [image.data.buffer]);
                 } catch (error) {
                   fail(error);
                 }

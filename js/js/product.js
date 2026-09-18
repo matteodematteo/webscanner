@@ -246,6 +246,7 @@ function getLegacyDiscountFields(rawData, productData) {
 
   return {
     discountPrice: discountPrice,
+    saleDiscount: hasDiscount ? activeDiscountValue : 0,
     discountPercent: hasDiscount ? formatPercent(activeDiscountValue) : "",
     hasDiscount: hasDiscount
   };
@@ -276,7 +277,7 @@ function renderProductData(data) {
     italian_name: String(normalized.italian_name || ""),
     p_price: String(normalized.p_price || ""),
     s_price: String(normalized.s_price || ""),
-    s_discount: String(normalized.s_discount || ""),
+    s_discount: String(legacyFields.saleDiscount),
     discount_price: legacyFields.hasDiscount ? String(legacyFields.discountPrice || "") : "",
     has_discount: legacyFields.hasDiscount,
     comparison_qty: 1

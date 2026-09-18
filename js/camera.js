@@ -485,7 +485,7 @@ function getSquareCropSize(video) {
 
 
 function getDetectionCropModes() {
-  return ["roi"];
+  return ["expanded", "visible"];
 }
 
 
@@ -555,7 +555,7 @@ function getRoiCropRect(videoWidth, videoHeight) {
 }
 
 
-function drawDetectionFrame(mode) {
+function drawDetectionFrame(mode, maxOutputSize = 1920) {
   const video = state.els.cameraPreview;
   const canvas = state.els.captureCanvas;
   const context = state.captureContext || canvas.getContext("2d", { alpha: false, willReadFrequently: true });
@@ -567,7 +567,18 @@ function drawDetectionFrame(mode) {
   let sh = videoHeight;
   const isiOS = state.isIOS;
 
-  if (mode === "roi") {
+  if (mode === "expanded" || mode === "visible") {
+    const container = state.els.previewFrame;
+    const cover = getCoverSourceRect(videoWidth, videoHeight,
+      container?.clientWidth || videoWidth, container?.clientHeight || videoHeight);
+    // The box is an aiming guide, never a hard clipping boundary.
+    const widthRatio = mode === "visible" ? 1 : Math.min(1, Math.max(0.85, state.roi.width * 1.5));
+    const heightRatio = mode === "visible" ? 1 : Math.min(1, Math.max(0.5, state.roi.height * 1.5));
+    sw = cover.visibleWidth * widthRatio;
+    sh = cover.visibleHeight * heightRatio;
+    sx = cover.offsetX + (cover.visibleWidth - sw) / 2;
+    sy = cover.offsetY + (cover.visibleHeight - sh) / 2;
+  } else if (mode === "roi") {
     const roiRect = getRoiCropRect(videoWidth, videoHeight);
     sx = roiRect.sx;
     sy = roiRect.sy;
@@ -591,7 +602,6 @@ function drawDetectionFrame(mode) {
     }
   }
 
-  const maxOutputSize = 1920;
   const scale = Math.min(1, maxOutputSize / Math.max(sw, sh));
   const outputWidth = Math.max(1, Math.round(sw * scale));
   const outputHeight = Math.max(1, Math.round(sh * scale));
@@ -738,11 +748,26 @@ function initRoiResize() {
 
 
 async function detectBarcodeInFrame() {
+  const session = state.scanSession;
   const detector = await createDetector();
-  const canvas = drawDetectionFrame("roi");
+  const attempt = state.detectionAttempt || 0;
+  // Quick center/full-preview passes, then high-resolution difficult-label passes.
+  const confirming = Boolean(state.pendingConfirmCode && state.lastDetectionPass);
+  const pass = confirming ? state.lastDetectionPass : {
+    mode: getDetectionCropModes()[attempt % 2],
+    thorough: attempt % 4 >= 2
+  };
+  const canvas = drawDetectionFrame(pass.mode, pass.thorough ? 1920 : 1280);
   const context = state.captureContext || canvas.getContext("2d", { willReadFrequently: true });
   const image = context.getImageData(0, 0, canvas.width, canvas.height);
-  return detector.detect(image, CONFIG.detectorFormats.map((format) => ZXING_FORMAT_MAP[format]).filter(Boolean));
+  const text = await detector.detect(image,
+    CONFIG.detectorFormats.map((format) => ZXING_FORMAT_MAP[format]).filter(Boolean),
+    { thorough: pass.thorough });
+  if (session === state.scanSession) {
+    state.detectionAttempt = attempt + 1;
+    if (text) state.lastDetectionPass = pass;
+  }
+  return text;
 }
 
 
@@ -835,7 +860,7 @@ async function captureAttempt(session) {
 
   if (!detectedText) {
     confirmAcrossFrames("");
-    setStatus("Scanning... point the barcode inside the square");
+    setStatus("Scanning... aim at the barcode; no exact box alignment needed");
     return false;
   }
 
@@ -1204,6 +1229,8 @@ async function startScanning() {
   if (session !== state.scanSession || state.inputMode === "scanner") return;
 
   scheduleFocusRefresh(state.track);
+  state.detectionAttempt = 0;
+  state.lastDetectionPass = null;
   state.isScanning = true;
   startScanTimeoutTimer();
   updateScanButton();

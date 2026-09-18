@@ -43,7 +43,7 @@ const CONFIG = {
       "codabar",
       "itf"
     ],
-    detectionCropModes: ["roi"],
+    detectionCropModes: ["expanded", "visible"],
     resultFields: [
       "id",
       "goods_code",

@@ -4,8 +4,10 @@ The app uses ZXing WASM 3.1.2 for both Android and iOS. `js/zxing-scanner.js`
 loads a dedicated worker, which uses the matching wrapper and binary in
 `js/vendor/zxing-wasm/3.1.2/`. No runtime CDN or native BarcodeDetector is needed.
 
-Frames are cropped to the adjustable scan box and transferred as RGBA pixels,
-without JPEG compression. Only one frame is decoded at a time. Two matching
+The adjustable box is an aiming guide. Scanning alternates an expanded central
+area with the full visible preview, so labels can extend beyond the box. Quick
+1280-pixel passes alternate with thorough 1920-pixel passes for difficult or
+inverted labels. Frames transfer as RGBA pixels without JPEG compression. Only one frame is decoded at a time. Two matching
 frames confirm a capture, then the existing product lookup runs. Stop, camera
 switch, and restart invalidate pending results. The existing 10-second scan
 timeout remains in place.

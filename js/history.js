@@ -279,7 +279,7 @@ function buildHistoryItemFromLookupData(productPayload, discountPayload, fallbac
     italian_name: String(normalizedProduct.italian_name || ""),
     p_price: String(normalizedProduct.p_price || ""),
     s_price: String(normalizedProduct.s_price || ""),
-    s_discount: String(normalizedProduct.s_discount || ""),
+    s_discount: String(discountFields.saleDiscount),
     discount_price: hasVisibleDiscount ? String(discountFields.discountPrice || "") : "",
     has_discount: hasVisibleDiscount,
     comparison_qty: comparisonQty || 1
@@ -410,6 +410,23 @@ async function sendTxtList() {
 }
 
 
+function buildDirectPrintPayloadItem(item) {
+  const entry = normalizeHistoryItem(item);
+  const sPrice = numberFromValue(entry.s_price);
+  const sDiscount = numberFromValue(entry.s_discount);
+  const discountPrice = sPrice * (1 - sDiscount / 100);
+
+  return {
+    barcode: entry.barcode,
+    italian_name: entry.italian_name || "",
+    comparison_qty: entry.comparison_qty || 1,
+    s_price: formatPrice(sPrice) || "0",
+    s_discount: String(sDiscount),
+    discount_price: formatPrice(discountPrice) || "0"
+  };
+}
+
+
 async function printHistoryList(printType) {
   if (state.history.length === 0) {
     setStatus("Barcode list is empty");
@@ -424,7 +441,7 @@ async function printHistoryList(printType) {
     data: [
       {
         stack: normalizedType === "40*25" ? "sticker_tickets" : "big_tickets",
-        items: state.history.map(buildHistoryPayloadItem)
+        items: state.history.map(buildDirectPrintPayloadItem)
       }
     ]
   };
@@ -523,7 +540,7 @@ async function openHistoryEditor(index) {
   state.els.historyEditSaveNote.textContent = "Loading latest info...";
 
   try {
-    const { product, discountPrice, hasDiscount } = await loadProductAndDiscountResponse(item.barcode);
+    const { product, discountPrice, hasDiscount, saleDiscount } = await loadProductAndDiscountResponse(item.barcode);
     const updatedItem = normalizeHistoryItem({
       ...item,
       goods_id: product.id || item.goods_id,
@@ -531,7 +548,7 @@ async function openHistoryEditor(index) {
       italian_name: product.italian_name || item.italian_name,
       p_price: product.p_price || item.p_price,
       s_price: product.s_price || item.s_price,
-      s_discount: product.s_discount || item.s_discount,
+      s_discount: String(saleDiscount),
       discount_price: discountPrice || calculateDiscountPrice(product.s_price || item.s_price, product.s_discount || item.s_discount),
       has_discount: hasDiscount || Boolean(numberFromValue(product.s_discount || item.s_discount))
     });
@@ -734,7 +751,7 @@ async function saveHistoryEditorChanges() {
         italian_name: String(latestItemData.product.italian_name || updatedItem.italian_name || ""),
         p_price: String(latestItemData.product.p_price || updatedItem.p_price || ""),
         s_price: String(latestItemData.product.s_price || updatedItem.s_price || ""),
-        s_discount: String(latestItemData.product.s_discount || updatedItem.s_discount || ""),
+        s_discount: String(latestItemData.saleDiscount),
         discount_price: latestItemData.discountPrice || calculateDiscountPrice(
           latestItemData.product.s_price || updatedItem.s_price,
           latestItemData.product.s_discount || updatedItem.s_discount

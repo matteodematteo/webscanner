@@ -47,6 +47,37 @@ function ean(code) {
    }
   }
   console.log('PASS: actual worker/WASM decodes EAN-13, EAN-8, UPC-A, UPC-E and Code 128, normal, inverted and rotated (20 cases)');
+  for (const sample of [
+    {x:540,y:540,angle:0,invert:false},
+    {x:540,y:170,angle:0,invert:false},
+    {x:540,y:780,angle:15,invert:false},
+    {x:540,y:540,angle:90,invert:true}
+  ]) {
+    const capture = await page.evaluate(async ({bits,sample})=>{
+      const originalVideo=state.els.cameraPreview, originalRoi={...state.roi};
+      const source=document.createElement('canvas'); source.width=1080; source.height=1080;
+      source.videoWidth=1080; source.videoHeight=1080;
+      const ctx=source.getContext('2d'); ctx.fillStyle=sample.invert?'black':'white';ctx.fillRect(0,0,1080,1080);
+      ctx.translate(sample.x,sample.y);ctx.rotate(sample.angle*Math.PI/180);
+      ctx.fillStyle=sample.invert?'white':'black';
+      [...bits].forEach((b,i)=>{if(b==='1')ctx.fillRect((i-bits.length/2)*3,-60,3,120)});
+      state.els.cameraPreview=source;state.roi={width:0.12,height:0.12};
+      state.detectionAttempt=0;state.lastDetectionPass=null;state.pendingConfirmCode='';state.pendingConfirmCount=0;
+      const started=performance.now();let confirmed=false, reads=0;
+      try {
+        for(;reads<8;reads++) {
+          const text=await detectBarcodeInFrame();
+          if(confirmAcrossFrames(text)){confirmed=true;reads++;break;}
+        }
+        return {confirmed,reads,elapsed:Math.round(performance.now()-started)};
+      } finally {
+        state.els.cameraPreview=originalVideo;state.roi=originalRoi;
+        state.pendingConfirmCode='';state.pendingConfirmCount=0;
+      }
+    },{bits:ean('5901234123457'),sample});
+    assert.equal(capture.confirmed,true,JSON.stringify({sample,capture}));
+    console.log('PASS: tiny aiming box, barcode placement '+JSON.stringify(sample)+' '+JSON.stringify(capture));
+  }
   const canceled = await page.evaluate(async ()=>{
    state.inputMode='phone'; state.isScanning=true; state.isCameraRunning=true; state.track={}; state.scanSession++;
    const original=detectBarcodeInFrame, originalFresh=waitForFreshVideoFrame;
@@ -72,6 +103,7 @@ function ean(code) {
    const c=document.createElement('canvas'); c.width=1920; c.height=1080;
    const x=c.getContext('2d'); x.fillStyle='white'; x.fillRect(0,0,1920,1080); x.fillStyle='black';
    [...bits].forEach((b,i)=>{if(b==='1')x.fillRect(700+i*5,420,5,220)});
+   state.roi={width:0.12,height:0.12};
    window.cameraRequests=0; window.cameraConstraints=[]; window.lookups=[];
    navigator.mediaDevices.getUserMedia=async()=>{
     window.cameraRequests++; const stream=c.captureStream(30); const track=stream.getVideoTracks()[0];
@@ -91,7 +123,7 @@ function ean(code) {
   console.log('PASS: camera stream to ROI to worker to lookup, exactly one capture, no zoom constraints');
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
   await page.waitForFunction(()=>navigator.serviceWorker.controller);
-  await page.waitForFunction(async()=>{const c=await caches.open('webscanner-v12');return !!await c.match(new URL('js/vendor/zxing-wasm/3.1.2/zxing_reader.wasm',location.href).href)});
+  await page.waitForFunction(async()=>{const c=await caches.open('webscanner-v14');return !!await c.match(new URL('js/vendor/zxing-wasm/3.1.2/zxing_reader.wasm',location.href).href)});
   await context.setOffline(true); await page.reload(); await page.evaluate(()=>window.ensureZXingLoaded());
   assert.deepEqual(errors,[]);
   console.log('PASS: app and worker/WASM initialize after offline reload; no page errors');

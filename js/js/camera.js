@@ -591,7 +591,7 @@ function getSquareCropSize(video) {
 
 
 function getDetectionCropModes() {
-  return ["roi"];
+  return ["expanded", "visible"];
 }
 
 
@@ -661,10 +661,10 @@ function getRoiCropRect(videoWidth, videoHeight) {
 }
 
 
-function drawDetectionFrame(mode) {
+function drawDetectionFrame(mode, maxOutputSize = 1920) {
   const video = state.els.cameraPreview;
   const canvas = state.els.captureCanvas;
-  const context = state.captureContext || canvas.getContext("2d", { alpha: false });
+  const context = state.captureContext || canvas.getContext("2d", { alpha: false, willReadFrequently: true });
   const videoWidth = video.videoWidth || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
   const videoHeight = video.videoHeight || (state.isMobileUi ? CONFIG.mobilePreferredSquareSize : CONFIG.preferredSquareSize);
   let sx = 0;
@@ -673,7 +673,18 @@ function drawDetectionFrame(mode) {
   let sh = videoHeight;
   const isiOS = state.isIOS;
 
-  if (mode === "roi") {
+  if (mode === "expanded" || mode === "visible") {
+    const container = state.els.previewFrame;
+    const cover = getCoverSourceRect(videoWidth, videoHeight,
+      container?.clientWidth || videoWidth, container?.clientHeight || videoHeight);
+    // The box is an aiming guide, never a hard clipping boundary.
+    const widthRatio = mode === "visible" ? 1 : Math.min(1, Math.max(0.85, state.roi.width * 1.5));
+    const heightRatio = mode === "visible" ? 1 : Math.min(1, Math.max(0.5, state.roi.height * 1.5));
+    sw = cover.visibleWidth * widthRatio;
+    sh = cover.visibleHeight * heightRatio;
+    sx = cover.offsetX + (cover.visibleWidth - sw) / 2;
+    sy = cover.offsetY + (cover.visibleHeight - sh) / 2;
+  } else if (mode === "roi") {
     const roiRect = getRoiCropRect(videoWidth, videoHeight);
     sx = roiRect.sx;
     sy = roiRect.sy;
@@ -697,7 +708,6 @@ function drawDetectionFrame(mode) {
     }
   }
 
-  const maxOutputSize = 1080;
   const scale = Math.min(1, maxOutputSize / Math.max(sw, sh));
   const outputWidth = Math.max(1, Math.round(sw * scale));
   const outputHeight = Math.max(1, Math.round(sh * scale));
@@ -888,27 +898,26 @@ function canvasToImageFile(canvas) {
 
 
 async function detectBarcodeInFrame() {
+  const session = state.scanSession;
   const detector = await createDetector();
-  if (!detector) {
-    return "";
+  const attempt = state.detectionAttempt || 0;
+  // Quick center/full-preview passes, then high-resolution difficult-label passes.
+  const confirming = Boolean(state.pendingConfirmCode && state.lastDetectionPass);
+  const pass = confirming ? state.lastDetectionPass : {
+    mode: getDetectionCropModes()[attempt % 2],
+    thorough: attempt % 4 >= 2
+  };
+  const canvas = drawDetectionFrame(pass.mode, pass.thorough ? 1920 : 1280);
+  const context = state.captureContext || canvas.getContext("2d", { willReadFrequently: true });
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const text = await detector.detect(image,
+    CONFIG.detectorFormats.map((format) => ZXING_FORMAT_MAP[format]).filter(Boolean),
+    { thorough: pass.thorough });
+  if (session === state.scanSession) {
+    state.detectionAttempt = attempt + 1;
+    if (text) state.lastDetectionPass = pass;
   }
-
-  const detectionCropModes = getDetectionCropModes();
-  for (let index = 0; index < detectionCropModes.length; index += 1) {
-    const mode = detectionCropModes[index];
-    const canvas = drawDetectionFrame(mode);
-    try {
-      const file = await canvasToImageFile(canvas);
-      const result = await detector.scanFile(file, false);
-      const detectedText = normalizeDetectedText(result);
-      if (detectedText) {
-        return detectedText;
-      }
-    } catch {
-      // Ignore a single failed crop and continue with the next one.
-    }
-  }
-  return "";
+  return text;
 }
 
 
@@ -998,7 +1007,7 @@ async function captureAttempt() {
 
   if (!detectedText) {
     confirmAcrossFrames("");
-    setStatus("Scanning... point the barcode inside the square");
+    setStatus("Scanning... aim at the barcode; no exact box alignment needed");
     return false;
   }
 
@@ -1434,6 +1443,8 @@ async function startScanning() {
   }
 
   scheduleFocusRefresh(state.track);
+  state.detectionAttempt = 0;
+  state.lastDetectionPass = null;
   state.isScanning = true;
   startScanTimeoutTimer();
   updateScanButton();

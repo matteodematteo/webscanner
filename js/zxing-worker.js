@@ -17,7 +17,7 @@ self.onmessage = async ({ data }) => {
     const pixels = new ImageData(new Uint8ClampedArray(data.buffer), data.width, data.height);
     const options = {
       formats: data.formats,
-      tryHarder: true,
+      tryHarder: data.thorough !== false,
       tryRotate: true,
       tryInvert: true,
       tryDownscale: true,
@@ -28,7 +28,7 @@ self.onmessage = async ({ data }) => {
     let results = await ZXingWASM.readBarcodes(pixels, options);
     // ZXing's tryInvert applies to matrix codes. Also support light bars on
     // dark labels for the linear formats used by this app.
-    if (!results.some((result) => result.isValid)) {
+    if (data.thorough !== false && !results.some((result) => result.isValid)) {
       for (let i = 0; i < pixels.data.length; i += 4) {
         pixels.data[i] = 255 - pixels.data[i];
         pixels.data[i + 1] = 255 - pixels.data[i + 1];
