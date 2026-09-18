@@ -559,7 +559,7 @@
   <div class="dialog-backdrop" id="confirmDialog" aria-hidden="true">
     <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="confirmDialogTitle">
       <h2 id="confirmDialogTitle">Confirm action</h2>
-      <p id="confirmDialogText">Are you sure?</p>
+      <p id="confirmDialogText" style="white-space: pre-line; max-height: 50vh; overflow-y: auto;">Are you sure?</p>
       <div class="dialog-actions">
         <button class="btn btn-primary" id="confirmDialogOkBtn" type="button">Confirm</button>
         <button class="btn btn-muted" id="confirmDialogCancelBtn" type="button">Cancel</button>
@@ -570,7 +570,12 @@
   <div class="dialog-backdrop" id="printDialog" aria-hidden="true">
     <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="printDialogTitle">
       <h2 id="printDialogTitle">Print Format</h2>
-      <p>Choose the label size for the current barcode list.</p>
+      <p>Choose the print destination and label size.</p>
+      <label for="printTunnelSelect">Print destination</label>
+      <select class="select" id="printTunnelSelect">
+        <option value="gate1">Gate 1</option>
+        <option value="gate2">Gate 2</option>
+      </select>
       <div class="dialog-actions">
         <button class="btn btn-primary" id="printBigBtn" type="button">[BIG] 60*38</button>
         <button class="btn btn-primary" id="printStickerBtn" type="button">[STICKER] 40*25</button>
@@ -673,7 +678,7 @@
   <script src="js/zxing-scanner.js?v=74" defer></script>
   <script src="js/config.js?v=74" defer></script>
   <script src="js/state.js?v=69" defer></script>
-  <script src="js/dom.js?v=69" defer></script>
+  <script src="js/dom.js?v=75" defer></script>
   <script src="js/utils.js?v=69" defer></script>
   <script src="js/ui.js?v=69" defer></script>
   <script src="js/settings.js?v=69" defer></script>
@@ -682,9 +687,9 @@
   <script src="js/api.js?v=73" defer></script>
   <script src="js/sales.js?v=69" defer></script>
   <script src="js/closest-search.js?v=69" defer></script>
-  <script src="js/history.js?v=73" defer></script>
+  <script src="js/history.js?v=76" defer></script>
   <script src="js/camera.js?v=74" defer></script>
-  <script src="js/events.js?v=72" defer></script>
+  <script src="js/events.js?v=76" defer></script>
   <script src="js/app.js?v=71" defer></script>
 </body>
 </html>

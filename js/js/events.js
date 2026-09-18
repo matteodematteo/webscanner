@@ -122,34 +122,12 @@ function bindDeferredEvents() {
     openPrintDialog();
   });
 
-  state.els.printBigBtn.addEventListener("click", async function () {
-    state.els.printBigBtn.disabled = true;
-    state.els.printStickerBtn.disabled = true;
-    try {
-      await printHistoryList("60*38");
-      closePrintDialog();
-      moveFocusToInput(state.els.barcodeInput);
-    } catch (error) {
-      setStatus(error.message || "Print failed");
-    } finally {
-      state.els.printBigBtn.disabled = false;
-      state.els.printStickerBtn.disabled = false;
-    }
+  state.els.printBigBtn.addEventListener("click", function () {
+    runDirectPrint("60*38");
   });
 
-  state.els.printStickerBtn.addEventListener("click", async function () {
-    state.els.printBigBtn.disabled = true;
-    state.els.printStickerBtn.disabled = true;
-    try {
-      await printHistoryList("40*25");
-      closePrintDialog();
-      moveFocusToInput(state.els.barcodeInput);
-    } catch (error) {
-      setStatus(error.message || "Print failed");
-    } finally {
-      state.els.printBigBtn.disabled = false;
-      state.els.printStickerBtn.disabled = false;
-    }
+  state.els.printStickerBtn.addEventListener("click", function () {
+    runDirectPrint("40*25");
   });
 
   state.els.printBackBtn.addEventListener("click", function() {

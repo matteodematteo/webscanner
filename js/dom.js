@@ -70,6 +70,7 @@ function getDeferredElements() {
     closestSearchTitle:          document.getElementById("closestSearchTitle"),
     closestSearchBackBtn:        document.getElementById("closestSearchBackBtn"),
     printDialog:                 document.getElementById("printDialog"),
+    printTunnelSelect:          document.getElementById("printTunnelSelect"),
     printBigBtn:                 document.getElementById("printBigBtn"),
     printStickerBtn:             document.getElementById("printStickerBtn"),
     printBackBtn:                document.getElementById("printBackBtn"),

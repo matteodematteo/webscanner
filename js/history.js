@@ -427,17 +427,42 @@ function buildDirectPrintPayloadItem(item) {
 }
 
 
-async function printHistoryList(printType) {
+async function runDirectPrint(printType, confirmedSignature) {
+  state.els.printBigBtn.disabled = true;
+  state.els.printStickerBtn.disabled = true;
+  state.els.printBtn.disabled = true;
+  try {
+    const printed = await printHistoryList(printType, confirmedSignature);
+    if (printed !== false) {
+      closePrintDialog();
+      moveFocusToInput(state.els.barcodeInput);
+    }
+  } catch (error) {
+    setStatus(error.message || "Print failed");
+  } finally {
+    state.els.printBigBtn.disabled = false;
+    state.els.printStickerBtn.disabled = false;
+    state.els.printBtn.disabled = state.history.length === 0;
+  }
+}
+
+
+async function printHistoryList(printType, confirmedSignature) {
   if (state.history.length === 0) {
     setStatus("Barcode list is empty");
     return;
   }
 
+  const tunnelId = state.els.printTunnelSelect.value;
+  if (!["gate1", "gate2"].includes(tunnelId)) {
+    throw new Error("Choose Gate 1 or Gate 2 before printing.");
+  }
   const normalizedType = printType === "40*25" ? "40*25" : "60*38";
   const payload = {
     session_id: `directPrint_${normalizedType}_${formatTimestamp()}`,
     session_cost: "$1.00",
     print_type: normalizedType,
+    tunnel_id: tunnelId,
     data: [
       {
         stack: normalizedType === "40*25" ? "sticker_tickets" : "big_tickets",
@@ -446,7 +471,26 @@ async function printHistoryList(printType) {
     ]
   };
 
-  setStatus(`Sending print ${normalizedType}...`);
+  const problems = [];
+  state.history.forEach(function (item, index) {
+    const reasons = [];
+    if (numberFromValue(item.s_price) <= 0) reasons.push("price missing or 0.00");
+    if (!String(item.italian_name || "").trim()) reasons.push("name missing");
+    if (reasons.length) problems.push(`Record ${index + 1} (${item.barcode || "no barcode"}): ${reasons.join(", ")}`);
+  });
+  // Reconfirm if the list, destination or format changes while the dialog is open.
+  const signature = JSON.stringify([tunnelId, normalizedType, payload.data]);
+  if (problems.length && confirmedSignature !== signature) {
+    closePrintDialog();
+    openConfirmDialog(
+      problems.join("\n") + `\n\nPrint all records to ${tunnelId} (${normalizedType}) anyway?`,
+      function () { return runDirectPrint(printType, signature); }
+    );
+    state.els.confirmDialogCancelBtn.focus({ preventScroll: true });
+    return false;
+  }
+
+  setStatus(`Sending print ${normalizedType} to ${tunnelId}...`);
   const response = await apiFetch(CONFIG.sendTxtEndpoint, {
     method: "POST",
     headers: {
@@ -456,14 +500,15 @@ async function printHistoryList(printType) {
   });
 
   if (!response.ok) {
-    throw new Error(`Print failed with status ${response.status}`);
+    const details = (await response.text()).trim();
+    throw new Error(details || `Print failed with status ${response.status}`);
   }
 
   state.history = [];
   state.selectedHistoryIndex = -1;
   saveHistoryState();
   renderHistory();
-  setStatus(`Print ${normalizedType} sent successfully`);
+  setStatus(`Print ${normalizedType} sent to ${tunnelId}`);
 }
 
 
