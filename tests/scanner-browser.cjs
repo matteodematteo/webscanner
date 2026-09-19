@@ -123,7 +123,7 @@ function ean(code) {
   console.log('PASS: camera stream to ROI to worker to lookup, exactly one capture, no zoom constraints');
   await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
   await page.waitForFunction(()=>navigator.serviceWorker.controller);
-  await page.waitForFunction(async()=>{const c=await caches.open('webscanner-v17');return !!await c.match(new URL('js/vendor/zxing-wasm/3.1.2/zxing_reader.wasm',location.href).href)});
+  await page.waitForFunction(async()=>{const c=await caches.open('webscanner-v18');return !!await c.match(new URL('js/vendor/zxing-wasm/3.1.2/zxing_reader.wasm',location.href).href)});
   await context.setOffline(true); await page.reload(); await page.evaluate(()=>window.ensureZXingLoaded());
   assert.deepEqual(errors,[]);
   console.log('PASS: app and worker/WASM initialize after offline reload; no page errors');

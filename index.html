@@ -344,7 +344,7 @@
        browsers paint the completed interface once instead of restyling sections
        progressively on a slow connection. -->
   <link rel="stylesheet" href="css/history.css" />
-  <link rel="stylesheet" href="css/dialogs.css?v=77" />
+  <link rel="stylesheet" href="css/dialogs.css?v=78" />
   <link rel="stylesheet" href="css/responsive.css" />
 
 </head>
@@ -569,8 +569,8 @@
 
   <div class="dialog-backdrop" id="printDialog" aria-hidden="true">
     <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="printDialogTitle">
-      <h2 id="printDialogTitle">Print labels</h2>
-      <p>Choose where to print, then select a label size.</p>
+      <h2 id="printDialogTitle">Print Format</h2>
+      <p>Choose the print destination and label size.</p>
       <div class="print-field">
         <label for="printTunnelSelect">Print destination</label>
         <select class="select" id="printTunnelSelect">
@@ -578,13 +578,10 @@
           <option value="gate2">Gate 2</option>
         </select>
       </div>
-      <div class="print-label">Label size</div>
-      <div class="print-sizes">
-        <button class="btn btn-primary" id="printBigBtn" type="button"><strong>Big label</strong><span>60 × 38 mm</span></button>
-        <button class="btn btn-primary" id="printStickerBtn" type="button"><strong>Sticker</strong><span>40 × 25 mm</span></button>
-      </div>
-      <div class="print-footer">
-        <button class="btn btn-muted" id="sendTxtBtn" type="button">Send TXT</button>
+      <div class="dialog-actions compact-print-actions">
+        <button class="btn btn-primary" id="printBigBtn" type="button">[BIG] 60*38</button>
+        <button class="btn btn-primary" id="printStickerBtn" type="button">[STICKER] 40*25</button>
+        <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
         <button class="btn btn-muted" id="printBackBtn" type="button">Back</button>
       </div>
     </div>

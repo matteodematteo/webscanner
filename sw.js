@@ -1,6 +1,6 @@
 // Offline app shell. All paths are resolved against the service worker scope
 // so installs work both at the domain root and from a deployed subfolder.
-const CACHE_NAME = 'webscanner-v17';
+const CACHE_NAME = 'webscanner-v18';
 const APP_SHELL_URL = new URL('index.html', self.registration.scope).toString();
 const CACHEABLE_DESTINATIONS = new Set(['script', 'style', 'document', 'image', 'font']);
 const ASSETS_TO_CACHE = [
@@ -15,7 +15,7 @@ const ASSETS_TO_CACHE = [
   'css/layout.css',
   'css/components.css',
   'css/history.css',
-  'css/dialogs.css?v=77',
+  'css/dialogs.css?v=78',
   'css/responsive.css',
   'js/zxing-scanner.js?v=74',
   'js/zxing-worker.js?v=74',
