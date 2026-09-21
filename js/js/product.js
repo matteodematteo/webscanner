@@ -311,34 +311,13 @@ async function fetchProductInfo(barcode, options) {
 
   setStatus("Requesting product info...");
   try {
-    const cookie = await getCookieForRequests();
-    // Start the optional requests as soon as the shared session is ready.
-    // Only the product response below is awaited for the first render.
-    const discountPromise = fetchDiscountInfoThroughProxy(code, cookie)
-      .then(function (responseText) {
-        try {
-          return responseText ? JSON.parse(responseText) : null;
-        } catch {
-          return null;
-        }
-      })
-      .catch(function () {
-        return null;
-      });
-    const productResponseText = await fetchProductInfoThroughProxy(code, cookie);
-
-    let parsedProduct;
-    try {
-      parsedProduct = JSON.parse(productResponseText);
-    } catch {
-      if (lookupOptions.allowClosestSearch) {
-        throw createNoExactMatchError();
-      }
-      throw new Error("Product info response was not valid JSON.");
-    }
-
-    const normalizedProduct = normalizeProductData(parsedProduct?.product || parsedProduct);
-    if (shouldFallbackToClosestSearch(normalizedProduct, code, lookupOptions.allowClosestSearch)) {
+    let discountPromise;
+    const info = await loadProductInfoResponse(code, function (cookie) {
+      // Restart the optional discount lookup with the refreshed session too.
+      discountPromise = loadOptionalDiscount(code, cookie);
+    });
+    const parsedProduct = info.raw;
+    if (!hasProductInDatabase(info.normalized, code)) {
       throw createNoExactMatchError();
     }
 

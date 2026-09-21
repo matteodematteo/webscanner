@@ -691,7 +691,7 @@ async function saveHistoryEditorChanges() {
     return;
   }
 
-  const cookie = await getCookieForRequests();
+  let cookie = await getCookieForRequests();
   state.els.historyEditSaveNote.textContent = originalItalianName !== payload.italian_name
     ? "Italian name cleaned before save."
     : "Checking product...";
@@ -700,11 +700,12 @@ async function saveHistoryEditorChanges() {
 
   try {
     const latestInfo = await loadProductInfoResponse(payload.barcode);
+    cookie = latestInfo.cookie;
     if (hasProductInDatabase(latestInfo.normalized, payload.barcode)) {
       existingProduct = latestInfo.normalized;
     }
-  } catch {
-    existingProduct = null;
+  } catch (error) {
+    throw new Error(`Could not load current product values. Nothing was saved. ${error.message || "Please retry."}`);
   }
 
   const shouldAddNewProduct = !existingProduct;
@@ -756,7 +757,7 @@ async function saveHistoryEditorChanges() {
   } else {
     state.els.historyEditSaveNote.textContent = "Saving changes...";
     try {
-      const updateResponseText = await fetchUpdateItemThroughProxy(payload, cookie);
+      const updateResponseText = await fetchUpdateItemThroughProxy(payload, cookie, existingProduct);
       let updateResponse = null;
       try {
         updateResponse = updateResponseText ? JSON.parse(updateResponseText) : null;

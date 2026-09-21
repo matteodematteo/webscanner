@@ -63,10 +63,36 @@ async function fetchDiscountInfoThroughProxy(code, cookie) {
 }
 
 
-async function fetchUpdateItemThroughProxy(payload, cookie) {
+function getPreservedUpdateFields(product) {
+  // The ERP update replaces these fields, so never omit unread values.
+  const firstDiscount = product?.p_discount !== undefined
+    ? product.p_discount : product?.p_discount1;
+  const preserved = {
+    p_discount: firstDiscount,
+    p_discount2: product?.p_discount2,
+    p_discount3: product?.p_discount3,
+    p_discount4: product?.p_discount4,
+    spec: product?.spec
+  };
+  const missing = Object.keys(preserved).filter((key) => preserved[key] === undefined);
+  if (missing.length) {
+    throw new Error(`Cannot safely update: product info is missing ${missing.join(", ")}. Reload product info and try again.`);
+  }
+  // Preserve the numbered alias too when supplied by the product endpoint.
+  if (product.p_discount1 !== undefined) preserved.p_discount1 = product.p_discount1;
+  for (const key of Object.keys(preserved)) {
+    if (preserved[key] === null) preserved[key] = "";
+  }
+  return preserved;
+}
+
+
+async function fetchUpdateItemThroughProxy(payload, cookie, existingProduct) {
+  const preserved = getPreservedUpdateFields(existingProduct);
   const response = await apiFetch(CONFIG.updateProxyEndpoint, {
     method: "POST",
     body: JSON.stringify({
+      ...preserved,
       id: payload.id,
       barcode: payload.barcode,
       goods_code: payload.barcode,
@@ -115,41 +141,56 @@ async function fetchAddProductThroughProxy(payload, cookie) {
 }
 
 
-async function getCookieForRequests() {
-  let cookie = state.authCookie;
-  if (!cookie) {
-    if (!cookieRequestPromise) {
-      cookieRequestPromise = loginAndRefreshCookie().finally(function () {
-        cookieRequestPromise = null;
-      });
-    }
-    cookie = await cookieRequestPromise;
+async function refreshCookieForRequests(failedCookie) {
+  if (cookieRequestPromise) return cookieRequestPromise;
+  if (failedCookie && state.authCookie && state.authCookie !== failedCookie) {
+    return state.authCookie;
   }
-  return cookie;
+  cookieRequestPromise = loginAndRefreshCookie().then(function (cookie) {
+    if (!cookie) throw new Error("Could not refresh login. Check your saved login settings.");
+    return cookie;
+  }).finally(function () { cookieRequestPromise = null; });
+  return cookieRequestPromise;
 }
 
 
-async function loadProductInfoResponse(barcode) {
+async function getCookieForRequests() {
+  if (cookieRequestPromise) return cookieRequestPromise;
+  return state.authCookie || refreshCookieForRequests();
+}
+
+
+async function loadProductInfoResponse(barcode, onCookie) {
   const code = String(barcode || "").trim();
-  if (!code) {
-    throw new Error("Barcode is empty");
+  if (!code) throw new Error("Barcode is empty");
+  let cookie = await getCookieForRequests();
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (onCookie) onCookie(cookie);
+    try {
+      const responseText = await fetchProductInfoThroughProxy(code, cookie);
+      let raw;
+      try { raw = JSON.parse(responseText); }
+      catch { throw new Error("Product info response was not valid JSON."); }
+      const normalized = normalizeProductData(raw?.product || raw);
+      if (hasProductInDatabase(normalized, code) || attempt === 1) {
+        return { cookie, raw, normalized };
+      }
+    } catch (error) {
+      if (attempt === 1 || (typeof navigator !== "undefined" && navigator.onLine === false)) throw error;
+    }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      throw new Error("Offline — cannot retry product lookup.");
+    }
+    setStatus("Refreshing login and retrying barcode...");
+    cookie = await refreshCookieForRequests(cookie);
   }
+}
 
-  const cookie = await getCookieForRequests();
-  const responseText = await fetchProductInfoThroughProxy(code, cookie);
 
-  let parsedProduct;
-  try {
-    parsedProduct = JSON.parse(responseText);
-  } catch {
-    throw new Error("Product info response was not valid JSON.");
-  }
-
-  return {
-    cookie: cookie,
-    raw: parsedProduct,
-    normalized: normalizeProductData(parsedProduct?.product || parsedProduct)
-  };
+function loadOptionalDiscount(code, cookie) {
+  return fetchDiscountInfoThroughProxy(code, cookie).then(function (text) {
+    try { return text ? JSON.parse(text) : null; } catch { return null; }
+  }).catch(function () { return null; });
 }
 
 
@@ -159,36 +200,13 @@ async function loadProductAndDiscountResponse(barcode) {
     throw new Error("Barcode is empty");
   }
 
-  const cookie = await getCookieForRequests();
-  const [productResult, discountResult] = await Promise.allSettled([
-    fetchProductInfoThroughProxy(code, cookie),
-    fetchDiscountInfoThroughProxy(code, cookie)
-  ]);
-
-  if (productResult.status !== "fulfilled") {
-    throw productResult.reason instanceof Error
-      ? productResult.reason
-      : new Error("Could not load product info.");
-  }
-
-  const productResponseText = productResult.value;
-  const discountResponseText = discountResult.status === "fulfilled"
-    ? discountResult.value
-    : "";
-
-  let parsedProduct;
-  let parsedDiscount = null;
-  try {
-    parsedProduct = JSON.parse(productResponseText);
-  } catch {
-    throw new Error("Product info response was not valid JSON.");
-  }
-
-  try {
-    parsedDiscount = discountResponseText ? JSON.parse(discountResponseText) : null;
-  } catch {
-    parsedDiscount = null;
-  }
+  let discountPromise;
+  const info = await loadProductInfoResponse(code, function (cookie) {
+    discountPromise = loadOptionalDiscount(code, cookie);
+  });
+  const cookie = info.cookie;
+  const parsedProduct = info.raw;
+  const parsedDiscount = await discountPromise;
 
   const normalizedProduct = normalizeProductData(parsedProduct?.product || parsedProduct);
   const discountFields = getLegacyDiscountFields({
