@@ -69,13 +69,14 @@ Actual foreground returns and frozen-stream recovery remain supported. Recovery
 checks are skipped while camera startup is in progress. The camera fallback is
 only used if the initial camera request fails, never to replace a working stream.
 
-## Search retries and app updates
+## Search loading and app updates
 
-Search starts exact and partial lookups together. Read-only product and closest
-search requests retry temporary HTTP 408, 429, 5xx and network failures, up to
-three attempts with 200ms and 400ms waits. A usable result cancels the unused
-lookup and any scheduled retry. Writes are never retried automatically. A
-persistent failure still shows an error and re-enables Search.
+Search starts exact and partial lookups together, with no automatic retries for
+server or network errors and no client timeout. The Search button shows a loading
+circle and stays disabled until the response is received and processed. The
+closest-match dialog also shows its existing loading circle while waiting for
+matches. A usable result cancels the unused lookup. A failed response shows the
+error and re-enables Search. Expired-session recovery remains supported.
 
 Upload `index.html`, `sw.js`, and the `js/` directory together for this release.
 Online reloads fetch current HTML and its versioned scripts; offline reloads
@@ -90,6 +91,6 @@ and `APP_VERSION` in `sw.js` together, increment `CACHE_NAME`, and update the
 URLs of changed scripts in both files. `sw.js` keeps its stable registration
 URL and bypasses HTTP cache for update checks.
 
-Run `node tests/search-browser.cjs` for transient and persistent search failures
+Run `node tests/search-browser.cjs` for slow responses, loading circles, and search failures
 and `node tests/app-updates-browser.cjs` for real service-worker upgrades,
 storage preservation, HTTP cache bypass, subfolder hosting, and offline use.

@@ -21,45 +21,8 @@ async function apiFetch(url, options, loaderOptions) {
 }
 
 
-function waitForProxyRetry(delay, signal) {
-  return new Promise(function (resolve, reject) {
-    if (signal?.aborted) {
-      reject(new DOMException("Request canceled", "AbortError"));
-      return;
-    }
-    const onAbort = function () {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", onAbort);
-      reject(new DOMException("Request canceled", "AbortError"));
-    };
-    const timer = setTimeout(function () {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, delay);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-
-// These POST endpoints only read data. Never use this retry for writes.
-async function fetchReadOnlyProxyWithRetry(url, options, loaderOptions) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const response = await apiFetch(url, { ...options, cache: "no-store" }, loaderOptions);
-      const transient = response.status === 408 || response.status === 429 || response.status >= 500;
-      if (!transient || attempt === 2 || navigator.onLine === false) return response;
-      await response.body?.cancel();
-    } catch (error) {
-      if (error?.name !== "TypeError" || options?.signal?.aborted ||
-          navigator.onLine === false || attempt === 2) throw error;
-    }
-    await waitForProxyRetry(200 * (attempt + 1), options?.signal);
-  }
-}
-
-
 async function fetchProductInfoThroughProxy(code, cookie, options) {
-  const response = await fetchReadOnlyProxyWithRetry(CONFIG.infoProxyEndpoint, {
+  const response = await apiFetch(CONFIG.infoProxyEndpoint, {
     method: "POST",
     signal: options?.signal,
     body: JSON.stringify({

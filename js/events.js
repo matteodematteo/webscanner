@@ -72,6 +72,7 @@ function bindDeferredEvents() {
 
   state.els.searchBarcodeBtn.addEventListener("click", async function () {
     state.els.searchBarcodeBtn.disabled = true;
+    state.els.searchBarcodeBtn.setAttribute("aria-busy", "true");
     try {
       const lookupResult = await handleBarcodeLookup({
         allowClosestSearch: true,
@@ -84,6 +85,7 @@ function bindDeferredEvents() {
       }
     } finally {
       state.els.searchBarcodeBtn.disabled = false;
+      state.els.searchBarcodeBtn.removeAttribute("aria-busy");
     }
   });
 
