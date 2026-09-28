@@ -304,3 +304,13 @@
     font: inherit;
     touch-action: manipulation;
   }
+
+  .activity-slide { position: relative; }
+  .activity-loader { position: absolute; top: 7px; right: 10px; }
+  .activity-row + .activity-row { margin-top: 12px; }
+  .activity-row h3 { margin: 0 24px 5px 0; font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .activity-periods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .activity-periods label { font-size: .58rem; letter-spacing: 0; }
+  .activity-error { margin: 6px 0; color: var(--danger); font-size: .75rem; }
+  .activity-retry { margin-top: 4px; padding: 4px 12px; min-height: 28px; }
+  .activity-retry[hidden], .activity-error[hidden] { display: none; }

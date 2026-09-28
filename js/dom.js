@@ -47,6 +47,10 @@ function queryCriticalElements() {
     salesQuantityField: document.getElementById("field_sales_quantity"),
     salesQuantityLoader:document.getElementById("salesQuantityLoader"),
     salesPeriodBtn:     document.getElementById("salesPeriodBtn"),
+    productActivitySlide: document.getElementById("productActivitySlide"),
+    productActivityLoader: document.getElementById("productActivityLoader"),
+    productActivityStatus: document.getElementById("productActivityStatus"),
+    productActivityRetryBtn: document.getElementById("productActivityRetryBtn"),
   };
 }
 

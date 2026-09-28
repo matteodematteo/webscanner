@@ -295,6 +295,15 @@
       animation: api-loader-spin 700ms linear infinite;
     }
     .sales-loader[hidden] { display: none; }
+    .activity-slide { position: relative; }
+    .activity-loader { position: absolute; top: 7px; right: 10px; }
+    .activity-row + .activity-row { margin-top: 12px; }
+    .activity-row h3 { margin: 0 24px 5px 0; font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .activity-periods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .activity-periods label { font-size: .58rem; letter-spacing: 0; }
+    .activity-error { margin: 6px 0; color: var(--danger); font-size: .75rem; }
+    .activity-retry[hidden], .activity-error[hidden] { display: none; }
+    .activity-retry { margin-top: 4px; padding: 4px 12px; min-height: 28px; }
     .field-card[hidden] { display: none; }
     .field-value.is-discount { color: #b42318; font-weight: 800; }
     #field_disc_cost, #field_disc_iva, #field_discount_percent { color: var(--text); font-weight: 700; }
@@ -435,12 +444,36 @@
               <button class="btn btn-muted sales-period-btn pi-w-17" id="salesPeriodBtn" type="button">Period</button>
             </div>
           </div>
+          <div class="pi-slide activity-slide" data-slide-index="3" id="productActivitySlide" role="tabpanel" aria-label="Sales and inventory" aria-busy="false">
+            <span class="sales-loader activity-loader" id="productActivityLoader" role="status" aria-label="Loading sales and inventory" hidden></span>
+            <div class="field-card activity-row">
+              <h3>Sales</h3>
+              <div class="activity-periods">
+                <div><label for="activitySalesToday">Today</label><div class="field-value" id="activitySalesToday" data-activity-type="sales" data-period-index="0">—</div></div>
+                <div><label for="activitySales7">Last 7 days</label><div class="field-value" id="activitySales7" data-activity-type="sales" data-period-index="1">—</div></div>
+                <div><label for="activitySales30">Last 30 days</label><div class="field-value" id="activitySales30" data-activity-type="sales" data-period-index="2">—</div></div>
+                <div><label for="activitySales90">Last 90 days</label><div class="field-value" id="activitySales90" data-activity-type="sales" data-period-index="3">—</div></div>
+              </div>
+            </div>
+            <div class="field-card activity-row">
+              <h3>Inventory in</h3>
+              <div class="activity-periods">
+                <div><label for="activityInventoryToday">Today</label><div class="field-value" id="activityInventoryToday" data-activity-type="inventory" data-period-index="0">—</div></div>
+                <div><label for="activityInventory7">Last 7 days</label><div class="field-value" id="activityInventory7" data-activity-type="inventory" data-period-index="1">—</div></div>
+                <div><label for="activityInventory30">Last 30 days</label><div class="field-value" id="activityInventory30" data-activity-type="inventory" data-period-index="2">—</div></div>
+                <div><label for="activityInventory90">Last 90 days</label><div class="field-value" id="activityInventory90" data-activity-type="inventory" data-period-index="3">—</div></div>
+              </div>
+            </div>
+            <p class="activity-error" id="productActivityStatus" role="status" hidden></p>
+            <button class="btn btn-muted activity-retry" id="productActivityRetryBtn" type="button" hidden>Retry</button>
+          </div>
         </div>
       </div>
       <div class="pi-dots" id="productInfoDots" role="tablist" aria-label="Product info pages">
         <button class="pi-dot" type="button" data-goto-slide="0" role="tab" aria-label="Page 1" aria-selected="true"></button>
         <button class="pi-dot" type="button" data-goto-slide="1" role="tab" aria-label="Page 2" aria-selected="false"></button>
         <button class="pi-dot" type="button" data-goto-slide="2" role="tab" aria-label="Page 3" aria-selected="false"></button>
+        <button class="pi-dot" type="button" data-goto-slide="3" role="tab" aria-label="Page 4: Sales and inventory" aria-controls="productActivitySlide" aria-selected="false"></button>
       </div>
       <div class="visually-hidden" aria-hidden="true">
         <div class="field-card" id="field_supplier_name_compact_card" hidden><label for="field_supplier_name_compact">Supplier</label><div class="field-value" id="field_supplier_name_compact"></div></div>
@@ -679,19 +712,19 @@
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script src="js/zxing-scanner.js?v=74" defer></script>
   <script src="js/config.js?v=74" defer></script>
-  <script src="js/state.js?v=69" defer></script>
-  <script src="js/dom.js?v=75" defer></script>
+  <script src="js/state.js?v=81" defer></script>
+  <script src="js/dom.js?v=81" defer></script>
   <script src="js/utils.js?v=69" defer></script>
   <script src="js/ui.js?v=69" defer></script>
   <script src="js/settings.js?v=69" defer></script>
-  <script src="js/input-mode.js?v=69" defer></script>
-  <script src="js/product.js?v=80" defer></script>
+  <script src="js/input-mode.js?v=81" defer></script>
+  <script src="js/product.js?v=81" defer></script>
   <script src="js/api.js?v=80" defer></script>
-  <script src="js/sales.js?v=69" defer></script>
-  <script src="js/closest-search.js?v=69" defer></script>
+  <script src="js/sales.js?v=81" defer></script>
+  <script src="js/closest-search.js?v=81" defer></script>
   <script src="js/history.js?v=80" defer></script>
   <script src="js/camera.js?v=74" defer></script>
-  <script src="js/events.js?v=76" defer></script>
+  <script src="js/events.js?v=81" defer></script>
   <script src="js/app.js?v=71" defer></script>
 </body>
 </html>

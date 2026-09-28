@@ -390,12 +390,13 @@ function bindDeferredEvents() {
   });
 
   state.els.salesPeriodAllBtn.addEventListener("click", function () {
-    if (applySalesPeriod("", "")) {
-      state.els.salesPeriodStartInput.value = "";
-      state.els.salesPeriodEndInput.value = "";
-      closeSalesPeriodDialog();
-      moveFocusToInput(state.els.barcodeInput);
-    }
+    state.els.salesPeriodStartInput.value = "";
+    state.els.salesPeriodEndInput.value = "";
+    state.els.salesPeriodStatus.textContent = "Click Apply to load all sales.";
+  });
+
+  state.els.productActivityRetryBtn.addEventListener("click", function () {
+    startProductActivityLookup({ retry: true });
   });
 
   state.els.salesPeriodBackBtn.addEventListener("click", function () {

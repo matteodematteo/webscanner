@@ -1,6 +1,6 @@
 "use strict";
 
-/* Background sales quantity lookup */
+/* On-demand sales quantity and product activity lookups */
 
 function formatSalesQuantity(value) {
   const numeric = Number(value);
@@ -66,7 +66,7 @@ function extractSalesRows(payload) {
     return payload;
   }
   if (!payload || typeof payload !== "object") {
-    return [];
+    throw new Error("Activity response did not contain quantity rows. Refresh your login and retry.");
   }
 
   const queue = [payload];
@@ -95,7 +95,7 @@ function extractSalesRows(payload) {
       }
     }
   }
-  return [];
+  throw new Error("Activity response did not contain quantity rows. Refresh your login and retry.");
 }
 
 
@@ -154,6 +154,8 @@ function renderSalesQuantity() {
     valueEl.textContent = "";
   } else if (!state.salesBarcode) {
     valueEl.textContent = "";
+  } else if (state.salesError || !state.hasSalesResult) {
+    valueEl.textContent = "—";
   } else {
     valueEl.textContent = formatSalesQuantity(sumSalesQuantity(state.salesRows));
   }
@@ -167,59 +169,61 @@ function renderSalesQuantity() {
 
 
 function clearSalesData() {
+  state.salesAbortController?.abort();
+  state.productActivityAbortController?.abort();
   state.salesLookupSequence += 1;
   state.salesBarcode = "";
   state.salesRows = [];
   state.isSalesLoading = false;
+  state.hasSalesResult = false;
+  state.salesError = false;
+  state.productActivityLookupSequence += 1;
+  state.productActivityTotals = null;
+  state.productActivityDate = "";
+  state.isProductActivityLoading = false;
+  state.productActivityError = "";
   renderSalesQuantity();
+  renderProductActivity();
 }
 
 
-async function fetchSalesPerformance(code, cookie) {
-  const beginDate = formatSalesDateForRequest(state.salesBeginDate);
-  const endDate = formatSalesEndDateForRequest(state.salesEndDate);
+function setSalesProduct(barcode) {
+  const code = String(barcode || "").trim();
+  if (code !== state.salesBarcode) {
+    clearSalesData();
+    state.salesBarcode = code;
+    renderSalesQuantity();
+  }
+  if (state.productInfoSlideIndex === 3) startProductActivityLookup();
+}
+
+
+async function fetchSalesPerformance(code, cookie, options) {
+  const beginDate = formatSalesDateForRequest(options.beginDate);
+  const endDate = formatSalesEndDateForRequest(options.endDate);
   const proxyEndpoint = String(CONFIG.salesPerformanceProxyEndpoint || "").trim();
-  const rows = Math.max(1, Number(CONFIG.salesPerformanceRows || 500) || 500);
+  const rows = options.rows;
 
-  if (proxyEndpoint) {
-    const response = await fetch(proxyEndpoint, {
-      method: "POST",
-      body: JSON.stringify({
-        goodsCode: code,
-        barcode: code,
-        cookie: cookie,
-        beginDate: beginDate,
-        endDate: endDate,
-        page: 1,
-        rows: rows
-      }),
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Sales request failed with status ${response.status}`);
-    }
-    return response.text();
+  if (!proxyEndpoint) {
+    throw new Error("Sales performance Cloudflare Worker endpoint is not configured.");
   }
 
-  const url = new URL(CONFIG.salesPerformanceEndpoint);
-  url.searchParams.set("goodsCode", code);
-  url.searchParams.set("person", "");
-  url.searchParams.set("operator", "");
-  url.searchParams.set("beginDate", beginDate);
-  url.searchParams.set("endDate", endDate);
-  url.searchParams.set("page", "1");
-  url.searchParams.set("rows", String(rows));
-
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    credentials: "include",
+  const response = await fetch(proxyEndpoint, {
+    method: "POST",
+    signal: options.signal,
+    body: JSON.stringify({
+      goodsCode: code,
+      barcode: code,
+      cookie: cookie,
+      type: options.type,
+      beginDate: beginDate,
+      endDate: endDate,
+      page: options.page,
+      rows: rows
+    }),
     headers: {
-      Accept: "application/json, text/javascript, */*; q=0.01",
-      "X-Requested-With": "XMLHttpRequest"
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json"
     }
   });
 
@@ -230,17 +234,40 @@ async function fetchSalesPerformance(code, cookie) {
 }
 
 
-async function loadSalesPerformanceRows(code) {
+async function loadSalesPerformanceRows(code, options = {}) {
+  // Snapshot the period before awaiting the session or any page requests.
+  const requestOptions = {
+    type: "sales",
+    beginDate: state.salesBeginDate,
+    endDate: state.salesEndDate,
+    ...options,
+    rows: Math.min(1000, Math.max(1, Math.floor(Number(CONFIG.salesPerformanceRows) || 500)))
+  };
   const cookie = await getCookieForRequests();
-  const responseText = await fetchSalesPerformance(code, cookie);
-  let parsed;
-  try {
-    parsed = JSON.parse(responseText);
-  } catch {
-    throw new Error("Sales response was not valid JSON.");
+  const rows = [];
+  let previousPage = "";
+  for (let page = 1; page <= 100; page += 1) {
+    const responseText = await fetchSalesPerformance(code, cookie, { ...requestOptions, page });
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch {
+      throw new Error("Activity response was not valid JSON. Refresh your login and retry.");
+    }
+    const pageRows = extractSalesRows(parsed);
+    const pageSignature = JSON.stringify(pageRows);
+    if (pageRows.length && pageSignature === previousPage) {
+      throw new Error("The activity endpoint repeated a page; totals could not be completed.");
+    }
+    rows.push(...pageRows);
+    const total = parsed?.total === undefined ? NaN : Number(parsed.total);
+    if (pageRows.length < requestOptions.rows ||
+        (Number.isFinite(total) && total >= 0 && rows.length >= total)) {
+      return rows;
+    }
+    previousPage = pageSignature;
   }
-
-  return extractSalesRows(parsed);
+  throw new Error("Too many activity pages; narrow the sales period and retry.");
 }
 
 
@@ -250,6 +277,10 @@ function startSalesPerformanceLookup(barcode) {
   state.salesLookupSequence = lookupSequence;
   state.salesBarcode = code;
   state.salesRows = [];
+  state.salesAbortController?.abort();
+  state.salesAbortController = new AbortController();
+  state.hasSalesResult = false;
+  state.salesError = false;
   state.isSalesLoading = Boolean(code);
   renderSalesQuantity();
 
@@ -257,12 +288,13 @@ function startSalesPerformanceLookup(barcode) {
     return;
   }
 
-  loadSalesPerformanceRows(code)
+  return loadSalesPerformanceRows(code, { signal: state.salesAbortController.signal })
     .then(function (rows) {
       if (lookupSequence !== state.salesLookupSequence) {
         return;
       }
       state.salesRows = rows;
+      state.hasSalesResult = true;
       state.isSalesLoading = false;
       renderSalesQuantity();
     })
@@ -272,12 +304,8 @@ function startSalesPerformanceLookup(barcode) {
       }
       state.salesRows = [];
       state.isSalesLoading = false;
-      if (state.els?.salesQuantityField) {
-        state.els.salesQuantityField.textContent = "-";
-      }
-      if (state.els?.salesQuantityLoader) {
-        state.els.salesQuantityLoader.hidden = true;
-      }
+      state.salesError = true;
+      renderSalesQuantity();
     });
 }
 
@@ -298,21 +326,88 @@ function closeSalesPeriodDialog() {
 
 
 function applySalesPeriod(beginDate, endDate) {
-  state.salesBeginDate = String(beginDate || "").trim();
-  state.salesEndDate = String(endDate || "").trim();
+  const nextBeginDate = String(beginDate || "").trim();
+  const nextEndDate = String(endDate || "").trim();
 
-  if (state.salesBeginDate && state.salesEndDate) {
-    const begin = parseSalesDate(state.salesBeginDate);
-    const end = parseSalesDate(state.salesEndDate);
+  if (nextBeginDate && nextEndDate) {
+    const begin = parseSalesDate(nextBeginDate);
+    const end = parseSalesDate(nextEndDate);
     if (begin && end && begin > end) {
       state.els.salesPeriodStatus.textContent = "Start must be before end.";
       return false;
     }
   }
 
+  state.salesBeginDate = nextBeginDate;
+  state.salesEndDate = nextEndDate;
   renderSalesQuantity();
   if (state.salesBarcode) {
     startSalesPerformanceLookup(state.salesBarcode);
   }
   return true;
+}
+
+
+function sumActivityPeriods(rows, today) {
+  const end = parseSalesDate(today, true);
+  return [1, 7, 30, 90].map(function (days) {
+    const begin = parseSalesDate(today);
+    begin.setDate(begin.getDate() - (days - 1));
+    return rows.reduce(function (total, row) {
+      const date = parseSalesDate(row?.operatortime);
+      return date && date >= begin && date <= end ? total + getSalesRowQuantity(row) : total;
+    }, 0);
+  });
+}
+
+
+function renderProductActivity() {
+  const slide = state.els?.productActivitySlide;
+  if (!slide) return;
+  slide.setAttribute("aria-busy", state.isProductActivityLoading ? "true" : "false");
+  state.els.productActivityLoader.hidden = !state.isProductActivityLoading;
+  const status = state.els.productActivityStatus;
+  status.textContent = state.productActivityError;
+  status.hidden = !state.productActivityError;
+  state.els.productActivityRetryBtn.hidden = !state.productActivityError;
+  slide.querySelectorAll("[data-activity-type]").forEach(function (element) {
+    const totals = state.productActivityTotals?.[element.dataset.activityType];
+    element.textContent = totals ? formatSalesQuantity(totals[Number(element.dataset.periodIndex)]) : "—";
+  });
+}
+
+
+function startProductActivityLookup(lookupOptions = {}) {
+  const code = state.salesBarcode;
+  const today = getSalesPeriodDate(0);
+  if (!code || state.isProductActivityLoading || (state.productActivityError && !lookupOptions.retry) ||
+      (state.productActivityTotals && state.productActivityDate === today)) return;
+  const sequence = ++state.productActivityLookupSequence;
+  state.productActivityAbortController?.abort();
+  const controller = new AbortController();
+  state.productActivityAbortController = controller;
+  state.isProductActivityLoading = true;
+  state.productActivityTotals = null;
+  state.productActivityError = "";
+  renderProductActivity();
+  const options = { beginDate: getSalesPeriodDate(89), endDate: today, signal: controller.signal };
+  return Promise.all([
+    loadSalesPerformanceRows(code, { ...options, type: "sales" }),
+    loadSalesPerformanceRows(code, { ...options, type: "inventory" })
+  ]).then(function ([sales, inventory]) {
+    if (sequence !== state.productActivityLookupSequence) return;
+    state.productActivityTotals = {
+      sales: sumActivityPeriods(sales, today),
+      inventory: sumActivityPeriods(inventory, today)
+    };
+    state.productActivityDate = today;
+  }).catch(function (error) {
+    if (sequence !== state.productActivityLookupSequence) return;
+    controller.abort();
+    state.productActivityError = error.message || "Could not load sales and inventory. Try again.";
+  }).finally(function () {
+    if (sequence !== state.productActivityLookupSequence) return;
+    state.isProductActivityLoading = false;
+    renderProductActivity();
+  });
 }

@@ -297,9 +297,7 @@ async function handleClosestSearchSelection(index) {
 
   if (state.isQuantityEntryUnlocked) {
     state.els.barcodeInput.value = barcode;
-    if (typeof startSalesPerformanceLookup === "function") {
-      startSalesPerformanceLookup(barcode);
-    }
+    clearResultFields();
     closeClosestSearchDialog();
     setStatus(`Selected ${barcode}. Tap Enter / Add to send request.`);
     moveFocusToInput(state.els.quantityInput);
@@ -314,16 +312,14 @@ async function handleClosestSearchSelection(index) {
   const pendingComparisonQty = state.closestSearchPendingHistoryId
     ? state.history.find((item) => item.id === state.closestSearchPendingHistoryId)?.comparison_qty || 1
     : 1;
-  if (typeof startSalesPerformanceLookup === "function") {
-    startSalesPerformanceLookup(barcode);
-  }
+  clearSalesData();
 
   try {
     // Product data is the critical response: render it as soon as it arrives.
     // Discount is best-effort and is applied in a follow-up request below.
     const selectedData = await loadProductInfoResponse(barcode);
     state.els.barcodeInput.value = barcode;
-    clearResultFields({ keepSales: true });
+    clearResultFields();
     renderProductData({
       product: selectedData.raw?.product || selectedData.raw,
       sale: null

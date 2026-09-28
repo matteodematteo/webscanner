@@ -185,6 +185,10 @@ function initProductInfoSlider() {
   const dotButtons = Array.prototype.slice.call(dots.querySelectorAll(".pi-dot"));
 
   function setActiveDot(index) {
+    state.productInfoSlideIndex = index;
+    if (index === 3 && typeof startProductActivityLookup === "function") {
+      startProductActivityLookup();
+    }
     dotButtons.forEach(function (dot, dotIndex) {
       const isActive = dotIndex === index;
       dot.classList.toggle("is-active", isActive);
