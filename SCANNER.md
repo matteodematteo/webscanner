@@ -71,11 +71,12 @@ only used if the initial camera request fails, never to replace a working stream
 
 ## Search loading and app updates
 
-Search starts exact and partial lookups together, with no automatic retries for
-server or network errors and no client timeout. The Search button shows a loading
-circle and stays disabled until the response is received and processed. The
-closest-match dialog also shows its existing loading circle while waiting for
-matches. A usable result cancels the unused lookup. A failed response shows the
+Search waits for the exact product lookup first. If that lookup does not find
+the barcode, it requests closest matches and waits for the complete response.
+The Search button shows a loading circle until the response is received and
+processed; the closest-match dialog shows its circle while waiting for matches.
+There is no parallel exact/closest search, early cancellation, client timeout,
+or automatic retry for server or network errors. A failed response shows the
 error and re-enables Search. Expired-session recovery remains supported.
 
 Upload `index.html`, `sw.js`, and the `js/` directory together for this release.

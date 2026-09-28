@@ -312,27 +312,10 @@ async function fetchProductInfo(barcode, options) {
   setStatus("Requesting product info...");
   try {
     let discountPromise;
-    let info;
-    if (lookupOptions.allowClosestSearch && navigator.onLine !== false) {
-      setStatus("Searching product and closest matches...");
-      const searchResponse = await loadProductSearchResponse(code, function () {
-        if (lookupSequence === state.lookupSequence) openClosestSearchLoadingDialog(code, createdHistoryId);
-      });
-      if (lookupSequence !== state.lookupSequence) return "cancelled";
-      if (searchResponse.kind === "closest") {
-        openClosestSearchDialog(code, searchResponse.results, createdHistoryId);
-        setStatus("Select one of the closest matches.");
-        return "closest";
-      }
-      info = searchResponse.info;
-      discountPromise = loadOptionalDiscount(code, info.cookie);
-      if (state.els.closestSearchDialog.classList.contains("is-open")) closeClosestSearchDialog();
-    } else {
-      info = await loadProductInfoResponse(code, function (cookie) {
-        // Restart the optional discount lookup with the refreshed session too.
-        discountPromise = loadOptionalDiscount(code, cookie);
-      }, { retryMissing: !lookupOptions.allowClosestSearch });
-    }
+    const info = await loadProductInfoResponse(code, function (cookie) {
+      // Restart the optional discount lookup with the refreshed session too.
+      discountPromise = loadOptionalDiscount(code, cookie);
+    }, { retryMissing: !lookupOptions.allowClosestSearch });
     if (lookupSequence !== state.lookupSequence) return "cancelled";
     const parsedProduct = info.raw;
     if (!hasProductInDatabase(info.normalized, code) ||
@@ -379,12 +362,6 @@ async function fetchProductInfo(barcode, options) {
     return "exact";
   } catch (error) {
     if (lookupSequence !== state.lookupSequence) return "cancelled";
-    if (error?.code === "SEARCH_FAILED") {
-      openClosestSearchDialog(code, [], createdHistoryId);
-      state.els.closestSearchStatus.textContent = error.message;
-      setStatus(error.message);
-      return "no-match";
-    }
     // Explicit Search can use the independent closest-search endpoint even
     // when the exact lookup or its session refresh fails. Scans retain their
     // existing exact-lookup retry and offline behavior.
@@ -394,10 +371,12 @@ async function fetchProductInfo(barcode, options) {
         try {
           openClosestSearchLoadingDialog(code, createdHistoryId);
           const closestMatches = await fetchClosestSearchResults(code);
+          if (lookupSequence !== state.lookupSequence) return "cancelled";
           openClosestSearchDialog(code, closestMatches, createdHistoryId);
           setStatus("Exact barcode not found. Select one of the closest matches.");
           return "closest";
         } catch (closestError) {
+          if (lookupSequence !== state.lookupSequence) return "cancelled";
           const message = closestError.message || "No similar products found.";
           state.isClosestSearchLoading = false;
           state.els.closestSearchBackBtn.disabled = false;
