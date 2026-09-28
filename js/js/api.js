@@ -21,9 +21,10 @@ async function apiFetch(url, options, loaderOptions) {
 }
 
 
-async function fetchProductInfoThroughProxy(code, cookie) {
+async function fetchProductInfoThroughProxy(code, cookie, options) {
   const response = await apiFetch(CONFIG.infoProxyEndpoint, {
     method: "POST",
+    signal: options?.signal,
     body: JSON.stringify({
       barcode: code,
       cookie: cookie
@@ -160,23 +161,24 @@ async function getCookieForRequests() {
 }
 
 
-async function loadProductInfoResponse(barcode, onCookie) {
+async function loadProductInfoResponse(barcode, onCookie, options) {
   const code = String(barcode || "").trim();
   if (!code) throw new Error("Barcode is empty");
   let cookie = await getCookieForRequests();
   for (let attempt = 0; attempt < 2; attempt += 1) {
     if (onCookie) onCookie(cookie);
     try {
-      const responseText = await fetchProductInfoThroughProxy(code, cookie);
+      const responseText = await fetchProductInfoThroughProxy(code, cookie, options);
       let raw;
       try { raw = JSON.parse(responseText); }
       catch { throw new Error("Product info response was not valid JSON."); }
       const normalized = normalizeProductData(raw?.product || raw);
-      if (hasProductInDatabase(normalized, code) || attempt === 1) {
+      if (hasProductInDatabase(normalized, code) || attempt === 1 || options?.retryMissing === false) {
         return { cookie, raw, normalized };
       }
     } catch (error) {
-      if (attempt === 1 || (typeof navigator !== "undefined" && navigator.onLine === false)) throw error;
+      if (attempt === 1 || error?.name === "AbortError" ||
+          (typeof navigator !== "undefined" && navigator.onLine === false)) throw error;
     }
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       throw new Error("Offline — cannot retry product lookup.");

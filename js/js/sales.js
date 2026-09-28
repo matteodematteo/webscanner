@@ -230,6 +230,20 @@ async function fetchSalesPerformance(code, cookie, options) {
   if (!response.ok) {
     throw new Error(`Sales request failed with status ${response.status}`);
   }
+  const responseType = response.headers.get("X-Activity-Type");
+  const responseSource = response.headers.get("X-Activity-Source");
+  const expectedSource = options.type === "inventory"
+    ? "/stock/findGoodsAnalyze" : "/sellAccountCode/findGoodsAnalyze";
+  if ((responseType && responseType !== options.type) ||
+      (responseSource && responseSource !== expectedSource)) {
+    throw new Error("Activity request returned the wrong source. Deploy the updated salesperformance Worker.");
+  }
+  // The original sales-only Worker ignores type and can return sales rows
+  // for an inventory request. Require the stock source before counting inserts.
+  if (options.type === "inventory" &&
+      (responseType !== "inventory" || responseSource !== expectedSource)) {
+    throw new Error("Insert source could not be verified. Deploy the updated salesperformance Worker for stock data.");
+  }
   return response.text();
 }
 
@@ -255,6 +269,11 @@ async function loadSalesPerformanceRows(code, options = {}) {
       throw new Error("Activity response was not valid JSON. Refresh your login and retry.");
     }
     const pageRows = extractSalesRows(parsed);
+    if (requestOptions.type === "inventory" && pageRows.some(function (row) {
+      return String(row?.invoicesType || "").trim() === "结算记录";
+    })) {
+      throw new Error("Insert request returned sales records. Deploy the updated salesperformance Worker.");
+    }
     const pageSignature = JSON.stringify(pageRows);
     if (pageRows.length && pageSignature === previousPage) {
       throw new Error("The activity endpoint repeated a page; totals could not be completed.");

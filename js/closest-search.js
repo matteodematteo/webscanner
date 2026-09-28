@@ -2,7 +2,7 @@
 
 /* Closest-match product search */
 
-async function fetchClosestSearchResults(barcode) {
+async function fetchClosestSearchResults(barcode, options) {
   const code = String(barcode || "").trim();
   if (!code) {
     throw new Error("Barcode is empty");
@@ -11,6 +11,7 @@ async function fetchClosestSearchResults(barcode) {
   const cookie = await getCookieForRequests();
   const response = await apiFetch(CONFIG.closestSearchProxyEndpoint, {
     method: "POST",
+    signal: options?.signal,
     body: JSON.stringify({
       supplierId: -1,
       symbol: "combination",
@@ -44,6 +45,44 @@ async function fetchClosestSearchResults(barcode) {
   }
 
   return results;
+}
+
+
+async function loadProductSearchResponse(code, onMissingExact) {
+  const exactController = new AbortController();
+  const closestController = new AbortController();
+  // Start both ERP lookups now. A failed or slow exact lookup must not delay
+  // a usable partial-match list. Settle errors so canceled requests are handled.
+  const exactPromise = loadProductInfoResponse(code, null, {
+    retryMissing: false, signal: exactController.signal
+  }).then(function (info) {
+    const exact = hasProductInDatabase(info.normalized, code) &&
+      String(info.normalized.goods_code || "").trim() === code;
+    return { source: "exact", kind: exact ? "exact" : "missing", info };
+  }).catch(function (error) { return { source: "exact", kind: "failed", error }; });
+  const closestPromise = fetchClosestSearchResults(code, { signal: closestController.signal })
+    .then(function (results) { return { source: "closest", kind: "closest", results }; })
+    .catch(function (error) { return { source: "closest", kind: "failed", error }; });
+
+  try {
+    const first = await Promise.race([exactPromise, closestPromise]);
+    if (first.kind === "exact") return first;
+    if (first.kind === "closest" && !first.results.some(function (item) {
+      return item.barcode === code;
+    })) return first;
+    if (first.source === "exact" && onMissingExact) onMissingExact();
+    const second = await (first.source === "exact" ? closestPromise : exactPromise);
+    if (second.kind === "exact") return second;
+    if (first.kind === "closest") return first;
+    if (second.kind === "closest") return second;
+    const closestFailure = first.source === "closest" ? first : second;
+    const error = new Error(closestFailure.error?.message || "No similar products found.");
+    error.code = "SEARCH_FAILED";
+    throw error;
+  } finally {
+    exactController.abort();
+    closestController.abort();
+  }
 }
 
 
