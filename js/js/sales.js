@@ -348,6 +348,17 @@ function applySalesPeriod(beginDate, endDate) {
 }
 
 
+function isUnapprovedInventoryRow(row) {
+  // billStatusDesc describes the current state. The other status strings
+  // label actions (approve/unapprove) and can show the opposite state.
+  const status = String(row?.billStatusDesc || "").replace(/<[^>]*>/g, "").trim();
+  if (status.includes("未审核")) return true;
+  if (status.includes("已审核")) return false;
+  // The ERP also represents unapproved stock entries with bill_status 1.
+  return String(row?.bill_status ?? "").trim() === "1";
+}
+
+
 function sumActivityPeriods(rows, today) {
   const end = parseSalesDate(today, true);
   return [1, 7, 30, 90].map(function (days) {
@@ -398,7 +409,9 @@ function startProductActivityLookup(lookupOptions = {}) {
     if (sequence !== state.productActivityLookupSequence) return;
     state.productActivityTotals = {
       sales: sumActivityPeriods(sales, today),
-      inventory: sumActivityPeriods(inventory, today)
+      inventory: sumActivityPeriods(inventory.filter(function (row) {
+        return !isUnapprovedInventoryRow(row);
+      }), today)
     };
     state.productActivityDate = today;
   }).catch(function (error) {
