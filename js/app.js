@@ -68,16 +68,14 @@ async function init() {
     document.body.classList.add("is-scroll-locked");
   }
 
-  // Keep authentication and offline precaching out of scanner startup.
+  // Keep authentication out of scanner startup. app-updates.js registers the
+  // service worker independently so update checks do not wait for the camera.
   function finishStartup() {
     scheduleIdleWork(function () {
       loginAndRefreshCookie(savedSettings).catch(function (error) {
         const message = error.message || "Cookie refresh failed.";
         saveCookieState(state.authCookie || "", `Cookie refresh failed: ${message}`);
       });
-      if ("serviceWorker" in navigator && window.isSecureContext) {
-        navigator.serviceWorker.register("sw.js").catch(function () {});
-      }
     });
   }
 

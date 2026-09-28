@@ -1,6 +1,7 @@
 // Offline app shell. All paths are resolved against the service worker scope
 // so installs work both at the domain root and from a deployed subfolder.
-const CACHE_NAME = 'webscanner-v26';
+const CACHE_NAME = 'webscanner-v27';
+const APP_VERSION = '86';
 const APP_SHELL_URL = new URL('index.html', self.registration.scope).toString();
 const CACHEABLE_DESTINATIONS = new Set(['script', 'style', 'document', 'image', 'font']);
 const ASSETS_TO_CACHE = [
@@ -17,6 +18,7 @@ const ASSETS_TO_CACHE = [
   'css/history.css',
   'css/dialogs.css?v=78',
   'css/responsive.css',
+  'js/app-updates.js?v=86',
   'js/zxing-scanner.js?v=74',
   'js/zxing-worker.js?v=74',
   'js/vendor/zxing-wasm/3.1.2/reader.js',
@@ -29,13 +31,13 @@ const ASSETS_TO_CACHE = [
   'js/settings.js?v=69',
   'js/input-mode.js?v=81',
   'js/product.js?v=85',
-  'js/api.js?v=85',
+  'js/api.js?v=86',
   'js/sales.js?v=83',
-  'js/closest-search.js?v=85',
+  'js/closest-search.js?v=86',
   'js/history.js?v=80',
   'js/camera.js?v=74',
   'js/events.js?v=81',
-  'js/app.js?v=71'
+  'js/app.js?v=86'
 ].map((url) => new URL(url, self.registration.scope).toString());
 
 self.addEventListener('install', (event) => {
@@ -46,7 +48,7 @@ self.addEventListener('install', (event) => {
       // everything — the moment a single request fails).
       Promise.allSettled(
         ASSETS_TO_CACHE.map((url) =>
-          fetch(url).then((response) => {
+          fetch(url, { cache: 'reload' }).then((response) => {
             if (response && response.ok) {
               return cache.put(url, response);
             }
@@ -55,25 +57,35 @@ self.addEventListener('install', (event) => {
           })
         )
       )
-    )
+    ).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
       keys.filter((k) => k.startsWith('webscanner-') && k !== CACHE_NAME).map((k) => caches.delete(k))
-    ))
+    )).then(async () => {
+      await self.clients.claim();
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach((client) => client.postMessage({ type: 'APP_VERSION', version: APP_VERSION }));
+    })
   );
-  self.clients.claim();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'GET_APP_VERSION') {
+    event.source?.postMessage({ type: 'APP_VERSION', version: APP_VERSION });
+  }
 });
 
 self.addEventListener('fetch', (event) => {
+  const requestUrl = new URL(event.request.url);
+  // Let live ERP/proxy requests go straight to the network.
+  if (event.request.method !== 'GET' || requestUrl.origin !== self.location.origin) return;
   // Versioned decoder files are immutable. Reuse them without downloading the
   // WASM binary again while the camera is starting on every repeat visit.
-  const requestUrl = new URL(event.request.url);
-  if (event.request.method === 'GET' && ASSETS_TO_CACHE.includes(requestUrl.href) &&
+  if (ASSETS_TO_CACHE.includes(requestUrl.href) &&
       requestUrl.pathname.includes('/vendor/zxing-wasm/')) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
@@ -85,50 +97,37 @@ self.addEventListener('fetch', (event) => {
     })());
     return;
   }
-  // Stale-while-revalidate for navigations too: serve the cached app shell
-  // instantly (no network round-trip on the critical "app becomes visible"
-  // path), then silently refetch in the background so the next load picks
-  // up any update. Falls back to network if nothing is cached yet.
+  // Online reloads get current HTML, including new script version URLs.
+  // Keep the latest successful page available when offline.
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      caches.match(event.request).then((cachedRequest) => cachedRequest || caches.match(APP_SHELL_URL)).then((cached) => {
-        const networkUpdate = fetch(event.request).then((response) => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            const shellCopy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, copy);
-              cache.put(APP_SHELL_URL, shellCopy);
-            });
-          }
-          return response;
-        }).catch(() => cached);
-
-        return cached || networkUpdate;
-      })
-    );
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      let response;
+      try {
+        response = await fetch(event.request, { cache: 'no-store' });
+      } catch (_) {}
+      if (response?.ok) {
+        await Promise.all([
+          cache.put(event.request, response.clone()),
+          cache.put(APP_SHELL_URL, response.clone())
+        ]).catch(() => {});
+        return response;
+      }
+      return await cache.match(event.request) || await cache.match(APP_SHELL_URL) || response || Response.error();
+    })());
     return;
   }
 
-  // For other requests, try cache first then network (stale-while-revalidate).
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const networkFetch = fetch(event.request).then((resp) => {
-        // Cache same-origin app resources that may be needed offline.
-        try {
-          const requestUrl = new URL(event.request.url);
-          if (requestUrl.origin === location.origin && resp && resp.ok && (CACHEABLE_DESTINATIONS.has(event.request.destination) || ASSETS_TO_CACHE.includes(requestUrl.href))) {
-            const copy = resp.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-        } catch (e) {
-          // ignore
-        }
-        return resp;
-      }).catch(() => cached || Response.error());
-
-      // Serve cached immediately if we have it; otherwise wait on network.
-      return cached || networkFetch;
-    })
-  );
+  const cachePromise = caches.open(CACHE_NAME);
+  const cachedPromise = cachePromise.then((cache) => cache.match(event.request));
+  const networkFetch = fetch(event.request).then(async (response) => {
+    if (response.ok && (CACHEABLE_DESTINATIONS.has(event.request.destination) || ASSETS_TO_CACHE.includes(requestUrl.href))) {
+      const cache = await cachePromise;
+      await cache.put(event.request, response.clone()).catch(() => {});
+    }
+    return response;
+  }).catch(async () => await cachedPromise || Response.error());
+  // Keep background cache writes alive even after returning a cached response.
+  event.waitUntil(networkFetch.then(() => {}));
+  event.respondWith(cachedPromise.then((cached) => cached || networkFetch));
 });

@@ -55,7 +55,8 @@ Camera access and WASM initialization run concurrently. The saved camera is
 requested directly; device labels load after playback begins. Playback uses
 `video.play()` without a separate metadata wait, and resolution constraints
 are applied only in the initial camera request. Optional focus controls do not
-block startup. Authentication and service-worker registration run afterward.
+block startup. Authentication runs afterward. Service-worker registration and
+update checks run independently of camera startup.
 Versioned decoder assets use the offline cache without background re-downloads.
 
 Run `node tests/scanner-startup.cjs` to verify concurrent initialization and
@@ -67,3 +68,28 @@ On iPhone, window focus and initial pageshow no longer trigger camera recovery.
 Actual foreground returns and frozen-stream recovery remain supported. Recovery
 checks are skipped while camera startup is in progress. The camera fallback is
 only used if the initial camera request fails, never to replace a working stream.
+
+## Search retries and app updates
+
+Search starts exact and partial lookups together. Read-only product and closest
+search requests retry temporary HTTP 408, 429, 5xx and network failures, up to
+three attempts with 200ms and 400ms waits. A usable result cancels the unused
+lookup and any scheduled retry. Writes are never retried automatically. A
+persistent failure still shows an error and re-enables Search.
+
+Upload `index.html`, `sw.js`, and the `js/` directory together for this release.
+Online reloads fetch current HTML and its versioned scripts; offline reloads
+use the latest cached page. An open app checks for updates on return and every
+five minutes, and offers **Reload** when a new version activates. Reload keeps
+the current barcode and quantity, saved login, settings, cookies, and history.
+No browser-data deletion is needed. An installation using the previous service
+worker may need a second ordinary reload after the new worker finishes installing.
+
+For future releases, update the `webscanner-version` meta value in `index.html`
+and `APP_VERSION` in `sw.js` together, increment `CACHE_NAME`, and update the
+URLs of changed scripts in both files. `sw.js` keeps its stable registration
+URL and bypasses HTTP cache for update checks.
+
+Run `node tests/search-browser.cjs` for transient and persistent search failures
+and `node tests/app-updates-browser.cjs` for real service-worker upgrades,
+storage preservation, HTTP cache bypass, subfolder hosting, and offline use.

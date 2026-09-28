@@ -9,7 +9,7 @@ async function fetchClosestSearchResults(barcode, options) {
   }
 
   const cookie = await getCookieForRequests();
-  const response = await apiFetch(CONFIG.closestSearchProxyEndpoint, {
+  const response = await fetchReadOnlyProxyWithRetry(CONFIG.closestSearchProxyEndpoint, {
     method: "POST",
     signal: options?.signal,
     body: JSON.stringify({
