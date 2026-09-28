@@ -305,12 +305,11 @@
     touch-action: manipulation;
   }
 
-  .activity-slide { position: relative; }
-  .activity-loader { position: absolute; top: 7px; right: 10px; }
-  .activity-row + .activity-row { margin-top: 12px; }
-  .activity-row h3 { margin: 0 24px 5px 0; font-size: .62rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-  .activity-periods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-  .activity-periods label { font-size: .58rem; letter-spacing: 0; }
-  .activity-error { margin: 6px 0; color: var(--danger); font-size: .75rem; }
-  .activity-retry { margin-top: 4px; padding: 4px 12px; min-height: 28px; }
-  .activity-retry[hidden], .activity-error[hidden] { display: none; }
+    .activity-slide { position: relative; }
+    .activity-loader { position: absolute; top: 22px; right: 10px; width: 12px; height: 12px; }
+    .activity-row + .activity-row { margin-top: 12px; }
+    .activity-periods { display: grid; grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .activity-periods label { font-size: .58rem; letter-spacing: 0; text-transform: none; white-space: nowrap; }
+    .activity-error { position: absolute; inset: 0; margin: 0; padding: 5px 8px 36px; overflow: auto; background: var(--panel); color: var(--danger); font-size: .75rem; }
+    .activity-retry[hidden], .activity-error[hidden] { display: none; }
+    .activity-retry { position: absolute; bottom: 0; right: 8px; padding: 4px 12px; min-height: 28px; }
