@@ -202,7 +202,6 @@ async function fetchSalesPerformance(code, cookie, options) {
   const beginDate = formatSalesDateForRequest(options.beginDate);
   const endDate = formatSalesEndDateForRequest(options.endDate);
   const proxyEndpoint = String(CONFIG.salesPerformanceProxyEndpoint || "").trim();
-  const rows = options.rows;
 
   if (!proxyEndpoint) {
     throw new Error("Sales performance Cloudflare Worker endpoint is not configured.");
@@ -217,9 +216,7 @@ async function fetchSalesPerformance(code, cookie, options) {
       cookie: cookie,
       type: options.type,
       beginDate: beginDate,
-      endDate: endDate,
-      page: options.page,
-      rows: rows
+      endDate: endDate
     }),
     headers: {
       Accept: "application/json, text/plain, */*",
@@ -249,44 +246,28 @@ async function fetchSalesPerformance(code, cookie, options) {
 
 
 async function loadSalesPerformanceRows(code, options = {}) {
-  // Snapshot the period before awaiting the session or any page requests.
+  // Snapshot the period before awaiting the session or activity response.
   const requestOptions = {
     type: "sales",
     beginDate: state.salesBeginDate,
     endDate: state.salesEndDate,
-    ...options,
-    rows: Math.min(1000, Math.max(1, Math.floor(Number(CONFIG.salesPerformanceRows) || 500)))
+    ...options
   };
   const cookie = await getCookieForRequests();
-  const rows = [];
-  let previousPage = "";
-  for (let page = 1; page <= 100; page += 1) {
-    const responseText = await fetchSalesPerformance(code, cookie, { ...requestOptions, page });
-    let parsed;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      throw new Error("Activity response was not valid JSON. Refresh your login and retry.");
-    }
-    const pageRows = extractSalesRows(parsed);
-    if (requestOptions.type === "inventory" && pageRows.some(function (row) {
-      return String(row?.invoicesType || "").trim() === "结算记录";
-    })) {
-      throw new Error("Insert request returned sales records. Deploy the updated salesperformance Worker.");
-    }
-    const pageSignature = JSON.stringify(pageRows);
-    if (pageRows.length && pageSignature === previousPage) {
-      throw new Error("The activity endpoint repeated a page; totals could not be completed.");
-    }
-    rows.push(...pageRows);
-    const total = parsed?.total === undefined ? NaN : Number(parsed.total);
-    if (pageRows.length < requestOptions.rows ||
-        (Number.isFinite(total) && total >= 0 && rows.length >= total)) {
-      return rows;
-    }
-    previousPage = pageSignature;
+  const responseText = await fetchSalesPerformance(code, cookie, requestOptions);
+  let parsed;
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    throw new Error("Activity response was not valid JSON. Refresh your login and retry.");
   }
-  throw new Error("Too many activity pages; narrow the sales period and retry.");
+  const rows = extractSalesRows(parsed);
+  if (requestOptions.type === "inventory" && rows.some(function (row) {
+    return String(row?.invoicesType || "").trim() === "结算记录";
+  })) {
+    throw new Error("Insert request returned sales records. Deploy the updated salesperformance Worker.");
+  }
+  return rows;
 }
 
 

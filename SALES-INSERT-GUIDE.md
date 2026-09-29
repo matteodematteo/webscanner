@@ -153,9 +153,7 @@ Example sales summary request for a reference date of 2026-09-28:
   "cookie": "SESSION=YOUR_SAVED_SESSION",
   "type": "sales",
   "beginDate": "2026-07-01 00:00:00",
-  "endDate": "2026-09-28 23:59:59",
-  "page": 1,
-  "rows": 500
+  "endDate": "2026-09-28 23:59:59"
 }
 ```
 
@@ -174,9 +172,11 @@ The supplied HAR demonstrates these GET upstream endpoints:
 - Sales: `https://www.lgerp.cc/sellAccountCode/findGoodsAnalyze`.
 - Insert: `https://www.lgerp.cc/stock/findGoodsAnalyze`.
 
-Forward `goodsCode`, `person`, `operator`, `beginDate`, `endDate`, `page`, and `rows`
+Forward `goodsCode`, `person`, `operator`, `beginDate`, and `endDate`
 as query parameters. Forward the saved session as the upstream `Cookie` header.
 Keep `person` and `operator` empty unless explicitly supplied.
+Omit `page` and `rows` from both the browser body and upstream URL; the endpoint
+is requested once per activity type and period without pagination parameters.
 
 The Worker defaults to sales when `type` is omitted, preserving older clients.
 Allow only the two fixed routes. Handle OPTIONS and return CORS headers on both
@@ -198,15 +198,15 @@ uploading the app files to GitHub Pages. Never silently count a response from an
 older sales-only Worker as insert data. Show an error explaining that the Worker
 needs updating, with Retry available after deployment.
 
-### Pagination and stale responses
+### Complete responses and stale responses
 
-Load every page before calculating totals. Start at page 1 and increment the page
-number until fewer than `rows` records arrive, or a supplied total count has been
-reached. Default to 500 rows per page and cap the requested page size at 1000.
+Wait for the complete response and calculate totals from all returned records,
+including responses larger than 500 or 1000 records. Do not split the request into
+pages or cap the number of records used in calculations. Keep the loading circle
+visible while the response is pending.
 
-Detect repeated pages and enforce a reasonable page limit. Show an error rather
-than reporting incomplete totals. Snapshot product and period before requesting
-pages. Keep separate request sequences and abort controllers for the custom Sales
+Snapshot product and period before requesting data.
+Keep separate request sequences and abort controllers for the custom Sales
 card and the fourth tab. Cancel/invalidate previous requests when the product
 changes, so a late response cannot populate the new product's values.
 
@@ -241,7 +241,7 @@ If the description does not specify approval, `bill_status: 1` (including the st
 `"1"`) also means unapproved. Keep rows with no approval information for compatibility.
 Do not use `bill_status_toString` or `backStatusDesc` for filtering: they describe
 actions and can contain `已审核` on an unapproved record. Apply this filter only to
-insert totals, after collecting all pages, leaving sales calculations unchanged.
+insert totals after receiving the complete response, leaving sales calculations unchanged.
 
 Format quantities to at most two decimal places and remove unnecessary trailing
 zeros. Keep zero distinct from loading, missing data, and errors.
@@ -254,7 +254,7 @@ Update these existing files as needed:
   period-dialog markup.
 - `js/dom.js`: cache the new elements.
 - `js/state.js`: independent Sales-card and summary state.
-- `js/sales.js`: Worker requests, pagination, periods, totals, loading, and retry.
+- `js/sales.js`: Worker requests, periods, totals, loading, and retry.
 - `js/input-mode.js`: recognize slide index 3 and trigger the summary on selection.
 - `js/events.js`: Apply-only custom sales, All clearing inputs, and explicit Retry.
 - `js/product.js`: set the selected goods code without requesting the Sales card.
@@ -280,7 +280,8 @@ Verify the following behaviors:
 - Clicking Period, changing dates, clicking All, or closing the dialog sends no
   Sales-card request; clicking Apply does.
 - Boundaries include midnight and the end date, with correct 7/30/90-day totals.
-- Pagination includes all rows; old responses cannot overwrite a new product.
+- One request includes all returned records, even above 1000 records, without
+  `page` or `rows` parameters; old responses cannot overwrite a new product.
 - Failures show Retry and stop loading; empty successful responses show zero.
 - Unapproved insert records contribute zero, including the example with quantity 3,
   `bill_status: 1`, `billStatusDesc` containing `未审核`, and action labels containing
@@ -313,9 +314,9 @@ Paste this code into the existing salesperformance Worker and deploy it.
 /**
  * Worker for https://salesperformance.mattoteo96.workers.dev/.
  * Browser POST: { goodsCode, cookie, type: "sales" | "inventory",
- *                 beginDate, endDate, page, rows }.
+ *                 beginDate, endDate }.
  * Omitting type preserves the existing sales request contract.
- * Paths and query parameters match www.examplerequest.har.
+ * Paths match www.examplerequest.har; omit page and rows to request all records.
  */
 const UPSTREAM_URLS = {
   sales: "https://www.lgerp.cc/sellAccountCode/findGoodsAnalyze",
@@ -334,11 +335,6 @@ function json(value, status = 200, headers = {}) {
     status,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...headers }
   });
-}
-
-function positiveInteger(value, fallback, maximum) {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.min(maximum, Math.max(1, Math.floor(number))) : fallback;
 }
 
 export default {
@@ -362,9 +358,7 @@ export default {
       person: String(body?.person || ""),
       operator: String(body?.operator || ""),
       beginDate: String(body?.beginDate || ""),
-      endDate: String(body?.endDate || ""),
-      page: String(positiveInteger(body?.page ?? 1, 1, 100000)),
-      rows: String(positiveInteger(body?.rows ?? 500, 500, 1000))
+      endDate: String(body?.endDate || "")
     });
     const headers = new Headers({
       Accept: "application/json, text/javascript, */*; q=0.01",

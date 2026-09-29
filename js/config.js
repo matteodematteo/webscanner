@@ -13,7 +13,6 @@ const CONFIG = {
     updateProxyEndpoint: "https://lgkillerupdate.mattoteo96.workers.dev/",
     addProductProxyEndpoint: "https://lgkilleraddproduct.mattoteo96.workers.dev/",
     sendTxtEndpoint: "https://withered-base-e090.mattoteo96.workers.dev/",
-    salesPerformanceRows: 500,
     settingsStorageKey: "web_barcode_scanner_settings",
     cookieStorageKey: "web_barcode_scanner_cookie",
     cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
