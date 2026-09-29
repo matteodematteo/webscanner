@@ -97,9 +97,11 @@ tab is active loads that barcode's summary. Scans on tabs one and two do not loa
 salesperformance data. Older product or discount responses must not change the target.
 
 Fetch the last 90 days once for each data type and calculate all four totals from
-those rows. Keep a completed summary while the tab remains active; re-entering the
-tab refreshes it. Avoid duplicate requests from repeated scroll events, history
-renders, or discount responses while loading or after a successful result.
+those rows. Save one completed 90-day sales result and one completed 90-day insert
+result locally, each with its barcode and exact request dates. Re-entering the tab
+or reloading the app reuses a matching result. If only one source fails, Retry
+requests only that source. Avoid duplicate requests from repeated scroll events,
+history renders, or discount responses while loading or after a successful result.
 Require the selected slide to have finished moving into view before dispatching.
 Cancel requests when the tab is left or hidden, or history becomes empty. Check
 visibility and barcode again after awaiting login so a late session refresh
@@ -117,7 +119,10 @@ The existing card is `#field_sales_quantity_card`. Its value is
 
 Load this card when tab three becomes active and visible, using the newest captured
 barcode in history and the applied period. A new capture while tab three is active
-loads sales for that barcode. Clicking `#salesPeriodApplyBtn` also reloads the card.
+loads sales for that barcode. Clicking `#salesPeriodApplyBtn` checks the saved
+barcode and period first; it sends a request only when there is no matching
+completed result. Save one custom-period result and restore its selected dates on
+reload for the same newest barcode.
 Send no request when history is empty or tab three is hidden or inactive. Cancel
 pending work when leaving the tab, and stop its loading circle without showing an error.
 The fourth tab's requests must not update this card or its selected period.
@@ -217,6 +222,31 @@ Keep separate request sequences and abort controllers for the custom Sales
 card and the fourth tab. Cancel/invalidate previous requests when the product
 changes, so a late response cannot populate the new product's values.
 
+### Saved request settings
+
+Use three independent local storage entries for the latest custom-period sales,
+90-day summary sales, and 90-day summary inventory requests. Each entry records
+`barcode`, `type`, `beginDate`, `endDate`, and `result`. Keep only the most recent
+version per entry. The summary requests span 90 days; their one response per source
+provides all today, 7, 30, and 90-day values. The custom result is its final
+period total. Do not persist cookies or full ERP rows in these entries.
+
+Compare the exact formatted request dates and barcode before using a result.
+Restore the last custom period after loading history when its barcode still matches.
+Record the latest request settings as it starts, then add the result only on
+success. Failed, invalid, aborted, or unverified responses remain retryable;
+they must not be mistaken for valid zero quantities. On a new local day, the
+summary date boundaries change and both summary sources are requested again.
+
+`refreshCookieBtn` is an explicit exception to the saved-result rule. After a
+successful login, if tab three or four is visible and history has a barcode,
+send all three requests with the newly returned cookie: custom-period sales,
+90-day sales, and 90-day inventory. Replace their saved results on success,
+update both tab displays, and keep source verification and approval filtering.
+Keep the button disabled until these requests finish. If login fails, history is
+empty, or another tab is active when login completes, send no activity request.
+Ordinary scans and tab switches still reuse matching saved results.
+
 ## 4. Quantity and calendar calculations
 
 Rows in the HAR contain `quantity` and `operatortime`, for example:
@@ -260,12 +290,14 @@ Update these existing files as needed:
 - `index.html`: fourth slide, fourth navigation dot, compact styles, and existing
   period-dialog markup.
 - `js/dom.js`: cache the new elements.
-- `js/state.js`: independent Sales-card and summary state.
+- `js/state.js`: independent Sales-card and summary state, including the cached
+  custom total for rendering without full response rows.
 - `js/sales.js`: Worker requests, periods, totals, loading, and retry.
 - `js/input-mode.js`: trigger the matching requests for visible slide index 2 or 3,
   cancel inactive requests, and handle hidden product controls and page visibility.
 - `js/history.js`: keep the request target synchronized with the newest capture
   and cancel requests when history is emptied.
+- `js/app.js`: restore the last custom period after loading history.
 - `js/events.js`: custom-period Apply, All clearing inputs, and explicit Retry.
 - `js/product.js`: synchronize product responses with the latest captured code
   without starting requests for inactive tabs or an older product.
@@ -291,7 +323,14 @@ Verify the following behaviors:
   the correct Worker, Retry fetches the stock quantities.
 - Completed totals remain independent of the custom-period card.
 - Clicking Period, changing dates, clicking All, or closing the dialog sends no
-  Sales-card request; clicking Apply does while tab three is active with history.
+  Sales-card request; clicking Apply loads or reuses a matching result while tab
+  three is active with history.
+- Identical successful barcode/timeframe settings reuse results after tab switches
+  and reloads. A changed barcode or date range sends a request. Failed sources
+  remain retryable without resending a successful source.
+- Clicking the cookie refresh button on either sales tab sends one login request
+  followed by all three activity requests with that new cookie, even when all
+  three results were already saved. A failed login sends none.
 - Leaving or hiding a tab cancels pending requests. Waiting for login must not
   dispatch requests after the tab is left or history becomes empty.
 - Boundaries include midnight and the end date, with correct 7/30/90-day totals.

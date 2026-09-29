@@ -2,6 +2,46 @@
 
 /* On-demand sales quantity and product activity lookups */
 
+const SALES_REQUEST_CACHE_KEYS = {
+  custom: "web_barcode_scanner_sales_request_custom_v1",
+  summarySales: "web_barcode_scanner_sales_request_summary_sales_v1",
+  summaryInventory: "web_barcode_scanner_sales_request_summary_inventory_v1"
+};
+
+
+function salesRequestParams(barcode, type, beginDate, endDate) {
+  return {
+    barcode,
+    type,
+    beginDate: formatSalesDateForRequest(beginDate),
+    endDate: formatSalesEndDateForRequest(endDate)
+  };
+}
+
+
+function readSalesRequestCache(kind, params) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(SALES_REQUEST_CACHE_KEYS[kind]));
+    if (!cached || cached.barcode !== params.barcode || cached.type !== params.type ||
+        cached.beginDate !== params.beginDate || cached.endDate !== params.endDate) return null;
+    const value = cached.result;
+    if (kind === "custom") return typeof value === "number" && Number.isFinite(value) ? value : null;
+    return Array.isArray(value) && value.length === 4 &&
+      value.every(number => typeof number === "number" && Number.isFinite(number)) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+
+function saveSalesRequestCache(kind, params, result) {
+  try {
+    localStorage.setItem(SALES_REQUEST_CACHE_KEYS[kind], JSON.stringify({ ...params, result }));
+  } catch {
+    // Browsing still works when local storage is blocked or full.
+  }
+}
+
 function formatSalesQuantity(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -157,7 +197,7 @@ function renderSalesQuantity() {
   } else if (state.salesError || !state.hasSalesResult) {
     valueEl.textContent = "—";
   } else {
-    valueEl.textContent = formatSalesQuantity(sumSalesQuantity(state.salesRows));
+    valueEl.textContent = formatSalesQuantity(state.salesQuantityTotal ?? sumSalesQuantity(state.salesRows));
   }
 
   if (periodBtn) {
@@ -174,14 +214,17 @@ function clearSalesData() {
   state.salesLookupSequence += 1;
   state.salesBarcode = "";
   state.salesRows = [];
+  state.salesQuantityTotal = null;
   state.isSalesLoading = false;
   state.hasSalesResult = false;
   state.salesError = false;
+  state.salesRefreshAllInFlight = false;
   state.productActivityLookupSequence += 1;
   state.productActivityTotals = null;
   state.productActivityDate = "";
   state.isProductActivityLoading = false;
   state.productActivityError = "";
+  state.productActivityRefreshAllInFlight = false;
   renderSalesQuantity();
   renderProductActivity();
 }
@@ -189,6 +232,20 @@ function clearSalesData() {
 
 function getLatestSalesBarcode() {
   return String(state.history[0]?.barcode || "").trim();
+}
+
+
+function restoreSalesPeriodFromSavedRequest() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SALES_REQUEST_CACHE_KEYS.custom));
+    if (!saved || saved.barcode !== getLatestSalesBarcode() || saved.type !== "sales" ||
+        !/^(?:|\d{4}-\d{2}-\d{2} 00:00:00)$/.test(saved.beginDate) ||
+        !/^(?:|\d{4}-\d{2}-\d{2} 23:59:59)$/.test(saved.endDate)) return;
+    state.salesBeginDate = saved.beginDate.slice(0, 10);
+    state.salesEndDate = saved.endDate.slice(0, 10);
+  } catch {
+    // Use the default period if saved request settings are unavailable.
+  }
 }
 
 
@@ -203,11 +260,17 @@ function isSalesTabActive(index) {
 }
 
 
+function isEitherSalesTabActive() {
+  return isSalesTabActive(2) || isSalesTabActive(3);
+}
+
+
 function cancelSalesPerformanceLookup() {
   if (!state.isSalesLoading) return;
   state.salesLookupSequence += 1;
   state.salesAbortController?.abort();
   state.isSalesLoading = false;
+  state.salesRefreshAllInFlight = false;
   renderSalesQuantity();
 }
 
@@ -217,6 +280,7 @@ function cancelProductActivityLookup() {
   state.productActivityLookupSequence += 1;
   state.productActivityAbortController?.abort();
   state.isProductActivityLoading = false;
+  state.productActivityRefreshAllInFlight = false;
   renderProductActivity();
 }
 
@@ -231,6 +295,7 @@ function syncSalesPerformanceRequests(options = {}) {
   if (options.refresh && state.productInfoSlideIndex === 2) {
     state.hasSalesResult = false;
     state.salesError = false;
+    state.salesQuantityTotal = null;
   }
   if (options.refresh && state.productInfoSlideIndex === 3) {
     state.productActivityTotals = null;
@@ -238,13 +303,34 @@ function syncSalesPerformanceRequests(options = {}) {
   }
   const salesActive = isSalesTabActive(2);
   const activityActive = isSalesTabActive(3);
-  if (!code || !salesActive) cancelSalesPerformanceLookup();
-  if (!code || !activityActive) cancelProductActivityLookup();
+  const eitherActive = salesActive || activityActive;
+  if (!code || (!salesActive && !(state.salesRefreshAllInFlight && eitherActive))) {
+    cancelSalesPerformanceLookup();
+  }
+  if (!code || (!activityActive && !(state.productActivityRefreshAllInFlight && eitherActive))) {
+    cancelProductActivityLookup();
+  }
   if (!code) return;
   if (salesActive && !state.isSalesLoading && !state.hasSalesResult && !state.salesError) {
     return startSalesPerformanceLookup(code);
   }
   if (activityActive) return startProductActivityLookup();
+}
+
+
+function refreshSalesPerformanceAfterLogin(cookie) {
+  const code = getLatestSalesBarcode();
+  if (!cookie || !code || !isEitherSalesTabActive()) return;
+  if (code !== state.salesBarcode) {
+    clearSalesData();
+    state.salesBarcode = code;
+  }
+  // The explicit refresh replaces all three saved results, including the
+  // result for the other sales tab. Normal tab changes still use the cache.
+  return Promise.all([
+    startSalesPerformanceLookup(code, { force: true, cookie }),
+    startProductActivityLookup({ force: true, cookie })
+  ]);
 }
 
 
@@ -311,9 +397,11 @@ async function loadSalesPerformanceRows(code, options = {}) {
     endDate: state.salesEndDate,
     ...options
   };
-  const cookie = await getCookieForRequests();
+  const cookie = requestOptions.cookie || await getCookieForRequests();
+  const activeTabs = Array.isArray(requestOptions.activeTab)
+    ? requestOptions.activeTab : [requestOptions.activeTab];
   if (requestOptions.signal?.aborted || (requestOptions.activeTab !== undefined &&
-      (!isSalesTabActive(requestOptions.activeTab) || getLatestSalesBarcode() !== code))) {
+      (!activeTabs.some(isSalesTabActive) || getLatestSalesBarcode() !== code))) {
     throw new Error("Activity tab is no longer active for this barcode.");
   }
   const responseText = await fetchSalesPerformance(code, cookie, requestOptions);
@@ -333,32 +421,49 @@ async function loadSalesPerformanceRows(code, options = {}) {
 }
 
 
-function startSalesPerformanceLookup(barcode) {
+function startSalesPerformanceLookup(barcode, lookupOptions = {}) {
   const code = String(barcode || "").trim();
-  if (!code || code !== getLatestSalesBarcode() || !isSalesTabActive(2)) return;
+  if (!code || code !== getLatestSalesBarcode() ||
+      !(lookupOptions.force ? isEitherSalesTabActive() : isSalesTabActive(2))) return;
+  const params = salesRequestParams(code, "sales", state.salesBeginDate, state.salesEndDate);
   const lookupSequence = state.salesLookupSequence + 1;
   state.salesLookupSequence = lookupSequence;
   state.salesBarcode = code;
   state.salesRows = [];
+  state.salesQuantityTotal = null;
   state.salesAbortController?.abort();
-  state.salesAbortController = new AbortController();
+  state.salesRefreshAllInFlight = false;
   state.hasSalesResult = false;
   state.salesError = false;
-  state.isSalesLoading = Boolean(code);
-  renderSalesQuantity();
-
-  if (!code) {
+  const cachedTotal = lookupOptions.force ? null : readSalesRequestCache("custom", params);
+  if (cachedTotal !== null) {
+    state.salesQuantityTotal = cachedTotal;
+    state.hasSalesResult = true;
+    state.isSalesLoading = false;
+    renderSalesQuantity();
     return;
   }
+  saveSalesRequestCache("custom", params, null);
+  state.salesAbortController = new AbortController();
+  state.isSalesLoading = true;
+  state.salesRefreshAllInFlight = Boolean(lookupOptions.force);
+  renderSalesQuantity();
 
-  return loadSalesPerformanceRows(code, { signal: state.salesAbortController.signal, activeTab: 2 })
+  return loadSalesPerformanceRows(code, {
+    signal: state.salesAbortController.signal,
+    activeTab: lookupOptions.force ? [2, 3] : 2,
+    cookie: lookupOptions.cookie
+  })
     .then(function (rows) {
       if (lookupSequence !== state.salesLookupSequence) {
         return;
       }
       state.salesRows = rows;
+      state.salesQuantityTotal = sumSalesQuantity(rows);
+      saveSalesRequestCache("custom", params, state.salesQuantityTotal);
       state.hasSalesResult = true;
       state.isSalesLoading = false;
+      state.salesRefreshAllInFlight = false;
       renderSalesQuantity();
     })
     .catch(function () {
@@ -367,6 +472,7 @@ function startSalesPerformanceLookup(barcode) {
       }
       state.salesRows = [];
       state.isSalesLoading = false;
+      state.salesRefreshAllInFlight = false;
       state.salesError = true;
       renderSalesQuantity();
     });
@@ -406,6 +512,7 @@ function applySalesPeriod(beginDate, endDate) {
   cancelSalesPerformanceLookup();
   state.hasSalesResult = false;
   state.salesError = false;
+  state.salesQuantityTotal = null;
   renderSalesQuantity();
   syncSalesPerformanceRequests();
   return true;
@@ -455,29 +562,62 @@ function renderProductActivity() {
 function startProductActivityLookup(lookupOptions = {}) {
   const code = state.salesBarcode;
   const today = getSalesPeriodDate(0);
-  if (!isSalesTabActive(3) || !code || code !== getLatestSalesBarcode() ||
-      state.isProductActivityLoading || (state.productActivityError && !lookupOptions.retry) ||
-      (state.productActivityTotals && state.productActivityDate === today)) return;
+  if (!(lookupOptions.force ? isEitherSalesTabActive() : isSalesTabActive(3)) ||
+      !code || code !== getLatestSalesBarcode() ||
+      (state.isProductActivityLoading && !lookupOptions.force) ||
+      (state.productActivityError && !lookupOptions.retry && !lookupOptions.force) ||
+      (state.productActivityTotals && state.productActivityDate === today && !lookupOptions.force)) return;
+  const beginDate = getSalesPeriodDate(89);
+  const salesParams = salesRequestParams(code, "sales", beginDate, today);
+  const inventoryParams = salesRequestParams(code, "inventory", beginDate, today);
+  const cachedSales = lookupOptions.force ? null : readSalesRequestCache("summarySales", salesParams);
+  const cachedInventory = lookupOptions.force ? null : readSalesRequestCache("summaryInventory", inventoryParams);
   const sequence = ++state.productActivityLookupSequence;
   state.productActivityAbortController?.abort();
+  state.productActivityRefreshAllInFlight = false;
+  state.productActivityError = "";
+  if (cachedSales && cachedInventory) {
+    state.productActivityTotals = { sales: cachedSales, inventory: cachedInventory };
+    state.productActivityDate = today;
+    state.isProductActivityLoading = false;
+    renderProductActivity();
+    return;
+  }
+  if (!cachedSales) saveSalesRequestCache("summarySales", salesParams, null);
+  if (!cachedInventory) saveSalesRequestCache("summaryInventory", inventoryParams, null);
   const controller = new AbortController();
   state.productActivityAbortController = controller;
   state.isProductActivityLoading = true;
+  state.productActivityRefreshAllInFlight = Boolean(lookupOptions.force);
   state.productActivityTotals = null;
-  state.productActivityError = "";
   renderProductActivity();
-  const options = { beginDate: getSalesPeriodDate(89), endDate: today, signal: controller.signal, activeTab: 3 };
+  const options = {
+    beginDate, endDate: today, signal: controller.signal,
+    activeTab: lookupOptions.force ? [2, 3] : 3,
+    cookie: lookupOptions.cookie
+  };
   return Promise.all([
-    loadSalesPerformanceRows(code, { ...options, type: "sales" }),
-    loadSalesPerformanceRows(code, { ...options, type: "inventory" })
+    cachedSales ? Promise.resolve(cachedSales) :
+      loadSalesPerformanceRows(code, { ...options, type: "sales" }).then(function (rows) {
+        const totals = sumActivityPeriods(rows, today);
+        if (sequence === state.productActivityLookupSequence && !controller.signal.aborted) {
+          saveSalesRequestCache("summarySales", salesParams, totals);
+        }
+        return totals;
+      }),
+    cachedInventory ? Promise.resolve(cachedInventory) :
+      loadSalesPerformanceRows(code, { ...options, type: "inventory" }).then(function (rows) {
+        const totals = sumActivityPeriods(rows.filter(function (row) {
+          return !isUnapprovedInventoryRow(row);
+        }), today);
+        if (sequence === state.productActivityLookupSequence && !controller.signal.aborted) {
+          saveSalesRequestCache("summaryInventory", inventoryParams, totals);
+        }
+        return totals;
+      })
   ]).then(function ([sales, inventory]) {
     if (sequence !== state.productActivityLookupSequence) return;
-    state.productActivityTotals = {
-      sales: sumActivityPeriods(sales, today),
-      inventory: sumActivityPeriods(inventory.filter(function (row) {
-        return !isUnapprovedInventoryRow(row);
-      }), today)
-    };
+    state.productActivityTotals = { sales, inventory };
     state.productActivityDate = today;
   }).catch(function (error) {
     if (sequence !== state.productActivityLookupSequence) return;
@@ -486,6 +626,7 @@ function startProductActivityLookup(lookupOptions = {}) {
   }).finally(function () {
     if (sequence !== state.productActivityLookupSequence) return;
     state.isProductActivityLoading = false;
+    state.productActivityRefreshAllInFlight = false;
     renderProductActivity();
   });
 }

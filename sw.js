@@ -1,7 +1,7 @@
 // Offline app shell. All paths are resolved against the service worker scope
 // so installs work both at the domain root and from a deployed subfolder.
-const CACHE_NAME = 'webscanner-v33';
-const APP_VERSION = '92';
+const CACHE_NAME = 'webscanner-v35';
+const APP_VERSION = '94';
 const APP_SHELL_URL = new URL('index.html', self.registration.scope).toString();
 const CACHEABLE_DESTINATIONS = new Set(['script', 'style', 'document', 'image', 'font']);
 const ASSETS_TO_CACHE = [
@@ -24,7 +24,7 @@ const ASSETS_TO_CACHE = [
   'js/vendor/zxing-wasm/3.1.2/reader.js',
   'js/vendor/zxing-wasm/3.1.2/zxing_reader.wasm',
   'js/config.js?v=91',
-  'js/state.js?v=81',
+  'js/state.js?v=94',
   'js/dom.js?v=89',
   'js/utils.js?v=69',
   'js/ui.js?v=90',
@@ -32,12 +32,12 @@ const ASSETS_TO_CACHE = [
   'js/input-mode.js?v=92',
   'js/product.js?v=88',
   'js/api.js?v=87',
-  'js/sales.js?v=92',
+  'js/sales.js?v=94',
   'js/closest-search.js?v=88',
   'js/history.js?v=92',
   'js/camera.js?v=74',
-  'js/events.js?v=87',
-  'js/app.js?v=86'
+  'js/events.js?v=94',
+  'js/app.js?v=93'
 ].map((url) => new URL(url, self.registration.scope).toString());
 
 self.addEventListener('install', (event) => {

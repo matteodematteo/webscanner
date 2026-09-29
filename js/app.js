@@ -23,6 +23,7 @@ async function init() {
   // parallel block above so they're logically grouped.
   loadCookieState();
   loadHistoryState();
+  restoreSalesPeriodFromSavedRequest();
 
   fillSettingsForm(savedSettings);
   applyDisplayMode();

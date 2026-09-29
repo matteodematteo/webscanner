@@ -321,7 +321,8 @@ function bindDeferredEvents() {
   state.els.refreshCookieBtn.addEventListener("click", async function () {
     state.els.refreshCookieBtn.disabled = true;
     try {
-      await loginAndRefreshCookie();
+      const cookie = await loginAndRefreshCookie();
+      if (cookie) await refreshSalesPerformanceAfterLogin(cookie);
     } catch (error) {
       const message = error.message || "Cookie refresh failed.";
       saveCookieState("", `Cookie refresh failed: ${message}`);
