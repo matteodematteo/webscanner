@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#131a22" />
-  <meta name="webscanner-version" content="88" />
+  <meta name="webscanner-version" content="89" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Web Scanner" />
@@ -372,7 +372,7 @@
        browsers paint the completed interface once instead of restyling sections
        progressively on a slow connection. -->
   <link rel="stylesheet" href="css/history.css" />
-  <link rel="stylesheet" href="css/dialogs.css?v=78" />
+  <link rel="stylesheet" href="css/dialogs.css?v=89" />
   <link rel="stylesheet" href="css/responsive.css" />
 
 </head>
@@ -628,6 +628,10 @@
           <option value="gate2">Gate 2</option>
         </select>
       </div>
+      <label class="print-timestamp-option" for="printTimestampCheckbox">
+        <input id="printTimestampCheckbox" type="checkbox" checked />
+        <span>Timestamp</span>
+      </label>
       <div class="dialog-actions compact-print-actions">
         <button class="btn btn-primary" id="printBigBtn" type="button">[BIG] 60*38</button>
         <button class="btn btn-primary" id="printStickerBtn" type="button">[STICKER] 40*25</button>
@@ -734,7 +738,7 @@
   <script src="js/zxing-scanner.js?v=74" defer></script>
   <script src="js/config.js?v=74" defer></script>
   <script src="js/state.js?v=81" defer></script>
-  <script src="js/dom.js?v=81" defer></script>
+  <script src="js/dom.js?v=89" defer></script>
   <script src="js/utils.js?v=69" defer></script>
   <script src="js/ui.js?v=69" defer></script>
   <script src="js/settings.js?v=69" defer></script>
@@ -743,7 +747,7 @@
   <script src="js/api.js?v=87" defer></script>
   <script src="js/sales.js?v=83" defer></script>
   <script src="js/closest-search.js?v=88" defer></script>
-  <script src="js/history.js?v=80" defer></script>
+  <script src="js/history.js?v=89" defer></script>
   <script src="js/camera.js?v=74" defer></script>
   <script src="js/events.js?v=87" defer></script>
   <script src="js/app.js?v=86" defer></script>

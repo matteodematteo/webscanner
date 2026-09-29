@@ -381,6 +381,7 @@ async function sendTxtList() {
   const payload = {
     session_id: formatSessionId(),
     session_cost: "$0.00",
+    timestamp: state.els.printTimestampCheckbox.checked,
     data: [
       {
         stack: "full_tickets",
@@ -463,6 +464,7 @@ async function printHistoryList(printType, confirmedSignature) {
     session_cost: "$1.00",
     print_type: normalizedType,
     tunnel_id: tunnelId,
+    timestamp: state.els.printTimestampCheckbox.checked,
     data: [
       {
         stack: normalizedType === "40*25" ? "sticker_tickets" : "big_tickets",
@@ -478,8 +480,8 @@ async function printHistoryList(printType, confirmedSignature) {
     if (!String(item.italian_name || "").trim()) reasons.push("name missing");
     if (reasons.length) problems.push(`Record ${index + 1} (${item.barcode || "no barcode"}): ${reasons.join(", ")}`);
   });
-  // Reconfirm if the list, destination or format changes while the dialog is open.
-  const signature = JSON.stringify([tunnelId, normalizedType, payload.data]);
+  // Reconfirm if the list or any print option changes while the dialog is open.
+  const signature = JSON.stringify([tunnelId, normalizedType, payload.timestamp, payload.data]);
   if (problems.length && confirmedSignature !== signature) {
     closePrintDialog();
     openConfirmDialog(

@@ -75,6 +75,7 @@ function getDeferredElements() {
     closestSearchBackBtn:        document.getElementById("closestSearchBackBtn"),
     printDialog:                 document.getElementById("printDialog"),
     printTunnelSelect:          document.getElementById("printTunnelSelect"),
+    printTimestampCheckbox:     document.getElementById("printTimestampCheckbox"),
     printBigBtn:                 document.getElementById("printBigBtn"),
     printStickerBtn:             document.getElementById("printStickerBtn"),
     printBackBtn:                document.getElementById("printBackBtn"),
