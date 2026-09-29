@@ -1,7 +1,7 @@
 // Offline app shell. All paths are resolved against the service worker scope
 // so installs work both at the domain root and from a deployed subfolder.
-const CACHE_NAME = 'webscanner-v30';
-const APP_VERSION = '89';
+const CACHE_NAME = 'webscanner-v31';
+const APP_VERSION = '90';
 const APP_SHELL_URL = new URL('index.html', self.registration.scope).toString();
 const CACHEABLE_DESTINATIONS = new Set(['script', 'style', 'document', 'image', 'font']);
 const ASSETS_TO_CACHE = [
@@ -27,7 +27,7 @@ const ASSETS_TO_CACHE = [
   'js/state.js?v=81',
   'js/dom.js?v=89',
   'js/utils.js?v=69',
-  'js/ui.js?v=69',
+  'js/ui.js?v=90',
   'js/settings.js?v=69',
   'js/input-mode.js?v=81',
   'js/product.js?v=88',

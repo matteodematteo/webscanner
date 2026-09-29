@@ -216,6 +216,7 @@ function closeConfirmDialog() {
 
 
 function openPrintDialog() {
+  state.els.printTimestampCheckbox.checked = true;
   state.els.printDialog.classList.add("is-open");
   state.els.printDialog.setAttribute("aria-hidden", "false");
 }
