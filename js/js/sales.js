@@ -187,14 +187,72 @@ function clearSalesData() {
 }
 
 
-function setSalesProduct(barcode) {
-  const code = String(barcode || "").trim();
+function getLatestSalesBarcode() {
+  return String(state.history[0]?.barcode || "").trim();
+}
+
+
+function isSalesTabActive(index) {
+  if (state.productInfoSlideIndex !== index || state.isQuantityEntryUnlocked ||
+      state.els?.productInfoSection?.hidden ||
+      (typeof document !== "undefined" && document.hidden)) return false;
+  const slider = state.els?.productInfoSlider;
+  // A clicked dot can change selection before the slide finishes moving.
+  return !slider || (slider.clientWidth > 0 &&
+    Math.abs(slider.scrollLeft - index * slider.clientWidth) <= 1);
+}
+
+
+function cancelSalesPerformanceLookup() {
+  if (!state.isSalesLoading) return;
+  state.salesLookupSequence += 1;
+  state.salesAbortController?.abort();
+  state.isSalesLoading = false;
+  renderSalesQuantity();
+}
+
+
+function cancelProductActivityLookup() {
+  if (!state.isProductActivityLoading) return;
+  state.productActivityLookupSequence += 1;
+  state.productActivityAbortController?.abort();
+  state.isProductActivityLoading = false;
+  renderProductActivity();
+}
+
+
+function syncSalesPerformanceRequests(options = {}) {
+  const code = getLatestSalesBarcode();
   if (code !== state.salesBarcode) {
     clearSalesData();
     state.salesBarcode = code;
     renderSalesQuantity();
   }
-  if (state.productInfoSlideIndex === 3) startProductActivityLookup();
+  if (options.refresh && state.productInfoSlideIndex === 2) {
+    state.hasSalesResult = false;
+    state.salesError = false;
+  }
+  if (options.refresh && state.productInfoSlideIndex === 3) {
+    state.productActivityTotals = null;
+    state.productActivityError = "";
+  }
+  const salesActive = isSalesTabActive(2);
+  const activityActive = isSalesTabActive(3);
+  if (!code || !salesActive) cancelSalesPerformanceLookup();
+  if (!code || !activityActive) cancelProductActivityLookup();
+  if (!code) return;
+  if (salesActive && !state.isSalesLoading && !state.hasSalesResult && !state.salesError) {
+    return startSalesPerformanceLookup(code);
+  }
+  if (activityActive) return startProductActivityLookup();
+}
+
+
+function setSalesProduct(barcode) {
+  // A late product/discount response must not replace the newest captured code.
+  if (String(barcode || "").trim() === getLatestSalesBarcode()) {
+    return syncSalesPerformanceRequests();
+  }
 }
 
 
@@ -254,6 +312,10 @@ async function loadSalesPerformanceRows(code, options = {}) {
     ...options
   };
   const cookie = await getCookieForRequests();
+  if (requestOptions.signal?.aborted || (requestOptions.activeTab !== undefined &&
+      (!isSalesTabActive(requestOptions.activeTab) || getLatestSalesBarcode() !== code))) {
+    throw new Error("Activity tab is no longer active for this barcode.");
+  }
   const responseText = await fetchSalesPerformance(code, cookie, requestOptions);
   let parsed;
   try {
@@ -273,6 +335,7 @@ async function loadSalesPerformanceRows(code, options = {}) {
 
 function startSalesPerformanceLookup(barcode) {
   const code = String(barcode || "").trim();
+  if (!code || code !== getLatestSalesBarcode() || !isSalesTabActive(2)) return;
   const lookupSequence = state.salesLookupSequence + 1;
   state.salesLookupSequence = lookupSequence;
   state.salesBarcode = code;
@@ -288,7 +351,7 @@ function startSalesPerformanceLookup(barcode) {
     return;
   }
 
-  return loadSalesPerformanceRows(code, { signal: state.salesAbortController.signal })
+  return loadSalesPerformanceRows(code, { signal: state.salesAbortController.signal, activeTab: 2 })
     .then(function (rows) {
       if (lookupSequence !== state.salesLookupSequence) {
         return;
@@ -340,10 +403,11 @@ function applySalesPeriod(beginDate, endDate) {
 
   state.salesBeginDate = nextBeginDate;
   state.salesEndDate = nextEndDate;
+  cancelSalesPerformanceLookup();
+  state.hasSalesResult = false;
+  state.salesError = false;
   renderSalesQuantity();
-  if (state.salesBarcode) {
-    startSalesPerformanceLookup(state.salesBarcode);
-  }
+  syncSalesPerformanceRequests();
   return true;
 }
 
@@ -391,7 +455,8 @@ function renderProductActivity() {
 function startProductActivityLookup(lookupOptions = {}) {
   const code = state.salesBarcode;
   const today = getSalesPeriodDate(0);
-  if (!code || state.isProductActivityLoading || (state.productActivityError && !lookupOptions.retry) ||
+  if (!isSalesTabActive(3) || !code || code !== getLatestSalesBarcode() ||
+      state.isProductActivityLoading || (state.productActivityError && !lookupOptions.retry) ||
       (state.productActivityTotals && state.productActivityDate === today)) return;
   const sequence = ++state.productActivityLookupSequence;
   state.productActivityAbortController?.abort();
@@ -401,7 +466,7 @@ function startProductActivityLookup(lookupOptions = {}) {
   state.productActivityTotals = null;
   state.productActivityError = "";
   renderProductActivity();
-  const options = { beginDate: getSalesPeriodDate(89), endDate: today, signal: controller.signal };
+  const options = { beginDate: getSalesPeriodDate(89), endDate: today, signal: controller.signal, activeTab: 3 };
   return Promise.all([
     loadSalesPerformanceRows(code, { ...options, type: "sales" }),
     loadSalesPerformanceRows(code, { ...options, type: "inventory" })

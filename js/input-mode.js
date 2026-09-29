@@ -38,6 +38,7 @@ function updateEntryModeControls() {
   if (state.els.productInfoSection) {
     state.els.productInfoSection.hidden = unlocked;
   }
+  if (typeof syncSalesPerformanceRequests === "function") syncSalesPerformanceRequests();
   state.els.entryModeIcon.innerHTML = unlocked
     ? '<path d="M16 11V8a4 4 0 0 0-7.74-1.5"></path><rect x="5" y="11" width="14" height="10" rx="2"></rect>'
     : '<rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 1 1 8 0v3"></path>';
@@ -185,9 +186,10 @@ function initProductInfoSlider() {
   const dotButtons = Array.prototype.slice.call(dots.querySelectorAll(".pi-dot"));
 
   function setActiveDot(index) {
+    const changed = state.productInfoSlideIndex !== index;
     state.productInfoSlideIndex = index;
-    if (index === 3 && typeof startProductActivityLookup === "function") {
-      startProductActivityLookup();
+    if (typeof syncSalesPerformanceRequests === "function") {
+      syncSalesPerformanceRequests({ refresh: changed });
     }
     dotButtons.forEach(function (dot, dotIndex) {
       const isActive = dotIndex === index;
@@ -222,6 +224,10 @@ function initProductInfoSlider() {
       saveProductInfoSlideIndex(index);
     }, 80);
   }, { passive: true });
+
+  document.addEventListener("visibilitychange", function () {
+    if (typeof syncSalesPerformanceRequests === "function") syncSalesPerformanceRequests();
+  });
 
   const savedIndex = Math.min(dotButtons.length - 1, Math.max(0, loadProductInfoSlideIndex()));
   setActiveDot(savedIndex);

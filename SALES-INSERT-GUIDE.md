@@ -91,12 +91,19 @@ accessible loading label.
 
 Load its sales and inventory data when the fourth tab is opened by clicking its
 dot, swiping to it, or restoring the saved slide selection.
-If a different product loads while this tab is active, load that product's summary.
+Use the newest captured barcode in history, including after restoring saved history.
+If history is empty, send no salesperformance request. A new capture while this
+tab is active loads that barcode's summary. Scans on tabs one and two do not load
+salesperformance data. Older product or discount responses must not change the target.
 
 Fetch the last 90 days once for each data type and calculate all four totals from
-those rows. Cache a completed summary for the current product and local calendar
-date. Returning to this tab on the same day must not repeat its requests.
-Avoid duplicate requests while a summary is already loading.
+those rows. Keep a completed summary while the tab remains active; re-entering the
+tab refreshes it. Avoid duplicate requests from repeated scroll events, history
+renders, or discount responses while loading or after a successful result.
+Require the selected slide to have finished moving into view before dispatching.
+Cancel requests when the tab is left or hidden, or history becomes empty. Check
+visibility and barcode again after awaiting login so a late session refresh
+cannot start a request for a hidden tab.
 
 Show `—` before a result is available or when loading fails. A successful empty
 result is `0`. Show the spinner while requests are pending; hide it on completion
@@ -108,11 +115,11 @@ request when a discount response arrives or a scroll event fires.
 The existing card is `#field_sales_quantity_card`. Its value is
 `#field_sales_quantity`; its loading circle is `#salesQuantityLoader`.
 
-**Only clicking `#salesPeriodApplyBtn` may start a request for this card.**
-
-Remove automatic Sales-card requests from barcode scanning, manual barcode lookup,
-history/product selection, and closest-match selection. Those actions can update
-the selected product and clear previous values without loading this card.
+Load this card when tab three becomes active and visible, using the newest captured
+barcode in history and the applied period. A new capture while tab three is active
+loads sales for that barcode. Clicking `#salesPeriodApplyBtn` also reloads the card.
+Send no request when history is empty or tab three is hidden or inactive. Cancel
+pending work when leaving the tab, and stop its loading circle without showing an error.
 The fourth tab's requests must not update this card or its selected period.
 
 Keep the existing period dialog:
@@ -121,7 +128,7 @@ Keep the existing period dialog:
 - `salesPeriodStartInput`: start date, using an HTML date input.
 - `salesPeriodEndInput`: end date, using an HTML date input.
 - `salesPeriodApplyBtn`: validate the dates, commit the selected period, and load
-  sales for the currently displayed product.
+  sales for the newest barcode in history if tab three is active and visible.
 - `salesPeriodAllBtn`: clear both date inputs and keep the dialog open. The user
   must click Apply to request all dates.
 - `salesPeriodBackBtn`: close the dialog without requesting data or applying edits.
@@ -255,10 +262,13 @@ Update these existing files as needed:
 - `js/dom.js`: cache the new elements.
 - `js/state.js`: independent Sales-card and summary state.
 - `js/sales.js`: Worker requests, periods, totals, loading, and retry.
-- `js/input-mode.js`: recognize slide index 3 and trigger the summary on selection.
-- `js/events.js`: Apply-only custom sales, All clearing inputs, and explicit Retry.
-- `js/product.js`: set the selected goods code without requesting the Sales card.
-- `js/closest-search.js`: remove automatic Sales-card requests from selection.
+- `js/input-mode.js`: trigger the matching requests for visible slide index 2 or 3,
+  cancel inactive requests, and handle hidden product controls and page visibility.
+- `js/history.js`: keep the request target synchronized with the newest capture
+  and cancel requests when history is emptied.
+- `js/events.js`: custom-period Apply, All clearing inputs, and explicit Retry.
+- `js/product.js`: synchronize product responses with the latest captured code
+  without starting requests for inactive tabs or an older product.
 - `js/config.js`: keep `salesPerformanceProxyEndpoint` set to the Worker URL above.
 - `sw.js`: increase the cache version and keep cached script URLs aligned with
   the script versions in `index.html`.
@@ -271,14 +281,19 @@ Apply CSS changes to the inline styles as well as the matching external CSS file
 
 Verify the following behaviors:
 
-- A scan/product selection does not request data for the custom Sales card.
+- Scans on tabs one and two send no salesperformance request. Tab three loads
+  sales and tab four loads sales and inserts for the newest captured barcode.
+- Opening either sales tab with empty history sends no request, including after
+  clearing history while older product data remains on screen.
 - Opening the fourth tab loads the correct sales and insert routes and displays a spinner.
 - A sales-only Worker returning the same sales payload for both request types
   produces an insert-source error, not duplicated sales totals. After deploying
   the correct Worker, Retry fetches the stock quantities.
 - Completed totals remain independent of the custom-period card.
 - Clicking Period, changing dates, clicking All, or closing the dialog sends no
-  Sales-card request; clicking Apply does.
+  Sales-card request; clicking Apply does while tab three is active with history.
+- Leaving or hiding a tab cancels pending requests. Waiting for login must not
+  dispatch requests after the tab is left or history becomes empty.
 - Boundaries include midnight and the end date, with correct 7/30/90-day totals.
 - One request includes all returned records, even above 1000 records, without
   `page` or `rows` parameters; old responses cannot overwrite a new product.

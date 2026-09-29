@@ -47,6 +47,7 @@ function buildHistoryArticle(item, index) {
 }
 
 function renderHistory() {
+  if (typeof syncSalesPerformanceRequests === "function") syncSalesPerformanceRequests();
   state.els.clearAllBtn.disabled = state.history.length === 0;
   state.els.sendTxtBtn.disabled = state.history.length === 0;
   state.els.printBtn.disabled = state.history.length === 0;
