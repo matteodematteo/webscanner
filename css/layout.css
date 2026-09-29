@@ -138,22 +138,43 @@
     gap: 5px;
     margin-top: 4px;
     line-height: 0;
+    position: relative;
+    z-index: 1;
   }
 
   .pi-dot {
-    width: 5px;
+    width: 34px;
     height: 5px;
     padding: 0;
     border: none;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    touch-action: manipulation;
+  }
+
+  .pi-dot::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     background: rgba(20, 28, 36, 0.18);
-    cursor: pointer;
+    transform: translateX(-50%);
     transition: background 160ms ease, transform 160ms ease;
   }
 
-  .pi-dot.is-active {
+  .pi-dot::after {
+    content: "";
+    position: absolute;
+    inset: -14px 0;
+  }
+
+  .pi-dot.is-active::before {
     background: var(--accent);
-    transform: scale(1.25);
+    transform: translateX(-50%) scale(1.25);
   }
 
   .helper-row {

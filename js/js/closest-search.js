@@ -8,7 +8,14 @@ async function fetchClosestSearchResults(barcode) {
     throw new Error("Barcode is empty");
   }
 
-  const cookie = await getCookieForRequests();
+  // The closest-search Worker can use its own ERP_COOKIE when the browser
+  // has no saved session. An unavailable login must not block that fallback.
+  let cookie = "";
+  try {
+    cookie = await getCookieForRequests();
+  } catch {
+    // Leave cookie empty so the Worker can use its configured ERP session.
+  }
   const response = await apiFetch(CONFIG.closestSearchProxyEndpoint, {
     method: "POST",
     body: JSON.stringify({

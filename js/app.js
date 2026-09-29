@@ -50,9 +50,7 @@ async function init() {
     try { initRoiResize(); } catch (e) {}
   }
 
-  scheduleIdleWork(function () {
-    initProductInfoSlider();
-  });
+  initProductInfoSlider();
 
   state.inputMode = loadInputMode();
   document.body.classList.toggle("mode-scanner", state.inputMode === "scanner");

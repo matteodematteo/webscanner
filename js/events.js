@@ -7,6 +7,25 @@
 // These are the interactions a user could trigger within the first 200 ms:
 // tapping Start Scanning, typing a barcode, or pressing Enter on barcodeInput.
 function bindCriticalEvents() {
+  state.els.searchBarcodeBtn.addEventListener("click", async function () {
+    state.els.searchBarcodeBtn.disabled = true;
+    state.els.searchBarcodeBtn.setAttribute("aria-busy", "true");
+    try {
+      const lookupResult = await handleBarcodeLookup({
+        allowClosestSearch: true,
+        addToHistoryBeforeLookup: false,
+        persistToHistory: !state.isQuantityEntryUnlocked
+      });
+      if (state.isQuantityEntryUnlocked && lookupResult === "exact") {
+        moveFocusToInput(state.els.quantityInput);
+        selectEntireInputValue({ target: state.els.quantityInput });
+      }
+    } finally {
+      state.els.searchBarcodeBtn.disabled = false;
+      state.els.searchBarcodeBtn.removeAttribute("aria-busy");
+    }
+  });
+
   state.els.scanBtn.addEventListener("click", async function () {
     state.els.scanBtn.disabled = true;
     try {
@@ -68,25 +87,6 @@ function bindDeferredEvents() {
     state.els.barcodeInput.value = "";
     state.els.quantityInput.value = "";
     setStatus("Barcode field cleared");
-  });
-
-  state.els.searchBarcodeBtn.addEventListener("click", async function () {
-    state.els.searchBarcodeBtn.disabled = true;
-    state.els.searchBarcodeBtn.setAttribute("aria-busy", "true");
-    try {
-      const lookupResult = await handleBarcodeLookup({
-        allowClosestSearch: true,
-        addToHistoryBeforeLookup: false,
-        persistToHistory: !state.isQuantityEntryUnlocked
-      });
-      if (state.isQuantityEntryUnlocked && lookupResult === "exact") {
-        moveFocusToInput(state.els.quantityInput);
-        selectEntireInputValue({ target: state.els.quantityInput });
-      }
-    } finally {
-      state.els.searchBarcodeBtn.disabled = false;
-      state.els.searchBarcodeBtn.removeAttribute("aria-busy");
-    }
   });
 
   state.els.clearSelectedBtn.addEventListener("click", function () {

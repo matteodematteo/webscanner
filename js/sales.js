@@ -255,8 +255,10 @@ function isSalesTabActive(index) {
       (typeof document !== "undefined" && document.hidden)) return false;
   const slider = state.els?.productInfoSlider;
   // A clicked dot can change selection before the slide finishes moving.
+  // Mobile scroll snapping and fractional slide widths need a visual-page
+  // check instead of requiring an exact pixel offset.
   return !slider || (slider.clientWidth > 0 &&
-    Math.abs(slider.scrollLeft - index * slider.clientWidth) <= 1);
+    Math.round(slider.scrollLeft / slider.clientWidth) === index);
 }
 
 

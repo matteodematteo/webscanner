@@ -50,9 +50,7 @@ async function init() {
     try { initRoiResize(); } catch (e) {}
   }
 
-  scheduleIdleWork(function () {
-    initProductInfoSlider();
-  });
+  initProductInfoSlider();
 
   // ── Optimization #7: Reduce scanner warm-up delay from 2-3s → 500ms ──────
   // Warm the (large, ~375KB) scanner decoding library in the background once
