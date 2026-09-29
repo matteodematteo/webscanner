@@ -494,6 +494,26 @@ function closeSalesPeriodDialog() {
 }
 
 
+function getSalesQuickPeriod(preset, today = new Date()) {
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  let start;
+  let end = today;
+  if (preset === "this-month") {
+    start = new Date(year, month, 1);
+  } else if (preset === "last-3-months") {
+    start = new Date(year, month - 2, 1);
+  } else if (preset === "last-year") {
+    start = new Date(year - 1, 0, 1);
+    end = new Date(year - 1, 11, 31);
+  } else {
+    return null;
+  }
+  const localDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return { beginDate: localDate(start), endDate: localDate(end) };
+}
+
+
 function applySalesPeriod(beginDate, endDate) {
   const nextBeginDate = String(beginDate || "").trim();
   const nextEndDate = String(endDate || "").trim();

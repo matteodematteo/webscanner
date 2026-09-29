@@ -385,6 +385,16 @@ function bindDeferredEvents() {
     openSalesPeriodDialog();
   });
 
+  state.els.salesPeriodDialog.addEventListener("click", function (event) {
+    const button = event.target.closest("button[data-sales-period-preset]");
+    if (!button) return;
+    const period = getSalesQuickPeriod(button.dataset.salesPeriodPreset);
+    if (!period) return;
+    state.els.salesPeriodStartInput.value = period.beginDate;
+    state.els.salesPeriodEndInput.value = period.endDate;
+    state.els.salesPeriodStatus.textContent = "";
+  });
+
   state.els.salesPeriodApplyBtn.addEventListener("click", function () {
     if (applySalesPeriod(state.els.salesPeriodStartInput.value, state.els.salesPeriodEndInput.value)) {
       closeSalesPeriodDialog();
