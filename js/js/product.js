@@ -283,7 +283,7 @@ function renderProductData(data) {
     comparison_qty: 1
   };
   if (typeof setSalesProduct === "function") {
-    setSalesProduct(state.currentProductRecord.barcode);
+    setSalesProduct();
   }
 }
 

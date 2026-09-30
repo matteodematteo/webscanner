@@ -230,15 +230,15 @@ function clearSalesData() {
 }
 
 
-function getLatestSalesBarcode() {
-  return String(state.history[0]?.barcode || "").trim();
+function getDisplayedGoodsCode() {
+  return String(state.fieldEls?.goods_code?.textContent || "").trim();
 }
 
 
 function restoreSalesPeriodFromSavedRequest() {
   try {
     const saved = JSON.parse(localStorage.getItem(SALES_REQUEST_CACHE_KEYS.custom));
-    if (!saved || saved.barcode !== getLatestSalesBarcode() || saved.type !== "sales" ||
+    if (!saved || !saved.barcode || saved.type !== "sales" ||
         !/^(?:|\d{4}-\d{2}-\d{2} 00:00:00)$/.test(saved.beginDate) ||
         !/^(?:|\d{4}-\d{2}-\d{2} 23:59:59)$/.test(saved.endDate)) return;
     state.salesBeginDate = saved.beginDate.slice(0, 10);
@@ -288,7 +288,7 @@ function cancelProductActivityLookup() {
 
 
 function syncSalesPerformanceRequests(options = {}) {
-  const code = getLatestSalesBarcode();
+  const code = getDisplayedGoodsCode();
   if (code !== state.salesBarcode) {
     clearSalesData();
     state.salesBarcode = code;
@@ -321,7 +321,7 @@ function syncSalesPerformanceRequests(options = {}) {
 
 
 function refreshSalesPerformanceAfterLogin(cookie) {
-  const code = getLatestSalesBarcode();
+  const code = getDisplayedGoodsCode();
   if (!cookie || !code || !isEitherSalesTabActive()) return;
   if (code !== state.salesBarcode) {
     clearSalesData();
@@ -336,11 +336,9 @@ function refreshSalesPerformanceAfterLogin(cookie) {
 }
 
 
-function setSalesProduct(barcode) {
-  // A late product/discount response must not replace the newest captured code.
-  if (String(barcode || "").trim() === getLatestSalesBarcode()) {
-    return syncSalesPerformanceRequests();
-  }
+function setSalesProduct() {
+  // Product rendering has already updated tab 1's Goods Code.
+  return syncSalesPerformanceRequests();
 }
 
 
@@ -403,7 +401,7 @@ async function loadSalesPerformanceRows(code, options = {}) {
   const activeTabs = Array.isArray(requestOptions.activeTab)
     ? requestOptions.activeTab : [requestOptions.activeTab];
   if (requestOptions.signal?.aborted || (requestOptions.activeTab !== undefined &&
-      (!activeTabs.some(isSalesTabActive) || getLatestSalesBarcode() !== code))) {
+      (!activeTabs.some(isSalesTabActive) || getDisplayedGoodsCode() !== code))) {
     throw new Error("Activity tab is no longer active for this barcode.");
   }
   const responseText = await fetchSalesPerformance(code, cookie, requestOptions);
@@ -425,7 +423,7 @@ async function loadSalesPerformanceRows(code, options = {}) {
 
 function startSalesPerformanceLookup(barcode, lookupOptions = {}) {
   const code = String(barcode || "").trim();
-  if (!code || code !== getLatestSalesBarcode() ||
+  if (!code || code !== getDisplayedGoodsCode() ||
       !(lookupOptions.force ? isEitherSalesTabActive() : isSalesTabActive(2))) return;
   const params = salesRequestParams(code, "sales", state.salesBeginDate, state.salesEndDate);
   const lookupSequence = state.salesLookupSequence + 1;
@@ -585,7 +583,7 @@ function startProductActivityLookup(lookupOptions = {}) {
   const code = state.salesBarcode;
   const today = getSalesPeriodDate(0);
   if (!(lookupOptions.force ? isEitherSalesTabActive() : isSalesTabActive(3)) ||
-      !code || code !== getLatestSalesBarcode() ||
+      !code || code !== getDisplayedGoodsCode() ||
       (state.isProductActivityLoading && !lookupOptions.force) ||
       (state.productActivityError && !lookupOptions.retry && !lookupOptions.force) ||
       (state.productActivityTotals && state.productActivityDate === today && !lookupOptions.force)) return;

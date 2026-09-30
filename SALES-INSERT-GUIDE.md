@@ -91,9 +91,10 @@ accessible loading label.
 
 Load its sales and inventory data when the fourth tab is opened by clicking its
 dot, swiping to it, or restoring the saved slide selection.
-Use the newest captured barcode in history, including after restoring saved history.
-If history is empty, send no salesperformance request. A new capture while this
-tab is active loads that barcode's summary. Scans on tabs one and two do not load
+Use the Goods Code displayed in tab one (`#field_goods_code`) as the request
+barcode. If that field is empty, send no salesperformance request, even when
+history contains barcodes. A product lookup that updates Goods Code while this
+tab is active loads its summary. Scans on tabs one and two do not load
 salesperformance data. Older product or discount responses must not change the target.
 
 Fetch the last 90 days once for each data type and calculate all four totals from
@@ -103,7 +104,7 @@ or reloading the app reuses a matching result. If only one source fails, Retry
 requests only that source. Avoid duplicate requests from repeated scroll events,
 history renders, or discount responses while loading or after a successful result.
 Require the selected slide to have finished moving into view before dispatching.
-Cancel requests when the tab is left or hidden, or history becomes empty. Check
+Cancel requests when the tab is left or hidden, or Goods Code becomes empty. Check
 visibility and barcode again after awaiting login so a late session refresh
 cannot start a request for a hidden tab.
 
@@ -117,13 +118,13 @@ request when a discount response arrives or a scroll event fires.
 The existing card is `#field_sales_quantity_card`. Its value is
 `#field_sales_quantity`; its loading circle is `#salesQuantityLoader`.
 
-Load this card when tab three becomes active and visible, using the newest captured
-barcode in history and the applied period. A new capture while tab three is active
-loads sales for that barcode. Clicking `#salesPeriodApplyBtn` checks the saved
+Load this card when tab three becomes active and visible, using the Goods Code
+displayed in tab one and the applied period. A product lookup while tab three is active
+loads sales for that code. Clicking `#salesPeriodApplyBtn` checks the saved
 barcode and period first; it sends a request only when there is no matching
 completed result. Save one custom-period result and restore its selected dates on
-reload for the same newest barcode.
-Send no request when history is empty or tab three is hidden or inactive. Cancel
+reload; matching totals are reused once Goods Code is displayed again.
+Send no request when Goods Code is empty or tab three is hidden or inactive. Cancel
 pending work when leaving the tab, and stop its loading circle without showing an error.
 The fourth tab's requests must not update this card or its selected period.
 
@@ -133,7 +134,7 @@ Keep the existing period dialog:
 - `salesPeriodStartInput`: start date, using an HTML date input.
 - `salesPeriodEndInput`: end date, using an HTML date input.
 - `salesPeriodApplyBtn`: validate the dates, commit the selected period, and load
-  sales for the newest barcode in history if tab three is active and visible.
+  sales for the displayed Goods Code if tab three is active and visible.
 - `salesPeriodAllBtn`: clear both date inputs and keep the dialog open. The user
   must click Apply to request all dates.
 - `salesPeriodBackBtn`: close the dialog without requesting data or applying edits.
@@ -239,18 +240,19 @@ provides all today, 7, 30, and 90-day values. The custom result is its final
 period total. Do not persist cookies or full ERP rows in these entries.
 
 Compare the exact formatted request dates and barcode before using a result.
-Restore the last custom period after loading history when its barcode still matches.
+Restore the last custom period on startup; wait for Goods Code to be displayed
+before loading or reusing a result.
 Record the latest request settings as it starts, then add the result only on
 success. Failed, invalid, aborted, or unverified responses remain retryable;
 they must not be mistaken for valid zero quantities. On a new local day, the
 summary date boundaries change and both summary sources are requested again.
 
 `refreshCookieBtn` is an explicit exception to the saved-result rule. After a
-successful login, if tab three or four is visible and history has a barcode,
+successful login, if tab three or four is visible and Goods Code is displayed,
 send all three requests with the newly returned cookie: custom-period sales,
 90-day sales, and 90-day inventory. Replace their saved results on success,
 update both tab displays, and keep source verification and approval filtering.
-Keep the button disabled until these requests finish. If login fails, history is
+Keep the button disabled until these requests finish. If login fails, Goods Code is
 empty, or another tab is active when login completes, send no activity request.
 Ordinary scans and tab switches still reuse matching saved results.
 
@@ -302,11 +304,12 @@ Update these existing files as needed:
 - `js/sales.js`: Worker requests, periods, totals, loading, and retry.
 - `js/input-mode.js`: trigger the matching requests for visible slide index 2 or 3,
   cancel inactive requests, and handle hidden product controls and page visibility.
-- `js/history.js`: keep the request target synchronized with the newest capture
-  and cancel requests when history is emptied.
-- `js/app.js`: restore the last custom period after loading history.
+- `js/history.js`: history renders may trigger synchronization, but history is
+  never the request barcode source.
+- `js/app.js`: restore the last custom period without loading activity until
+  Goods Code is displayed.
 - `js/events.js`: custom-period Apply, All clearing inputs, and explicit Retry.
-- `js/product.js`: synchronize product responses with the latest captured code
+- `js/product.js`: synchronize product responses with the displayed Goods Code
   without starting requests for inactive tabs or an older product.
 - `js/config.js`: keep `salesPerformanceProxyEndpoint` set to the Worker URL above.
 - `sw.js`: increase the cache version and keep cached script URLs aligned with
@@ -321,9 +324,10 @@ Apply CSS changes to the inline styles as well as the matching external CSS file
 Verify the following behaviors:
 
 - Scans on tabs one and two send no salesperformance request. Tab three loads
-  sales and tab four loads sales and inserts for the newest captured barcode.
-- Opening either sales tab with empty history sends no request, including after
-  clearing history while older product data remains on screen.
+  sales and tab four loads sales and inserts for the displayed Goods Code.
+- Opening either sales tab with an empty Goods Code sends no request, even if
+  saved history contains a barcode. Clearing history alone does not clear
+  the displayed Goods Code or prevent a requested refresh.
 - Opening the fourth tab loads the correct sales and insert routes and displays a spinner.
 - A sales-only Worker returning the same sales payload for both request types
   produces an insert-source error, not duplicated sales totals. After deploying
@@ -331,7 +335,7 @@ Verify the following behaviors:
 - Completed totals remain independent of the custom-period card.
 - Clicking Period, changing dates, clicking All, or closing the dialog sends no
   Sales-card request; clicking Apply loads or reuses a matching result while tab
-  three is active with history.
+  three is active with a displayed Goods Code.
 - This month, Last 3 months, and Last year fill the correct local date ranges
   without a request; Back discards them and Apply commits them.
 - Identical successful barcode/timeframe settings reuse results after tab switches
@@ -341,7 +345,7 @@ Verify the following behaviors:
   followed by all three activity requests with that new cookie, even when all
   three results were already saved. A failed login sends none.
 - Leaving or hiding a tab cancels pending requests. Waiting for login must not
-  dispatch requests after the tab is left or history becomes empty.
+  dispatch requests after the tab is left or Goods Code becomes empty.
 - Boundaries include midnight and the end date, with correct 7/30/90-day totals.
 - One request includes all returned records, even above 1000 records, without
   `page` or `rows` parameters; old responses cannot overwrite a new product.
