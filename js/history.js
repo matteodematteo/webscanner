@@ -288,6 +288,69 @@ function buildHistoryItemFromLookupData(productPayload, discountPayload, fallbac
 }
 
 
+function historyItemNeedsInfo(item) {
+  return Boolean(String(item?.barcode || "").trim()) &&
+    (!String(item?.italian_name || "").trim() ||
+      !String(item?.p_price ?? "").trim() || !String(item?.s_price ?? "").trim());
+}
+
+
+async function refreshMissingHistoryInfo(cookie) {
+  const codes = [...new Set(state.history.filter(historyItemNeedsInfo)
+    .map((item) => String(item.barcode).trim()))];
+  if (!cookie || !codes.length) return;
+
+  setStatus(`Refreshing info for ${codes.length} history barcode${codes.length === 1 ? "" : "s"}...`);
+  let nextIndex = 0;
+  let refreshed = 0;
+  let failed = 0;
+
+  async function refreshNext() {
+    while (nextIndex < codes.length) {
+      const code = codes[nextIndex++];
+      if (!state.history.some((item) => String(item.barcode || "").trim() === code && historyItemNeedsInfo(item))) {
+        continue;
+      }
+      try {
+        const { product, discountPrice, hasDiscount, saleDiscount } =
+          await loadProductAndDiscountResponse(code, cookie);
+        if (!hasProductInDatabase(product, code) || String(product.goods_code || "").trim() !== code) {
+          throw new Error("No exact product info found");
+        }
+        let changed = false;
+        state.history = state.history.map(function (item) {
+          if (String(item.barcode || "").trim() !== code || !historyItemNeedsInfo(item)) return item;
+          const activeDiscount = saleDiscount > 0 ? saleDiscount : numberFromValue(product.s_discount || item.s_discount);
+          changed = true;
+          return normalizeHistoryItem({
+            ...item,
+            goods_id: String(product.id || item.goods_id || ""),
+            italian_name: String(product.italian_name || item.italian_name || ""),
+            p_price: String(product.p_price ?? item.p_price ?? ""),
+            s_price: String(product.s_price ?? item.s_price ?? ""),
+            s_discount: String(activeDiscount),
+            discount_price: discountPrice || calculateDiscountPrice(product.s_price ?? item.s_price, activeDiscount),
+            has_discount: hasDiscount || activeDiscount > 0
+          });
+        });
+        if (changed) {
+          saveHistoryState();
+          renderHistory();
+          refreshed += 1;
+        }
+      } catch {
+        failed += 1;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(3, codes.length) }, refreshNext));
+  setStatus(failed
+    ? `Refreshed ${refreshed} history barcode${refreshed === 1 ? "" : "s"}; ${failed} failed.`
+    : `Refreshed ${refreshed} history barcode${refreshed === 1 ? "" : "s"}.`);
+}
+
+
 function selectHistoryItem(index) {
   if (index < 0 || index >= state.history.length) return;
   state.selectedHistoryIndex = index;

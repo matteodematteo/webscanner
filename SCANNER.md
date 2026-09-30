@@ -71,6 +71,11 @@ only used if the initial camera request fails, never to replace a working stream
 
 ## Search loading and app updates
 
+When tab one is active, the Refresh button logs in and fills history rows with
+missing product details by requesting their info and discount. It requests each
+missing barcode once; complete rows are left alone, and failed rows can be
+retried on the next Refresh. Tabs three and four retain their sales refresh.
+
 Search waits for the exact product lookup first. If that lookup does not find
 the barcode, it requests closest matches and waits for the complete response.
 The Search button shows a loading circle until the response is received and

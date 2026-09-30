@@ -166,7 +166,7 @@ async function getCookieForRequests() {
 async function loadProductInfoResponse(barcode, onCookie, options) {
   const code = String(barcode || "").trim();
   if (!code) throw new Error("Barcode is empty");
-  let cookie = await getCookieForRequests();
+  let cookie = options?.cookie || await getCookieForRequests();
   for (let attempt = 0; attempt < 2; attempt += 1) {
     if (onCookie) onCookie(cookie);
     try {
@@ -199,7 +199,7 @@ function loadOptionalDiscount(code, cookie) {
 }
 
 
-async function loadProductAndDiscountResponse(barcode) {
+async function loadProductAndDiscountResponse(barcode, cookieOverride) {
   const code = String(barcode || "").trim();
   if (!code) {
     throw new Error("Barcode is empty");
@@ -208,7 +208,7 @@ async function loadProductAndDiscountResponse(barcode) {
   let discountPromise;
   const info = await loadProductInfoResponse(code, function (cookie) {
     discountPromise = loadOptionalDiscount(code, cookie);
-  });
+  }, { cookie: cookieOverride });
   const cookie = info.cookie;
   const parsedProduct = info.raw;
   const parsedDiscount = await discountPromise;

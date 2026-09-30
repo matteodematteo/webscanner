@@ -252,6 +252,10 @@ successful login, if tab three or four is visible and Goods Code is displayed,
 send all three requests with the newly returned cookie: custom-period sales,
 90-day sales, and 90-day inventory. Replace their saved results on success,
 update both tab displays, and keep source verification and approval filtering.
+When tab one is active, use the refreshed cookie to request product info and
+discount for each distinct history barcode whose name or prices are missing;
+update only incomplete rows and preserve their quantities. A failed barcode
+does not prevent the others from being filled and remains eligible next time.
 Keep the button disabled until these requests finish. If login fails, Goods Code is
 empty, or another tab is active when login completes, send no activity request.
 Ordinary scans and tab switches still reuse matching saved results.

@@ -322,7 +322,13 @@ function bindDeferredEvents() {
     state.els.refreshCookieBtn.disabled = true;
     try {
       const cookie = await loginAndRefreshCookie();
-      if (cookie) await refreshSalesPerformanceAfterLogin(cookie);
+      if (cookie) {
+        if (isSalesTabActive(0)) {
+          await refreshMissingHistoryInfo(cookie);
+        } else {
+          await refreshSalesPerformanceAfterLogin(cookie);
+        }
+      }
     } catch (error) {
       const message = error.message || "Cookie refresh failed.";
       saveCookieState("", `Cookie refresh failed: ${message}`);
