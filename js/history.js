@@ -24,7 +24,7 @@ function buildHistoryArticle(item, index) {
   const meta = document.createElement("div");
   meta.className = "history-meta";
   const priceClass = isHistoryPriceDiscounted(item) ? "history-price is-discount" : "history-price";
-  meta.innerHTML = `<span>Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>Price: <span class="${priceClass}">${escapeHtml(getHistoryDisplayPrice(item))}</span></span>`;
+  meta.innerHTML = `<span class="history-cost">Cost: ${escapeHtml(formatPrice(item.p_price) || "-")}</span><span>Price: <span class="${priceClass}">${escapeHtml(getHistoryDisplayPrice(item))}</span></span><span class="history-supplier">Supplier: ${escapeHtml(item.supplier_name || "-")}</span>`;
 
   const footer = document.createElement("div");
   footer.className = "history-footer";
@@ -91,6 +91,20 @@ function renderHistory() {
 }
 
 
+function setHistoryDetailsVisible(visible) {
+  state.showHistoryDetails = Boolean(visible);
+  document.body.classList.toggle("show-history-details", state.showHistoryDetails);
+  const toggle = state.els.historyDetailsSwitch;
+  toggle.setAttribute("aria-checked", String(state.showHistoryDetails));
+  toggle.setAttribute("aria-label", state.showHistoryDetails
+    ? "Hide cost and supplier in history"
+    : "Show cost and supplier in history");
+  toggle.title = toggle.getAttribute("aria-label");
+  toggle.classList.toggle("btn-primary", state.showHistoryDetails);
+  toggle.classList.toggle("btn-muted", !state.showHistoryDetails);
+}
+
+
 function saveHistoryState() {
   localStorage.setItem(CONFIG.historyStorageKey, JSON.stringify(state.history));
 }
@@ -119,6 +133,7 @@ function normalizeHistoryItem(item) {
       barcode: item.trim(),
       italian_name: "",
       comparison_qty: 1,
+      supplier_name: "",
       p_price: "",
       s_price: "",
       s_discount: "",
@@ -144,6 +159,7 @@ function normalizeHistoryItem(item) {
     barcode: barcode,
     italian_name: String(item?.italian_name || ""),
     comparison_qty: Math.max(1, Number(item?.comparison_qty || 1) || 1),
+    supplier_name: String(item?.supplier_name || ""),
     p_price: String(item?.p_price || ""),
     s_price: String(item?.s_price || ""),
     s_discount: rawDiscount > 0 && rawDiscount < 1 ? String(normalizedDiscount) : String(item?.s_discount || ""),
@@ -228,6 +244,7 @@ function updateHistoryItemsByBarcode(barcode, updates) {
       nextItem.goods_id !== item.goods_id ||
       nextItem.barcode !== item.barcode ||
       nextItem.italian_name !== item.italian_name ||
+      nextItem.supplier_name !== item.supplier_name ||
       nextItem.comparison_qty !== item.comparison_qty ||
       nextItem.p_price !== item.p_price ||
       nextItem.s_price !== item.s_price ||
@@ -253,6 +270,7 @@ function buildSharedHistoryFields(item) {
     goods_id: normalized.goods_id,
     barcode: normalized.barcode,
     italian_name: normalized.italian_name,
+    supplier_name: normalized.supplier_name,
     p_price: normalized.p_price,
     s_price: normalized.s_price,
     s_discount: normalized.s_discount,
@@ -288,6 +306,7 @@ function buildHistoryItemFromLookupData(productPayload, discountPayload, fallbac
     goods_id: String(normalizedProduct.id || ""),
     barcode: String(normalizedProduct.goods_code || fallbackBarcode || "").trim(),
     italian_name: String(normalizedProduct.italian_name || ""),
+    supplier_name: String(normalizedProduct.supplier_name || ""),
     p_price: String(normalizedProduct.p_price || ""),
     s_price: String(normalizedProduct.s_price || ""),
     s_discount: String(discountFields.saleDiscount),
@@ -336,6 +355,7 @@ async function refreshMissingHistoryInfo(cookie) {
             ...item,
             goods_id: String(product.id || item.goods_id || ""),
             italian_name: String(product.italian_name || item.italian_name || ""),
+            supplier_name: String(product.supplier_name || item.supplier_name || ""),
             p_price: String(product.p_price ?? item.p_price ?? ""),
             s_price: String(product.s_price ?? item.s_price ?? ""),
             s_discount: String(activeDiscount),
@@ -671,6 +691,7 @@ async function openHistoryEditor(index) {
       goods_id: product.id || item.goods_id,
       barcode: product.goods_code || item.barcode,
       italian_name: product.italian_name || item.italian_name,
+      supplier_name: product.supplier_name || item.supplier_name,
       p_price: product.p_price || item.p_price,
       s_price: product.s_price || item.s_price,
       s_discount: String(saleDiscount),
@@ -822,6 +843,7 @@ async function saveHistoryEditorChanges() {
         goods_id: String(addedProduct.id || currentItem.goods_id || ""),
         barcode: String(addedProduct.goods_code || payload.barcode || currentItem.barcode || ""),
         italian_name: String(addedProduct.italian_name || payload.italian_name),
+        supplier_name: String(addedProduct.supplier_name || currentItem.supplier_name || ""),
         p_price: String(addedProduct.p_price || payload.p_price),
         s_price: String(addedProduct.s_price || payload.s_price),
         s_discount: String(addedProduct.s_discount || payload.s_discount),
@@ -875,6 +897,7 @@ async function saveHistoryEditorChanges() {
         goods_id: String(latestItemData.product.id || updatedItem.goods_id || ""),
         barcode: String(latestItemData.product.goods_code || updatedItem.barcode || ""),
         italian_name: String(latestItemData.product.italian_name || updatedItem.italian_name || ""),
+        supplier_name: String(latestItemData.product.supplier_name || updatedItem.supplier_name || ""),
         p_price: String(latestItemData.product.p_price || updatedItem.p_price || ""),
         s_price: String(latestItemData.product.s_price || updatedItem.s_price || ""),
         s_discount: String(latestItemData.saleDiscount),
@@ -894,6 +917,7 @@ async function saveHistoryEditorChanges() {
     goods_id: updatedItem.goods_id,
     barcode: updatedItem.barcode,
     italian_name: updatedItem.italian_name,
+    supplier_name: updatedItem.supplier_name,
     p_price: updatedItem.p_price,
     s_price: updatedItem.s_price,
     s_discount: updatedItem.s_discount,

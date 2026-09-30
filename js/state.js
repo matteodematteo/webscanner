@@ -29,6 +29,7 @@ const state = {
     authCookie: "",
     authStatus: "",
     history: [],
+    showHistoryDetails: false,
     printRequests: [],
     activePrintRequestId: "",
     isPrintRequestSending: false,

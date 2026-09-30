@@ -23,6 +23,7 @@ function queryCriticalElements() {
     sendTxtBtn:         document.getElementById("sendTxtBtn"),
     printBtn:           document.getElementById("printBtn"),
     entryModeBtn:       document.getElementById("entryModeBtn"),
+    historyDetailsSwitch: document.getElementById("historyDetailsSwitch"),
     entryModeIcon:      document.getElementById("entryModeIcon"),
     quantityInput:      document.getElementById("quantityInput"),
     quantityPad:        document.getElementById("quantityPad"),

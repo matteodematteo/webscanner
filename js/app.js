@@ -5,6 +5,7 @@
 async function init() {
   state.els = queryElements();
   requireElements(state.els);
+  setHistoryDetailsVisible(false);
   state.isIOS = isIOSDevice();
   state.isMobileUi = detectMobileUi();
   state.captureContext = state.els.captureCanvas?.getContext("2d", { alpha: false, willReadFrequently: true }) || null;

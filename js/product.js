@@ -290,6 +290,7 @@ function renderProductData(data) {
     goods_id: String(normalized.id || ""),
     barcode: String(normalized.goods_code || state.els.barcodeInput.value || "").trim(),
     italian_name: String(normalized.italian_name || ""),
+    supplier_name: String(normalized.supplier_name || ""),
     p_price: String(normalized.p_price || ""),
     s_price: String(normalized.s_price || ""),
     s_discount: String(legacyFields.saleDiscount),

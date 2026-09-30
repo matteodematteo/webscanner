@@ -7,6 +7,10 @@
 // These are the interactions a user could trigger within the first 200 ms:
 // tapping Start Scanning, typing a barcode, or pressing Enter on barcodeInput.
 function bindCriticalEvents() {
+  state.els.historyDetailsSwitch.addEventListener("click", function () {
+    setHistoryDetailsVisible(!state.showHistoryDetails);
+  });
+
   state.els.searchBarcodeBtn.addEventListener("click", async function () {
     state.els.searchBarcodeBtn.disabled = true;
     state.els.searchBarcodeBtn.setAttribute("aria-busy", "true");
@@ -309,7 +313,11 @@ function bindDeferredEvents() {
 
     saveSettings(values);
     try {
-      await loginAndRefreshCookie(values);
+      const cookie = await loginAndRefreshCookie(values);
+      if (cookie && state.els.settingsDialog.classList.contains("is-open")) {
+        closeSettingsDialog();
+        moveFocusToInput(state.els.barcodeInput);
+      }
     } catch (error) {
       const message = error.message || "Login request failed.";
       saveCookieState("", `Login failed: ${message}`);

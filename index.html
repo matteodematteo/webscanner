@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#131a22" />
-  <meta name="webscanner-version" content="104" />
+  <meta name="webscanner-version" content="106" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Web Scanner" />
@@ -225,14 +225,14 @@
     .pi-dot::after { content: ""; position: absolute; inset: -14px 0; }
     .pi-dot.is-active::before { background: var(--accent); transform: translateX(-50%) scale(1.25); }
     .helper-row {
-      grid-template-columns: var(--control-square-size) minmax(0,1fr) minmax(0,1fr) var(--control-square-size);
+      grid-template-columns: var(--control-square-size) minmax(0,.5fr) minmax(0,.5fr) minmax(0,1fr) var(--control-square-size);
       align-items: stretch; margin-top: 8px; column-gap: 8px; row-gap: 0;
     }
-    #scanBtn { grid-column: 3/-1; }
+    #scanBtn { grid-column: 4/-1; }
     .scan-actions { display: contents; }
     .manual-entry-group { display: contents; }
     .manual-entry-group > * { min-width: 0; }
-    .manual-entry-lock, .manual-entry-qty, .manual-entry-add { position: relative; z-index: 0; }
+    .manual-entry-lock, .manual-entry-qty, .manual-entry-add, .history-details-switch { position: relative; z-index: 0; }
     .manual-entry-lock {
       border-top-right-radius: 0; border-bottom-right-radius: 0; padding: 0;
       display: grid; place-items: center;
@@ -249,6 +249,12 @@
     .manual-entry-qty.is-locked {
       opacity: 1; background: rgba(246,240,231,.96); color: var(--text); pointer-events: none;
     }
+    .history-details-switch { display: grid; place-items: center; padding: 0; }
+    .history-details-switch-track { display: block; width: 30px; height: 18px; border-radius: 999px; background: rgba(20,28,36,.22); padding: 2px; box-sizing: border-box; }
+    .history-details-switch-thumb { display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 150ms ease; }
+    .history-details-switch-label { font-size: .54rem; line-height: 1; margin-top: -1px; }
+    .history-details-switch[aria-checked="true"] .history-details-switch-track { background: rgba(255,255,255,.35); }
+    .history-details-switch[aria-checked="true"] .history-details-switch-thumb { transform: translateX(12px); }
     .manual-entry-add { display: none; }
     .floating-action-btn {
       position: fixed; top: max(16px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right));
@@ -378,9 +384,9 @@
   <!-- These sheets affect the visible page geometry. Keep them render-blocking so
        browsers paint the completed interface once instead of restyling sections
        progressively on a slow connection. -->
-  <link rel="stylesheet" href="css/history.css" />
+  <link rel="stylesheet" href="css/history.css?v=105" />
   <link rel="stylesheet" href="css/dialogs.css?v=102" />
-  <link rel="stylesheet" href="css/responsive.css" />
+  <link rel="stylesheet" href="css/responsive.css?v=105" />
 
 </head>
 <body>
@@ -426,6 +432,7 @@
           </button>
           <input class="input manual-entry-qty" id="quantityInput" type="number" inputmode="none" min="1" step="1" value="" placeholder="Qty" aria-label="Quantity" readonly disabled />
           <button class="btn btn-primary manual-entry-add" id="addBarcodeBtn" type="button" hidden tabindex="-1" aria-hidden="true" disabled>Add</button>
+          <button class="btn btn-muted history-details-switch" id="historyDetailsSwitch" type="button" role="switch" aria-checked="false" aria-label="Show cost and supplier in history" title="Show cost and supplier in history"><span class="history-details-switch-track" aria-hidden="true"><span class="history-details-switch-thumb"></span></span><span class="history-details-switch-label" aria-hidden="true">Details</span></button>
         </div>
         <div class="scan-actions">
           <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
@@ -779,20 +786,20 @@
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script src="js/zxing-scanner.js?v=101" defer></script>
   <script src="js/config.js?v=102" defer></script>
-  <script src="js/state.js?v=102" defer></script>
-  <script src="js/dom.js?v=102" defer></script>
+  <script src="js/state.js?v=105" defer></script>
+  <script src="js/dom.js?v=105" defer></script>
   <script src="js/utils.js?v=103" defer></script>
   <script src="js/ui.js?v=102" defer></script>
   <script src="js/settings.js?v=69" defer></script>
   <script src="js/input-mode.js?v=92" defer></script>
-  <script src="js/product.js?v=103" defer></script>
+  <script src="js/product.js?v=105" defer></script>
   <script src="js/api.js?v=99" defer></script>
   <script src="js/sales.js?v=104" defer></script>
   <script src="js/closest-search.js?v=96" defer></script>
-  <script src="js/history.js?v=103" defer></script>
+  <script src="js/history.js?v=105" defer></script>
   <script src="js/print-requests.js?v=102" defer></script>
   <script src="js/camera.js?v=101" defer></script>
-  <script src="js/events.js?v=102" defer></script>
-  <script src="js/app.js?v=102" defer></script>
+  <script src="js/events.js?v=106" defer></script>
+  <script src="js/app.js?v=105" defer></script>
 </body>
 </html>

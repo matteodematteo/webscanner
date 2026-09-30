@@ -134,6 +134,21 @@
     white-space: nowrap;
   }
 
+  .history-meta .history-cost,
+  .history-meta .history-supplier {
+    display: none;
+  }
+
+  .history-meta .history-supplier {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  body.show-history-details .history-meta .history-cost,
+  body.show-history-details .history-meta .history-supplier {
+    display: inline;
+  }
+
   .history-price.is-discount {
     color: #b42318;
     font-weight: 800;

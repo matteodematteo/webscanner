@@ -9,7 +9,7 @@
     .button-row { grid-template-columns: 1fr; }
     .lookup-row { grid-template-columns: minmax(0, 1fr) 74px 74px; }
     .field-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-    .helper-row { grid-template-columns: var(--control-square-size) minmax(0, 1fr) minmax(0, 1fr) var(--control-square-size); }
+    .helper-row { grid-template-columns: var(--control-square-size) minmax(0, .5fr) minmax(0, .5fr) minmax(0, 1fr) var(--control-square-size); }
     .card { border-radius: 22px; }
     .preview-frame { width: 100%; aspect-ratio: 2.02; }
     .preview-meta { top: 8px; left: 8px; right: 8px; }
@@ -23,7 +23,7 @@
     .top-tools,
     .button-row { gap: 8px; }
     .helper-row {
-      grid-template-columns: var(--control-square-size) minmax(0, 1fr) minmax(0, 1fr) var(--control-square-size);
+      grid-template-columns: var(--control-square-size) minmax(0, .5fr) minmax(0, .5fr) minmax(0, 1fr) var(--control-square-size);
       gap: 8px;
     }
     .btn,
