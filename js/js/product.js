@@ -170,9 +170,14 @@ function normalizeSaleData(rawData) {
 }
 
 
+function normalizeSaleDiscountPercent(value) {
+  const discount = numberFromValue(String(value ?? "").replace(",", ".").replace("%", ""));
+  return discount > 0 && discount < 1 ? discount * 100 : discount;
+}
+
 function calculateDiscountPrice(sPriceValue, sDiscountValue) {
   const sPrice = numberFromValue(sPriceValue);
-  const sDiscount = numberFromValue(sDiscountValue);
+  const sDiscount = normalizeSaleDiscountPercent(sDiscountValue);
   if (!sPrice || !sDiscount) return "";
   return formatPrice(sPrice * (1 - (sDiscount / 100)));
 }
@@ -228,8 +233,9 @@ function getDiscountFields(rawData, productData) {
 function getLegacyDiscountFields(rawData, productData) {
   const saleData = normalizeSaleData(rawData);
   const hasSaleData = Boolean(saleData) && saleData !== "" && (!Array.isArray(saleData) || saleData.length > 0);
-  const saleDiscountValue = hasSaleData ? numberFromValue(saleData.sdiscount) : 0;
-  const productDiscountValue = numberFromValue(productData.s_discount);
+  const rawSaleDiscount = hasSaleData ? numberFromValue(String(saleData.sdiscount ?? "").replace(",", ".").replace("%", "")) : 0;
+  const saleDiscountValue = normalizeSaleDiscountPercent(rawSaleDiscount);
+  const productDiscountValue = normalizeSaleDiscountPercent(productData.s_discount);
 
   const usingSaleDiscount = saleDiscountValue > 0;
   const activeDiscountValue = usingSaleDiscount ? saleDiscountValue : productDiscountValue;
@@ -239,7 +245,12 @@ function getLegacyDiscountFields(rawData, productData) {
 
   let discountPrice = "";
   if (usingSaleDiscount && saleData.discountPrice !== undefined) {
-    discountPrice = formatPrice(saleData.discountPrice);
+    const suppliedPrice = numberFromValue(String(saleData.discountPrice ?? "").replace(",", "."));
+    const staleFractionPrice = rawSaleDiscount > 0 && rawSaleDiscount < 1 && sPrice > 0
+      && Math.abs(suppliedPrice - sPrice * (1 - rawSaleDiscount / 100)) < 0.011;
+    discountPrice = staleFractionPrice || suppliedPrice <= 0
+      ? calculateDiscountPrice(sPrice, activeDiscountValue)
+      : formatPrice(suppliedPrice);
   } else if (hasDiscount && sPrice) {
     discountPrice = formatPrice(sPrice * (1 - activeDiscountValue / 100));
   }

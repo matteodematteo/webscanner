@@ -128,6 +128,16 @@ function normalizeHistoryItem(item) {
   }
 
   const barcode = String(item?.barcode || "").trim();
+  const rawDiscount = numberFromValue(String(item?.s_discount ?? "").replace(",", ".").replace("%", ""));
+  const normalizedDiscount = normalizeSaleDiscountPercent(rawDiscount);
+  const sPrice = numberFromValue(item?.s_price);
+  let discountPrice = String(item?.discount_price || "");
+  if (rawDiscount > 0 && rawDiscount < 1 && sPrice > 0) {
+    const stalePrice = sPrice * (1 - rawDiscount / 100);
+    if (!discountPrice || Math.abs(numberFromValue(discountPrice) - stalePrice) < 0.011) {
+      discountPrice = calculateDiscountPrice(sPrice, normalizedDiscount);
+    }
+  }
   return {
     id: String(item?.id || `history_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`),
     goods_id: String(item?.goods_id || item?.id_value || ""),
@@ -136,9 +146,9 @@ function normalizeHistoryItem(item) {
     comparison_qty: Math.max(1, Number(item?.comparison_qty || 1) || 1),
     p_price: String(item?.p_price || ""),
     s_price: String(item?.s_price || ""),
-    s_discount: String(item?.s_discount || ""),
-    discount_price: String(item?.discount_price || ""),
-    has_discount: Boolean(item?.has_discount)
+    s_discount: rawDiscount > 0 && rawDiscount < 1 ? String(normalizedDiscount) : String(item?.s_discount || ""),
+    discount_price: discountPrice,
+    has_discount: Boolean(item?.has_discount) || normalizedDiscount > 0
   };
 }
 
@@ -480,8 +490,8 @@ async function sendTxtList() {
 function buildDirectPrintPayloadItem(item) {
   const entry = normalizeHistoryItem(item);
   const sPrice = numberFromValue(entry.s_price);
-  const sDiscount = numberFromValue(entry.s_discount);
-  const discountPrice = sPrice * (1 - sDiscount / 100);
+  const sDiscount = normalizeSaleDiscountPercent(entry.s_discount);
+  const discountPrice = Math.max(0, sPrice * (1 - sDiscount / 100));
 
   return {
     barcode: entry.barcode,

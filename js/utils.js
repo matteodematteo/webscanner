@@ -91,7 +91,7 @@ function numberFromValue(value) {
 function formatPercent(value) {
   const numeric = numberFromValue(value);
   if (!numeric) return "";
-  const percent = numeric <= 1 ? numeric * 100 : numeric;
+  const percent = numeric < 1 ? numeric * 100 : numeric;
   return `${percent.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}%`;
 }
 

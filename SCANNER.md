@@ -106,6 +106,11 @@ reopening or reloading. The timestamp option starts checked when Print Format
 or a saved request is opened. `node tests/print-requests-browser.cjs` verifies
 these flows in a mobile browser, including reload and failed sends.
 
+The discount proxy may return 50% as `0.5`. The app converts fractional sale
+discounts to percent before calculating label prices. A EUR 4.00 item at 50%
+now sends `s_discount: 50` and `discount_price: 2` for both label sizes.
+Previously saved rows with the stale `0.5`/`3.98` pair are corrected when read.
+
 ## Search loading and app updates
 
 When tab one is active, the Refresh button logs in and fills history rows with
