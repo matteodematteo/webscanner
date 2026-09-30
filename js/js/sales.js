@@ -502,14 +502,13 @@ function getSalesQuickPeriod(preset, today = new Date()) {
   const year = today.getFullYear();
   const month = today.getMonth();
   let start;
-  let end = today;
+  const end = today;
   if (preset === "this-month") {
     start = new Date(year, month, 1);
   } else if (preset === "last-3-months") {
     start = new Date(year, month - 2, 1);
-  } else if (preset === "last-year") {
-    start = new Date(year - 1, 0, 1);
-    end = new Date(year - 1, 11, 31);
+  } else if (preset === "this-year") {
+    start = new Date(year, 0, 1);
   } else {
     return null;
   }

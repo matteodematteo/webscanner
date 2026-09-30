@@ -146,7 +146,7 @@ Either boundary may be blank; both blank means all dates.
 The period popup also has three quick buttons that only fill its date inputs:
 `This month` selects the first day of the current month through today;
 `Last 3 months` selects the first day of the month two months ago through today;
-`Last year` selects January 1 through December 31 of the previous calendar year.
+`This year` selects January 1 of the current year through today.
 Use local calendar dates so January and leap-year boundaries work. Back discards
 unapplied quick selections; Apply remains the only button that commits the dates.
 
@@ -341,7 +341,7 @@ Verify the following behaviors:
 - Clicking Period, changing dates, clicking All, or closing the dialog sends no
   Sales-card request; clicking Apply loads or reuses a matching result while tab
   three is active with a displayed Goods Code.
-- This month, Last 3 months, and Last year fill the correct local date ranges
+- This month, Last 3 months, and This year fill the correct local date ranges
   without a request; Back discards them and Apply commits them.
 - Identical successful barcode/timeframe settings reuse results after tab switches
   and reloads. A changed barcode or date range sends a request. Failed sources
