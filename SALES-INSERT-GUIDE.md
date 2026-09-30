@@ -105,13 +105,13 @@ requests only that source. Avoid duplicate requests from repeated scroll events,
 history renders, or discount responses while loading or after a successful result.
 Require the selected slide to have finished moving into view before dispatching.
 Cancel requests when the tab is left or hidden, or Goods Code becomes empty. Check
-visibility and barcode again after awaiting login so a late session refresh
-cannot start a request for a hidden tab.
+visibility and barcode before dispatching. A missing cookie waits for manual Refresh;
+salesperformance requests never start an automatic login or resend after failure.
 
 Show `—` before a result is available or when loading fails. A successful empty
 result is `0`. Show the spinner while requests are pending; hide it on completion
-or failure. Expose Retry after failure. Do not automatically keep retrying a failed
-request when a discount response arrives or a scroll event fires.
+or failure. Expose Retry after failure. Reopening the tab, a discount response,
+or a scroll event must not automatically retry a failed request.
 
 ## 2. Existing Sales card and custom period
 
@@ -256,6 +256,7 @@ When tab one is active, use the refreshed cookie to request product info and
 discount for each distinct history barcode whose name or prices are missing;
 update only incomplete rows and preserve their quantities. A failed barcode
 does not prevent the others from being filled and remains eligible next time.
+Do not log in again or retry the same info/discount request during that click.
 Keep the button disabled until these requests finish. If login fails, Goods Code is
 empty, or another tab is active when login completes, send no activity request.
 Ordinary scans and tab switches still reuse matching saved results.
@@ -348,8 +349,11 @@ Verify the following behaviors:
 - Clicking the cookie refresh button on either sales tab sends one login request
   followed by all three activity requests with that new cookie, even when all
   three results were already saved. A failed login sends none.
-- Leaving or hiding a tab cancels pending requests. Waiting for login must not
-  dispatch requests after the tab is left or Goods Code becomes empty.
+- Without a cookie, normal tab loading sends no salesperformance request and
+  does not log in automatically. A failed request remains failed until explicit
+  Refresh, Apply, or Retry; reopening the tab does not resend it.
+- Leaving or hiding a tab cancels pending requests. A request must not start
+  after the tab is left or Goods Code becomes empty.
 - Boundaries include midnight and the end date, with correct 7/30/90-day totals.
 - One request includes all returned records, even above 1000 records, without
   `page` or `rows` parameters; old responses cannot overwrite a new product.

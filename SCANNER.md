@@ -74,7 +74,10 @@ only used if the initial camera request fails, never to replace a working stream
 When tab one is active, the Refresh button logs in and fills history rows with
 missing product details by requesting their info and discount. It requests each
 missing barcode once; complete rows are left alone, and failed rows can be
-retried on the next Refresh. Tabs three and four retain their sales refresh.
+retried on the next Refresh. A failed tab-one info request does not trigger a
+second login or an automatic retry. Tabs three and four retain their sales refresh.
+Sales-performance requests also use only the current cookie: missing or failed
+sessions do not trigger an automatic login or resend. Use Refresh to retry.
 
 Search waits for the exact product lookup first. If that lookup does not find
 the barcode, it requests closest matches and waits for the complete response.

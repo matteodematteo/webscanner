@@ -313,7 +313,7 @@ async function refreshMissingHistoryInfo(cookie) {
       }
       try {
         const { product, discountPrice, hasDiscount, saleDiscount } =
-          await loadProductAndDiscountResponse(code, cookie);
+          await loadProductAndDiscountResponse(code, { cookie, retry: false });
         if (!hasProductInDatabase(product, code) || String(product.goods_code || "").trim() !== code) {
           throw new Error("No exact product info found");
         }

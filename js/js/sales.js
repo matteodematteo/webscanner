@@ -294,12 +294,13 @@ function syncSalesPerformanceRequests(options = {}) {
     state.salesBarcode = code;
     renderSalesQuantity();
   }
-  if (options.refresh && state.productInfoSlideIndex === 2) {
+  // Keep failures visible on tab re-entry; only Apply or explicit Refresh retries.
+  if (options.refresh && state.productInfoSlideIndex === 2 && !state.salesError) {
     state.hasSalesResult = false;
     state.salesError = false;
     state.salesQuantityTotal = null;
   }
-  if (options.refresh && state.productInfoSlideIndex === 3) {
+  if (options.refresh && state.productInfoSlideIndex === 3 && !state.productActivityError) {
     state.productActivityTotals = null;
     state.productActivityError = "";
   }
@@ -397,7 +398,10 @@ async function loadSalesPerformanceRows(code, options = {}) {
     endDate: state.salesEndDate,
     ...options
   };
-  const cookie = requestOptions.cookie || await getCookieForRequests();
+  // Activity requests use only the current session. A failed or missing
+  // session waits for the user's explicit Refresh instead of logging in here.
+  const cookie = requestOptions.cookie || state.authCookie;
+  if (!cookie) throw new Error("No login cookie. Press Refresh to log in.");
   const activeTabs = Array.isArray(requestOptions.activeTab)
     ? requestOptions.activeTab : [requestOptions.activeTab];
   if (requestOptions.signal?.aborted || (requestOptions.activeTab !== undefined &&
