@@ -4,11 +4,23 @@ The app uses ZXing WASM 3.1.2 for both Android and iOS. `js/zxing-scanner.js`
 loads a dedicated worker, which uses the matching wrapper and binary in
 `js/vendor/zxing-wasm/3.1.2/`. No runtime CDN or native BarcodeDetector is needed.
 
-The adjustable box is an aiming guide. Scanning alternates an expanded central
-area with the full visible preview, so labels can extend beyond the box. Quick
+The adjustable box is an aiming guide. Scanning alternates a central band
+(at least 85% of the visible width, 50–65% of its height) with the full visible
+preview, so labels can extend beyond the box. Quick
 1280-pixel passes alternate with thorough 1920-pixel passes for difficult or
-inverted labels. Frames transfer as RGBA pixels without JPEG compression. Only one frame is decoded at a time. Two matching
-frames confirm a capture, then the existing product lookup runs. Stop, camera
+inverted labels. If the original and inverted thorough reads fail, the worker
+corrects local lighting with a 49-pixel neighborhood and a small noise dead band,
+then tries both barcode polarities. Enhanced reads require three matching scan
+lines; original reads still require two. Only valid ZXing results are accepted.
+Integral image buffers are reused; recovery work runs off the UI thread and is
+skipped for flat images. Clean reads do not pay the enhancement cost.
+
+Frames transfer as RGBA pixels without JPEG compression. Only one frame is
+decoded at a time. Two consecutive matching fresh camera frames confirm a
+capture, then the existing product lookup runs. Video frame callbacks pace
+scanning directly, without the extra timer/animation-frame delay. Timed-out
+callbacks and repeated video timestamps cannot confirm a stalled image; older
+browsers use the video timestamp with timer pacing. Stop, camera
 switch, and restart invalidate pending results. The existing 10-second scan
 timeout remains in place.
 
@@ -41,9 +53,21 @@ Verified in headless Chromium with a mobile viewport:
 - Late results ignored after stopping and restarting.
 - Scroll position preserved and mobile input font size checked.
 - Simulated camera stream through ROI capture, frame confirmation and lookup;
-  one lookup and no camera zoom constraints.
+  clean and faint gradient labels, one lookup and no camera zoom constraints.
 - App and decoder initialization after offline reload.
 - JavaScript syntax and the vendored WASM release hash.
+
+`node tests/scanner-contrast-browser.cjs` exercises 51 synthetic cases with the
+real worker and WASM: 28 valid labels across five formats, 1–12-pixel modules,
+rotation, inversion, shadows and noise, plus 23 invalid-checksum/blank/texture
+cases. Twenty faint labels that the previous worker missed now decode exactly.
+The checks also include 1080/1920 camera-sized crops. Optional comparison with
+an older local worker uses `SCANNER_BASELINE_WORKER`; timing output excludes
+fixture generation and is diagnostic, not a phone performance guarantee.
+
+`node tests/scanner-frames.cjs` verifies that frozen/repeated frames, isolated
+reads, intervening misses, conflicting results, and hidden pages do not submit
+a barcode; it also covers timestamp pacing on older browsers.
 
 Physical Android and iPhone cameras have not been tested. Check rear-camera
 focus at different distances, small/glossy labels, low light, rotation,

@@ -490,6 +490,10 @@ function getDetectionCropModes() {
 
 
 function getScanLoopIntervalMs() {
+  // The video callback already paces reads at the camera's frame rate.
+  // Avoid an extra timer + animation frame between each pair of reads.
+  if (document.hidden || state.isScanInFlight) return 100;
+  if (typeof state.els?.cameraPreview?.requestVideoFrameCallback === "function") return 0;
   if (state.isIOS) {
     return CONFIG.iosScanIntervalMs;
   }
@@ -571,9 +575,10 @@ function drawDetectionFrame(mode, maxOutputSize = 1920) {
     const container = state.els.previewFrame;
     const cover = getCoverSourceRect(videoWidth, videoHeight,
       container?.clientWidth || videoWidth, container?.clientHeight || videoHeight);
-    // The box is an aiming guide, never a hard clipping boundary.
-    const widthRatio = mode === "visible" ? 1 : Math.min(1, Math.max(0.85, state.roi.width * 1.5));
-    const heightRatio = mode === "visible" ? 1 : Math.min(1, Math.max(0.5, state.roi.height * 1.5));
+    // Search the center first without spending every pass on the whole preview.
+    // The following full-preview pass still finds labels outside this band.
+    const widthRatio = mode === "visible" ? 1 : Math.min(1, Math.max(0.85, state.roi.width));
+    const heightRatio = mode === "visible" ? 1 : Math.min(0.65, Math.max(0.5, state.roi.height));
     sw = cover.visibleWidth * widthRatio;
     sh = cover.visibleHeight * heightRatio;
     sx = cover.offsetX + (cover.visibleWidth - sw) / 2;
@@ -773,7 +778,7 @@ async function detectBarcodeInFrame() {
 
 function waitForFreshVideoFrame(video) {
   if (!video) {
-    return Promise.resolve();
+    return Promise.resolve(null);
   }
 
   if (typeof video.requestVideoFrameCallback === "function") {
@@ -785,22 +790,23 @@ function waitForFreshVideoFrame(video) {
         }
         settled = true;
         video.cancelVideoFrameCallback?.(callbackId);
-        resolve();
+        // A stalled camera frame must not count as a second confirmation.
+        resolve(null);
       }, state.isIOS ? 55 : 35);
 
-      const callbackId = video.requestVideoFrameCallback(function () {
+      const callbackId = video.requestVideoFrameCallback(function (_now, metadata) {
         if (settled) {
           return;
         }
         settled = true;
         window.clearTimeout(timerId);
-        resolve();
+        resolve(metadata?.mediaTime ?? video.currentTime);
       });
     });
   }
 
   return new Promise(function (resolve) {
-    window.setTimeout(resolve, state.isIOS ? 24 : 16);
+    window.setTimeout(function () { resolve(video.currentTime); }, state.isIOS ? 24 : 16);
   });
 }
 
@@ -853,8 +859,10 @@ async function captureAttempt(session) {
     return false;
   }
 
-  await waitForFreshVideoFrame(video);
+  const frameTime = await waitForFreshVideoFrame(video);
   if (session !== state.scanSession || !state.isScanning || document.hidden) return false;
+  if (frameTime === null || frameTime === state.lastScanFrameTime) return false;
+  state.lastScanFrameTime = frameTime;
   const detectedText = await detectBarcodeInFrame();
   if (session !== state.scanSession || !state.isScanning || document.hidden) return false;
 
@@ -881,14 +889,6 @@ async function captureAttempt(session) {
 function scheduleScanCallback(callback, delayMs) {
   state.scanTimer = window.setTimeout(function () {
     state.scanTimer = 0;
-    if (typeof window.requestAnimationFrame === "function") {
-      state.scanAnimationFrame = window.requestAnimationFrame(function () {
-        state.scanAnimationFrame = 0;
-        callback();
-      });
-      return;
-    }
-
     callback();
   }, delayMs);
 }
@@ -1231,6 +1231,7 @@ async function startScanning() {
   scheduleFocusRefresh(state.track);
   state.detectionAttempt = 0;
   state.lastDetectionPass = null;
+  state.lastScanFrameTime = null;
   state.isScanning = true;
   startScanTimeoutTimer();
   updateScanButton();
