@@ -50,7 +50,7 @@ function renderHistory() {
   if (typeof syncSalesPerformanceRequests === "function") syncSalesPerformanceRequests();
   state.els.clearAllBtn.disabled = state.history.length === 0;
   state.els.sendTxtBtn.disabled = state.history.length === 0;
-  state.els.printBtn.disabled = state.history.length === 0;
+  state.els.printBtn.disabled = state.history.length === 0 && state.printRequests.length === 0;
   if (state.els.historyCountBadge) {
     const countText = `Count: ${state.history.length}`;
     state.els.historyCountBadge.textContent = countText;
@@ -442,6 +442,7 @@ async function sendTxtList() {
     return;
   }
 
+  const sentItems = state.history.map(copyPrintRequestItem);
   const payload = {
     session_id: formatSessionId(),
     session_cost: "$0.00",
@@ -449,7 +450,7 @@ async function sendTxtList() {
     data: [
       {
         stack: "full_tickets",
-        items: state.history.map(buildHistoryPayloadItem)
+        items: sentItems.map(buildHistoryPayloadItem)
       }
     ]
   };
@@ -467,11 +468,12 @@ async function sendTxtList() {
     throw new Error(`Send TXT failed with status ${response.status}`);
   }
 
+  const saved = recordSentPrintRequest("TXT", sentItems, payload.timestamp, "");
   state.history = [];
   state.selectedHistoryIndex = -1;
   saveHistoryState();
   renderHistory();
-  setStatus("TXT sent successfully");
+  setStatus(saved ? "TXT sent successfully" : "TXT sent, but recent request could not be saved on this device");
 }
 
 
@@ -505,9 +507,9 @@ async function runDirectPrint(printType, confirmedSignature) {
   } catch (error) {
     setStatus(error.message || "Print failed");
   } finally {
-    state.els.printBigBtn.disabled = false;
-    state.els.printStickerBtn.disabled = false;
-    state.els.printBtn.disabled = state.history.length === 0;
+    state.els.printBigBtn.disabled = state.history.length === 0;
+    state.els.printStickerBtn.disabled = state.history.length === 0;
+    state.els.printBtn.disabled = state.history.length === 0 && state.printRequests.length === 0;
   }
 }
 
@@ -523,6 +525,7 @@ async function printHistoryList(printType, confirmedSignature) {
     throw new Error("Choose Gate 1 or Gate 2 before printing.");
   }
   const normalizedType = printType === "40*25" ? "40*25" : "60*38";
+  const sentItems = state.history.map(copyPrintRequestItem);
   const payload = {
     session_id: `directPrint_${normalizedType}_${formatTimestamp()}`,
     session_cost: "$1.00",
@@ -532,13 +535,13 @@ async function printHistoryList(printType, confirmedSignature) {
     data: [
       {
         stack: normalizedType === "40*25" ? "sticker_tickets" : "big_tickets",
-        items: state.history.map(buildDirectPrintPayloadItem)
+        items: sentItems.map(buildDirectPrintPayloadItem)
       }
     ]
   };
 
   const problems = [];
-  state.history.forEach(function (item, index) {
+  sentItems.forEach(function (item, index) {
     const reasons = [];
     if (numberFromValue(item.s_price) <= 0) reasons.push("price missing or 0.00");
     if (!String(item.italian_name || "").trim()) reasons.push("name missing");
@@ -570,11 +573,12 @@ async function printHistoryList(printType, confirmedSignature) {
     throw new Error(details || `Print failed with status ${response.status}`);
   }
 
+  const saved = recordSentPrintRequest(normalizedType, sentItems, payload.timestamp, tunnelId);
   state.history = [];
   state.selectedHistoryIndex = -1;
   saveHistoryState();
   renderHistory();
-  setStatus(`Print ${normalizedType} sent to ${tunnelId}`);
+  setStatus(saved ? `Print ${normalizedType} sent to ${tunnelId}` : `Print ${normalizedType} sent; recent request could not be saved on this device`);
 }
 
 

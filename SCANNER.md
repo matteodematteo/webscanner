@@ -93,6 +93,19 @@ Actual foreground returns and frozen-stream recovery remain supported. Recovery
 checks are skipped while camera startup is in progress. The camera fallback is
 only used if the initial camera request fails, never to replace a working stream.
 
+## Recent print requests
+
+The Print Format popup keeps the last 20 successful TXT, BIG 60*38, and
+STICKER 40*25 requests on this device. Recent requests remain accessible after
+the working barcode list is cleared. Tap one to see its saved barcodes, Italian
+names, sent prices, and quantities; Cancel returns to Print Format. TXT,
+60*38, and 40*25 send that saved snapshot as a new request without changing
+the current working list. Failed sends are not added to recent requests.
+Gate 1/2 selection is saved locally and reused in both print views after
+reopening or reloading. The timestamp option starts checked when Print Format
+or a saved request is opened. `node tests/print-requests-browser.cjs` verifies
+these flows in a mobile browser, including reload and failed sends.
+
 ## Search loading and app updates
 
 When tab one is active, the Refresh button logs in and fills history rows with

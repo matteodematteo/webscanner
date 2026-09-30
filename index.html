@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#131a22" />
-  <meta name="webscanner-version" content="101" />
+  <meta name="webscanner-version" content="102" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Web Scanner" />
@@ -379,7 +379,7 @@
        browsers paint the completed interface once instead of restyling sections
        progressively on a slow connection. -->
   <link rel="stylesheet" href="css/history.css" />
-  <link rel="stylesheet" href="css/dialogs.css?v=95" />
+  <link rel="stylesheet" href="css/dialogs.css?v=102" />
   <link rel="stylesheet" href="css/responsive.css" />
 
 </head>
@@ -645,6 +645,36 @@
         <button class="btn btn-primary" id="sendTxtBtn" type="button">Send TXT</button>
         <button class="btn btn-muted" id="printBackBtn" type="button">Back</button>
       </div>
+      <section class="print-request-section" aria-labelledby="printRequestHistoryTitle">
+        <h3 id="printRequestHistoryTitle">Recent print requests</h3>
+        <div id="printRequestHistoryList" class="print-request-list" aria-live="polite"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="dialog-backdrop" id="printRequestDetailDialog" aria-hidden="true">
+    <div class="dialog-card print-request-detail-card" role="dialog" aria-modal="true" aria-labelledby="printRequestDetailTitle">
+      <h2 id="printRequestDetailTitle">Print request</h2>
+      <p id="printRequestDetailMeta" class="print-request-detail-meta"></p>
+      <div id="printRequestDetailItems" class="print-request-detail-items"></div>
+      <div class="print-request-options">
+        <label for="printRequestTunnelSelect">Print destination</label>
+        <select class="select" id="printRequestTunnelSelect">
+          <option value="gate1">Gate 1</option>
+          <option value="gate2">Gate 2</option>
+        </select>
+        <label class="print-timestamp-option" for="printRequestTimestampCheckbox">
+          <input id="printRequestTimestampCheckbox" type="checkbox" checked />
+          <span>Timestamp</span>
+        </label>
+      </div>
+      <p id="printRequestDetailStatus" class="print-request-detail-status" role="status" aria-live="polite"></p>
+      <div class="dialog-actions print-request-detail-actions">
+        <button class="btn btn-muted" id="printRequestCancelBtn" type="button">Cancel</button>
+        <button class="btn btn-primary" id="printRequestTxtBtn" type="button">TXT</button>
+        <button class="btn btn-primary" id="printRequestBigBtn" type="button">60*38</button>
+        <button class="btn btn-primary" id="printRequestStickerBtn" type="button">40*25</button>
+      </div>
     </div>
   </div>
 
@@ -748,20 +778,21 @@
   </div>
   <canvas id="captureCanvas" class="visually-hidden" width="720" height="720"></canvas>
   <script src="js/zxing-scanner.js?v=101" defer></script>
-  <script src="js/config.js?v=91" defer></script>
-  <script src="js/state.js?v=94" defer></script>
-  <script src="js/dom.js?v=89" defer></script>
+  <script src="js/config.js?v=102" defer></script>
+  <script src="js/state.js?v=102" defer></script>
+  <script src="js/dom.js?v=102" defer></script>
   <script src="js/utils.js?v=69" defer></script>
-  <script src="js/ui.js?v=90" defer></script>
+  <script src="js/ui.js?v=102" defer></script>
   <script src="js/settings.js?v=69" defer></script>
   <script src="js/input-mode.js?v=92" defer></script>
   <script src="js/product.js?v=97" defer></script>
   <script src="js/api.js?v=99" defer></script>
   <script src="js/sales.js?v=100" defer></script>
   <script src="js/closest-search.js?v=96" defer></script>
-  <script src="js/history.js?v=99" defer></script>
+  <script src="js/history.js?v=102" defer></script>
+  <script src="js/print-requests.js?v=102" defer></script>
   <script src="js/camera.js?v=101" defer></script>
-  <script src="js/events.js?v=98" defer></script>
-  <script src="js/app.js?v=96" defer></script>
+  <script src="js/events.js?v=102" defer></script>
+  <script src="js/app.js?v=102" defer></script>
 </body>
 </html>

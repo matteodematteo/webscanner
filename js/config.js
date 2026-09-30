@@ -17,6 +17,8 @@ const CONFIG = {
     cookieStorageKey: "web_barcode_scanner_cookie",
     cookieStatusStorageKey: "web_barcode_scanner_cookie_status",
     historyStorageKey: "web_barcode_scanner_history",
+    printRequestStorageKey: "web_barcode_scanner_print_requests_v1",
+    printTunnelStorageKey: "web_barcode_scanner_print_tunnel_v1",
     cameraStorageKey: "web_barcode_scanner_camera",
     roiStorageKey: "web_barcode_scanner_roi",
     productInfoSlideStorageKey: "web_barcode_scanner_pi_slide",

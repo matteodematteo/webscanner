@@ -112,12 +112,12 @@ function bindDeferredEvents() {
     } catch (error) {
       setStatus(error.message || "Send TXT failed");
     } finally {
-      state.els.sendTxtBtn.disabled = false;
+      state.els.sendTxtBtn.disabled = state.history.length === 0;
     }
   });
 
   state.els.printBtn.addEventListener("click", function () {
-    if (state.history.length === 0) {
+    if (state.history.length === 0 && state.printRequests.length === 0) {
       setStatus("Barcode list is empty");
       return;
     }
@@ -389,6 +389,33 @@ function bindDeferredEvents() {
 
   state.els.salesPeriodBtn.addEventListener("click", function () {
     openSalesPeriodDialog();
+  });
+  state.els.printTunnelSelect.addEventListener("change", function () {
+    savePrintTunnelPreference(state.els.printTunnelSelect.value);
+  });
+  state.els.printRequestTunnelSelect.addEventListener("change", function () {
+    savePrintTunnelPreference(state.els.printRequestTunnelSelect.value);
+  });
+
+  state.els.printRequestHistoryList.addEventListener("click", function (event) {
+    const button = event.target.closest("[data-print-request-id]");
+    if (button) openPrintRequestDetail(button.dataset.printRequestId);
+  });
+
+  state.els.printRequestCancelBtn.addEventListener("click", function () {
+    closePrintRequestDetail();
+  });
+  state.els.printRequestDetailDialog.addEventListener("click", function (event) {
+    if (event.target === state.els.printRequestDetailDialog) closePrintRequestDetail();
+  });
+  state.els.printRequestTxtBtn.addEventListener("click", function () { sendSavedPrintRequest("TXT"); });
+  state.els.printRequestBigBtn.addEventListener("click", function () { sendSavedPrintRequest("60*38"); });
+  state.els.printRequestStickerBtn.addEventListener("click", function () { sendSavedPrintRequest("40*25"); });
+  state.els.printRequestDetailDialog.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !state.isPrintRequestSending && !state.els.confirmDialog.classList.contains("is-open")) {
+      event.preventDefault();
+      closePrintRequestDetail();
+    }
   });
 
   state.els.salesPeriodDialog.addEventListener("click", function (event) {

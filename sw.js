@@ -1,7 +1,7 @@
 // Offline app shell. All paths are resolved against the service worker scope
 // so installs work both at the domain root and from a deployed subfolder.
-const CACHE_NAME = 'webscanner-v42';
-const APP_VERSION = '101';
+const CACHE_NAME = 'webscanner-v43';
+const APP_VERSION = '102';
 const APP_SHELL_URL = new URL('index.html', self.registration.scope).toString();
 const CACHEABLE_DESTINATIONS = new Set(['script', 'style', 'document', 'image', 'font']);
 const ASSETS_TO_CACHE = [
@@ -16,28 +16,29 @@ const ASSETS_TO_CACHE = [
   'css/layout.css',
   'css/components.css',
   'css/history.css',
-  'css/dialogs.css?v=95',
+  'css/dialogs.css?v=102',
   'css/responsive.css',
   'js/app-updates.js?v=86',
   'js/zxing-scanner.js?v=101',
   'js/zxing-worker.js?v=101',
   'js/vendor/zxing-wasm/3.1.2/reader.js',
   'js/vendor/zxing-wasm/3.1.2/zxing_reader.wasm',
-  'js/config.js?v=91',
-  'js/state.js?v=94',
-  'js/dom.js?v=89',
+  'js/config.js?v=102',
+  'js/state.js?v=102',
+  'js/dom.js?v=102',
   'js/utils.js?v=69',
-  'js/ui.js?v=90',
+  'js/ui.js?v=102',
   'js/settings.js?v=69',
   'js/input-mode.js?v=92',
   'js/product.js?v=97',
   'js/api.js?v=99',
   'js/sales.js?v=100',
   'js/closest-search.js?v=96',
-  'js/history.js?v=99',
+  'js/history.js?v=102',
+  'js/print-requests.js?v=102',
   'js/camera.js?v=101',
-  'js/events.js?v=98',
-  'js/app.js?v=96'
+  'js/events.js?v=102',
+  'js/app.js?v=102'
 ].map((url) => new URL(url, self.registration.scope).toString());
 
 self.addEventListener('install', (event) => {

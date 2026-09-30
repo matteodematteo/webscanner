@@ -76,6 +76,7 @@ function isAnyDialogOpen() {
     els?.settingsDialog?.classList.contains("is-open") ||
     els?.confirmDialog?.classList.contains("is-open") ||
     els?.printDialog?.classList.contains("is-open") ||
+    els?.printRequestDetailDialog?.classList.contains("is-open") ||
     els?.salesPeriodDialog?.classList.contains("is-open") ||
     els?.closestSearchDialog?.classList.contains("is-open") ||
     els?.historyEditDialog?.classList.contains("is-open")
@@ -145,7 +146,7 @@ function isInsideScrollableWhileLocked(target) {
     return false;
   }
   return Boolean(target.closest(
-    ".is-locked-scroll, .closest-search-results, #salesPeriodDialog .dialog-card, #closestSearchDialog .dialog-card, #historyEditDialog .dialog-card, .pi-slider"
+    ".is-locked-scroll, .closest-search-results, #salesPeriodDialog .dialog-card, #closestSearchDialog .dialog-card, #historyEditDialog .dialog-card, #printDialog .dialog-card, #printRequestDetailDialog .dialog-card, .pi-slider"
   ));
 }
 
@@ -217,6 +218,10 @@ function closeConfirmDialog() {
 
 function openPrintDialog() {
   state.els.printTimestampCheckbox.checked = true;
+  state.els.printBigBtn.disabled = state.history.length === 0;
+  state.els.printStickerBtn.disabled = state.history.length === 0;
+  state.els.sendTxtBtn.disabled = state.history.length === 0;
+  renderPrintRequestHistory();
   state.els.printDialog.classList.add("is-open");
   state.els.printDialog.setAttribute("aria-hidden", "false");
 }

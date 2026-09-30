@@ -23,6 +23,8 @@ async function init() {
   // parallel block above so they're logically grouped.
   loadCookieState();
   loadHistoryState();
+  loadPrintRequestHistory();
+  loadPrintTunnelPreference();
   restoreSalesPeriodFromSavedRequest();
 
   fillSettingsForm(savedSettings);
