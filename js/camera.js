@@ -777,37 +777,85 @@ async function detectBarcodeInFrame() {
 }
 
 
+function readVideoFrameSample(video, metadata) {
+  let decodedFrames = null;
+  try {
+    const count = video.getVideoPlaybackQuality?.().totalVideoFrames;
+    if (Number.isFinite(count) && count > 0) decodedFrames = count;
+  } catch (_) { /* Some live streams do not expose playback quality. */ }
+  if (decodedFrames === null && Number.isFinite(video.webkitDecodedFrameCount) && video.webkitDecodedFrameCount > 0) {
+    decodedFrames = video.webkitDecodedFrameCount;
+  }
+  return {
+    presentedFrames: Number.isFinite(metadata?.presentedFrames) && metadata.presentedFrames > 0 ? metadata.presentedFrames : null,
+    decodedFrames,
+    mediaTime: Number.isFinite(metadata?.mediaTime) && metadata.mediaTime >= 0 ? metadata.mediaTime : null,
+    currentTime: Number.isFinite(video.currentTime) && video.currentTime >= 0 ? video.currentTime : null
+  };
+}
+
+
+function hasVideoFrameAdvanced(next, previous) {
+  if (!next) return false;
+  if (!previous) return true;
+  // Live camera callbacks may report mediaTime = 0 for every frame.
+  // Prefer counters, including when switching between callbacks and fallback.
+  for (const key of ["presentedFrames", "decodedFrames"]) {
+    if (next[key] !== null && previous[key] !== null) return next[key] > previous[key];
+  }
+  if (next.mediaTime !== null && previous.mediaTime !== null && (next.mediaTime > 0 || previous.mediaTime > 0)) {
+    return next.mediaTime > previous.mediaTime;
+  }
+  return next.currentTime !== null && previous.currentTime !== null && next.currentTime > previous.currentTime;
+}
+
+
 function waitForFreshVideoFrame(video) {
-  if (!video) {
+  if (!video || video.paused || video.ended) {
     return Promise.resolve(null);
   }
 
   if (typeof video.requestVideoFrameCallback === "function") {
     return new Promise(function (resolve) {
+      const initialFrame = readVideoFrameSample(video);
       let settled = false;
-      const timerId = window.setTimeout(function () {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        video.cancelVideoFrameCallback?.(callbackId);
-        // A stalled camera frame must not count as a second confirmation.
-        resolve(null);
-      }, state.isIOS ? 55 : 35);
-
-      const callbackId = video.requestVideoFrameCallback(function (_now, metadata) {
-        if (settled) {
-          return;
-        }
+      let callbackId = null;
+      let timerId;
+      function finish(frame) {
+        if (settled) return;
         settled = true;
         window.clearTimeout(timerId);
-        resolve(metadata?.mediaTime ?? video.currentTime);
-      });
+        resolve(video.paused || video.ended ? null : frame);
+      }
+      function fallback() {
+        if (settled) return;
+        const frame = readVideoFrameSample(video);
+        // Recover missed callbacks only when the live stream actually advanced.
+        finish(hasVideoFrameAdvanced(frame, initialFrame) ? frame : null);
+        try {
+          if (callbackId !== null) video.cancelVideoFrameCallback?.(callbackId);
+        } catch (_) { /* A failed cancellation must not block the fallback. */ }
+      }
+      // Healthy streams resolve immediately on the next frame. Give slow iOS
+      // callbacks time to arrive instead of repeatedly canceling them at 55ms.
+      timerId = window.setTimeout(fallback, 250);
+      try {
+        callbackId = video.requestVideoFrameCallback(function (_now, metadata) {
+          finish(readVideoFrameSample(video, metadata));
+        });
+      } catch (_) {
+        window.clearTimeout(timerId);
+        if (!settled) {
+          timerId = window.setTimeout(fallback, state.isIOS ? 24 : 16);
+        }
+      }
     });
   }
 
   return new Promise(function (resolve) {
-    window.setTimeout(function () { resolve(video.currentTime); }, state.isIOS ? 24 : 16);
+    window.setTimeout(function () {
+      resolve(video.paused || video.ended ? null : readVideoFrameSample(video));
+    }, state.isIOS ? 24 : 16);
   });
 }
 
@@ -856,14 +904,16 @@ function confirmAcrossFrames(detectedText) {
 
 async function captureAttempt(session) {
   const video = state.els.cameraPreview;
-  if (!state.isCameraRunning || !state.track || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+  if (session !== state.scanSession || !state.isScanning || document.hidden ||
+      !state.isCameraRunning || !state.track || !video || video.paused || video.ended ||
+      video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     return false;
   }
 
-  const frameTime = await waitForFreshVideoFrame(video);
+  const frame = await waitForFreshVideoFrame(video);
   if (session !== state.scanSession || !state.isScanning || document.hidden) return false;
-  if (frameTime === null || frameTime === state.lastScanFrameTime) return false;
-  state.lastScanFrameTime = frameTime;
+  if (!hasVideoFrameAdvanced(frame, state.lastScanFrame)) return false;
+  state.lastScanFrame = frame;
   const detectedText = await detectBarcodeInFrame();
   if (session !== state.scanSession || !state.isScanning || document.hidden) return false;
 
@@ -1338,7 +1388,7 @@ async function startScanning() {
   scheduleFocusRefresh(state.track, { newScan: true });
   state.detectionAttempt = 0;
   state.lastDetectionPass = null;
-  state.lastScanFrameTime = null;
+  state.lastScanFrame = null;
   state.isScanning = true;
   startScanTimeoutTimer();
   updateScanButton();
