@@ -20,7 +20,10 @@ Desktop and name the copy print.py before starting a launcher.
         (1-keep in the comand even "add-authtoken", 2-take off "[ ]" )
 
   3. Set the exact 40x25 and 60x38 printer names in the active "Desktop\print.py".
-     The local print server uses port 5000.
+
+  4. Put the correct url of ngrok in "WshShell.Run "cmd.exe /c ngrok http --url=" in VBS file
+  5. Put the correct url of ngrok in "start "Ngrok Tunnel" cmd /k "ngrok http --url="
+     - in both cases replace: "sandfish-construct-alone.ngrok-free.dev" keep the "5000" at the end
 -----------------------------------------------------------------------------------------------------
 // Starting direct print //
 
