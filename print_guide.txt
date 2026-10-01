@@ -1,0 +1,28 @@
+/25-08-2026
+
+guide for print.py
+
+print direcly with MTO webscanner using:
+-ngrok
+-print.py (local python script)
+
+steps:
+
+-download ngrok from microsoft store
+
+-log in ngrok web, find the token in "https://dashboard.ngrok.com/get-started/setup/windows"
+
+-in the terminal add "ngrok config add-authtoken [PASTE_THE_COPIED_TOKEN_HERE]" (keep in the comand even "add-authtoken")
+
+-after paste this "ngrok http --url=sandfish-construct-alone.ngrok-free.dev 5000"
+
+- set in print.py the printers
+
+-run print.py
+
+--------------------------------------------------------------------------------------------------------------------------
+to make it run on start of pc automatically:
+-windows + R -> "shell:startup" -> click ENTER
+--------------------------------------------------------------------------------------------------------------------------
+to modify in apk gate names:
+app/src/main/java/com/example/ui/SendPrintWorkerDialog.kt on ai studio
