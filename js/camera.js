@@ -179,6 +179,7 @@ async function ensurePreviewReadyAfterForeground() {
 
   // Stream is already healthy after foreground resume; ensure placeholder is hidden.
   setPreviewActive(true);
+  scheduleFocusRefresh(state.track);
 
   const previousTime = Number(video.currentTime || 0);
   await new Promise(function (resolve) {
@@ -988,56 +989,162 @@ async function startCameraStream(preferredCameraId, activeVideoConfig) {
   state.els.cameraPreview.muted = true;
   state.els.cameraPreview.setAttribute("playsinline", "");
   state.els.cameraPreview.srcObject = stream;
+  // Start focus while the first frame is arriving, independently of playback
+  // and decoder initialization. Devices with native autofocus need no reset.
+  scheduleFocusRefresh(track);
   // play() resolves when playback starts; no separate metadata timeout needed.
   await state.els.cameraPreview.play();
-  requestFocusRefresh(track).catch(() => {});
   refreshDevices(state.activeDeviceId, stream).catch(() => {
     // Device labels are optional; a working camera must not wait for them.
   });
 }
 
 
-async function requestFocusRefresh(track) {
-  // Leave iPhone autofocus to the camera. Reapplying focus constraints can
-  // visibly change framing while the first scan is starting.
-  if (isIOSDevice()) return;
-  if (!track?.getCapabilities || !track.applyConstraints || track.readyState === "ended") {
-    return;
-  }
+// Track-specific state prevents old camera requests affecting a new stream.
+const cameraFocusStates = new WeakMap();
+const cameraConstraintQueues = new WeakMap();
 
-  const capabilities = track.getCapabilities();
-  const advanced = [];
+function isCurrentCameraTrack(track) {
+  return Boolean(track && track === state.track && track.readyState !== "ended" &&
+    state.inputMode !== "scanner" && !document.hidden);
+}
 
-  if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
-    advanced.push({ focusMode: "continuous" });
-  } else if (Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("single-shot")) {
-    advanced.push({ focusMode: "single-shot" });
-  }
 
-  if (advanced.length === 0) {
-    return;
+function applyCameraTrackConstraints(track, changes) {
+  // applyConstraints replaces the previous constraints. Keep the current
+  // resolution, frame rate and torch, and serialize focus/torch changes.
+  const previous = cameraConstraintQueues.get(track) || Promise.resolve();
+  const pending = previous.catch(() => {}).then(async function () {
+    if (!isCurrentCameraTrack(track)) return false;
+    const current = track.getConstraints?.() || {};
+    const next = { ...current };
+    const keys = Object.keys(changes);
+    keys.forEach((key) => { delete next[key]; });
+    const advanced = (current.advanced || []).map(function (entry) {
+      const kept = { ...entry };
+      keys.forEach((key) => { delete kept[key]; });
+      return kept;
+    }).filter((entry) => Object.keys(entry).length);
+    next.advanced = [...advanced, changes];
+    await track.applyConstraints(next);
+    return isCurrentCameraTrack(track);
+  });
+  cameraConstraintQueues.set(track, pending);
+  return pending;
+}
+
+
+async function requestFocusRefresh(track, options = {}) {
+  if (!isCurrentCameraTrack(track) || !track.getCapabilities || !track.applyConstraints) return false;
+  let focus = cameraFocusStates.get(track);
+  if (!focus) {
+    focus = { mode: "", pending: null, updatedAt: 0, lastForcedAt: -Infinity, pointRejected: false };
+    cameraFocusStates.set(track, focus);
   }
+  if (focus.pending) return focus.pending;
 
   try {
-    await track.applyConstraints({ advanced: advanced });
+    // Capability detection also covers iPhones if their browser exposes focus.
+    // Otherwise native autofocus continues without sending camera constraints.
+    const modes = track.getCapabilities().focusMode || [];
+    const mode = modes.includes("continuous") ? "continuous" :
+      modes.includes("single-shot") ? "single-shot" : "";
+    if (!mode) return false;
+    const settings = track.getSettings?.() || {};
+    const now = Date.now();
+    const force = options.force || (options.newScan && mode === "single-shot" && now - focus.updatedAt >= 1500);
+    if (!force && (mode === "continuous" && settings.focusMode === mode ||
+        focus.mode === mode && (!settings.focusMode || settings.focusMode === mode))) return true;
+    if (force && now - focus.lastForcedAt < 700) return false;
+    if (force) focus.lastForcedAt = now;
+
+    let point;
+    if (options.point && !focus.pointRejected &&
+        navigator.mediaDevices?.getSupportedConstraints?.().pointsOfInterest) {
+      point = { x: Math.max(0, Math.min(1, options.point.x)),
+        y: Math.max(0, Math.min(1, options.point.y)) };
+    }
+    const changes = { focusMode: mode };
+    if (point) changes.pointsOfInterest = [point];
+
+    focus.pending = (async function () {
+      let applied;
+      try {
+        applied = await applyCameraTrackConstraints(track, changes);
+      } catch (error) {
+        if (!point || !isCurrentCameraTrack(track)) throw error;
+        // Some browsers recognize pointsOfInterest but the camera rejects it.
+        focus.pointRejected = true;
+        applied = await applyCameraTrackConstraints(track, { focusMode: mode });
+      }
+      if (!applied) return false;
+      const actualMode = track.getSettings?.().focusMode;
+      if (actualMode && actualMode !== mode) return false;
+      focus.mode = mode;
+      focus.updatedAt = Date.now();
+      return true;
+    }()).catch(() => false);
+    return await focus.pending;
   } catch {
-    // Device-specific camera focus controls can fail transiently.
+    // Focus controls are optional; a failure must never stop the live preview.
+    return false;
+  } finally {
+    focus.pending = null;
   }
 }
 
 
-function scheduleFocusRefresh(track) {
+function scheduleFocusRefresh(track, options = {}) {
   clearFocusRefreshTimers();
-  if (isIOSDevice()) return;
-  const delays = [120, 500, 1200];
-  for (let index = 0; index < delays.length; index += 1) {
+  if (!isCurrentCameraTrack(track)) return;
+  let ready = false;
+  requestFocusRefresh(track, options).then((result) => { ready = result; });
+  // Retry only incomplete setup, such as capabilities becoming available
+  // with the first frame. Never restart an already-running continuous focus.
+  for (const delay of [350, 1000]) {
     const timerId = window.setTimeout(function () {
-      requestFocusRefresh(track).catch(() => {
-        // Ignore autofocus refresh noise.
-      });
-    }, delays[index]);
+      if (!ready && isCurrentCameraTrack(track)) {
+        requestFocusRefresh(track).then((result) => { ready = result; });
+      }
+    }, delay);
     state.focusRefreshTimers.push(timerId);
   }
+}
+
+
+function getPreviewFocusPoint(clientX, clientY) {
+  const video = state.els.cameraPreview;
+  const rect = video.getBoundingClientRect();
+  if (!rect.width || !rect.height || !video.videoWidth || !video.videoHeight) return null;
+  const cover = getCoverSourceRect(video.videoWidth, video.videoHeight, rect.width, rect.height);
+  const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+  return { x: (cover.offsetX + x * cover.visibleWidth) / video.videoWidth,
+    y: (cover.offsetY + y * cover.visibleHeight) / video.videoHeight };
+}
+
+
+function initPreviewFocus() {
+  const preview = state.els.previewFrame;
+  let tap = null;
+  preview.addEventListener("pointerdown", function (event) {
+    tap = null;
+    if (!event.isPrimary || event.button !== 0 || event.target.closest("#roiResizeHandle, button")) return;
+    tap = { id: event.pointerId, x: event.clientX, y: event.clientY, time: Date.now() };
+  }, { passive: true });
+  preview.addEventListener("pointermove", function (event) {
+    if (tap && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 12) tap = null;
+  }, { passive: true });
+  preview.addEventListener("pointercancel", function () { tap = null; }, { passive: true });
+  preview.addEventListener("pointerup", function (event) {
+    const start = tap;
+    tap = null;
+    if (!start || start.id !== event.pointerId || Date.now() - start.time > 500 ||
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12 ||
+        !state.isCameraRunning) return;
+    const point = getPreviewFocusPoint(event.clientX, event.clientY);
+    if (point) requestFocusRefresh(state.track, { force: true, point });
+  }, { passive: true });
 }
 
 
@@ -1111,7 +1218,7 @@ async function toggleTorch() {
   const capabilities = liveTrack.getCapabilities();
   const nextTorchState = !readTorchStateFromTrack(liveTrack);
   try {
-    await liveTrack.applyConstraints({ advanced: [{ torch: nextTorchState }] });
+    if (!await applyCameraTrackConstraints(liveTrack, { torch: nextTorchState })) return;
     state.torchOn = readTorchStateFromTrack(liveTrack);
     if (state.torchOn !== nextTorchState) {
       state.torchOn = nextTorchState;
@@ -1228,7 +1335,7 @@ async function startScanning() {
   }
   if (session !== state.scanSession || state.inputMode === "scanner") return;
 
-  scheduleFocusRefresh(state.track);
+  scheduleFocusRefresh(state.track, { newScan: true });
   state.detectionAttempt = 0;
   state.lastDetectionPass = null;
   state.lastScanFrameTime = null;

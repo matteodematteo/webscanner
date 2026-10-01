@@ -52,6 +52,7 @@ async function init() {
   if (typeof initRoiResize === "function") {
     try { initRoiResize(); } catch (e) {}
   }
+  initPreviewFocus();
 
   initProductInfoSlider();
 
