@@ -3,7 +3,7 @@ Updated: 2026-10-01
 
 The launchers mtoprint.bat and mto_background_print.vbs start the same two services:
   1. python print.py
-  2. ngrok http --url=sandfish-construct-alone.ngrok-free.dev 5000
+  2. ngrok http --url=[NGROK_URL] 5000
 
 Both use C:\Users\LG\Desktop as the working folder. The active server file must be
 C:\Users\LG\Desktop\print.py. The copy named print_updated.py in this kit is
@@ -22,8 +22,8 @@ Desktop and name the copy print.py before starting a launcher.
   3. Set the exact 40x25 and 60x38 printer names in the active "Desktop\print.py".
 
   4. Put the correct url of ngrok in "WshShell.Run "cmd.exe /c ngrok http --url=" in VBS file
-  5. Put the correct url of ngrok in "start "Ngrok Tunnel" cmd /k "ngrok http --url="
-     - in both cases replace: "sandfish-construct-alone.ngrok-free.dev" keep the "5000" at the end
+  5. Put the correct url of ngrok in "start "Ngrok Tunnel" cmd /k "ngrok http --url=" in BAT file
+     - in both cases replace: "[NGROK_URL]" keep the "5000" at the end
 -----------------------------------------------------------------------------------------------------
 // Starting direct print //
 
