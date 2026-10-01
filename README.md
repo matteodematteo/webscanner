@@ -41,3 +41,6 @@ Start automatically with Windows
 -----------------------------------------------------------------------------------------------------
 To change gate names in the Android app, edit
 app/src/main/java/com/example/ui/SendPrintWorkerDialog.kt in Android Studio.
+
+To change gate names in web app [js/print-requests.js: (line 115)]
+cloudflare workers print-worker.js (line 4)
