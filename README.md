@@ -1,28 +1,40 @@
-/25-08-2026
+// MTO WEBSCANNER DIRECT PRINT GUIDE //
+Updated: 2026-10-01
 
-guide for print.py
+The launchers mtoprint.bat and mto_background_print.vbs start the same two services:
+  1. python print.py
+  2. ngrok http --url=sandfish-construct-alone.ngrok-free.dev 5000
 
-print direcly with MTO webscanner using:
--ngrok
--print.py (local python script)
+Both use C:\Users\LG\Desktop as the working folder. The active server file must be
+C:\Users\LG\Desktop\print.py. The copy named print_updated.py in this kit is
+not started by either launcher. If you want to use that version, copy it to the
+Desktop and name the copy print.py before starting a launcher.
+-----------------------------------------------------------------------------------------------------
+// One time setup //
 
-steps:
+  1. Install Python and Ngrok (this last one in the microsoft store). Make sure "python" and "ngrok" run from Command Prompt.
+  
+  2. Sign in at https://dashboard.ngrok.com/get-started/setup/windows and COPY your authtoken.
 
--download ngrok from microsoft store
+  2.1 In Command Prompt run: "ngrok config add-authtoken YOUR_TOKEN[PASTE_THE_COPIED_TOKEN_HERE]"
+        (1-keep in the comand even "add-authtoken", 2-take off "[ ]" )
 
--log in ngrok web, find the token in "https://dashboard.ngrok.com/get-started/setup/windows"
+  3. Set the exact 40x25 and 60x38 printer names in the active "Desktop\print.py".
+     The local print server uses port 5000.
+-----------------------------------------------------------------------------------------------------
+// Starting direct print //
 
--in the terminal add "ngrok config add-authtoken [PASTE_THE_COPIED_TOKEN_HERE]" (keep in the comand even "add-authtoken")
+  - Double-click mtoprint.bat to see the Python and Ngrok terminal windows.
 
--after paste this "ngrok http --url=sandfish-construct-alone.ngrok-free.dev 5000"
-
-- set in print.py the printers
-
--run print.py
-
---------------------------------------------------------------------------------------------------------------------------
-to make it run on start of pc automatically:
--windows + R -> "shell:startup" -> click ENTER
---------------------------------------------------------------------------------------------------------------------------
-to modify in apk gate names:
-app/src/main/java/com/example/ui/SendPrintWorkerDialog.kt on ai studio
+  - Double-click mto_background_print.vbs to run those same commands with the
+    terminal windows hidden.
+       ( ! ) It shows a message if Desktop\print.py is missing.
+       ( ! ) Use only one launcher at a time. Running both can cause a port or tunnel conflict.
+-----------------------------------------------------------------------------------------------------
+Start automatically with Windows
+  1. Press Windows+R, type "shell:startup", and press Enter.
+  2. Place a shortcut to mto_background_print.vbs in that Startup folder.
+     Keep the original VBS file in this kit.
+-----------------------------------------------------------------------------------------------------
+To change gate names in the Android app, edit
+app/src/main/java/com/example/ui/SendPrintWorkerDialog.kt in Android Studio.
