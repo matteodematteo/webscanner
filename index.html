@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#131a22" />
-  <meta name="webscanner-version" content="107" />
+  <meta name="webscanner-version" content="108" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Web Scanner" />
@@ -225,14 +225,14 @@
     .pi-dot::after { content: ""; position: absolute; inset: -14px 0; }
     .pi-dot.is-active::before { background: var(--accent); transform: translateX(-50%) scale(1.25); }
     .helper-row {
-      grid-template-columns: var(--control-square-size) minmax(0,.5fr) minmax(0,.5fr) minmax(0,1fr) var(--control-square-size);
+      grid-template-columns: var(--control-square-size) minmax(0,1fr) minmax(0,1fr) var(--control-square-size);
       align-items: stretch; margin-top: 8px; column-gap: 8px; row-gap: 0;
     }
-    #scanBtn { grid-column: 4/-1; }
+    #scanBtn { grid-column: 3/-1; }
     .scan-actions { display: contents; }
     .manual-entry-group { display: contents; }
     .manual-entry-group > * { min-width: 0; }
-    .manual-entry-lock, .manual-entry-qty, .manual-entry-add, .history-details-switch { position: relative; z-index: 0; }
+    .manual-entry-lock, .manual-entry-qty, .manual-entry-add { position: relative; z-index: 0; }
     .manual-entry-lock {
       border-top-right-radius: 0; border-bottom-right-radius: 0; padding: 0;
       display: grid; place-items: center;
@@ -249,10 +249,11 @@
     .manual-entry-qty.is-locked {
       opacity: 1; background: rgba(246,240,231,.96); color: var(--text); pointer-events: none;
     }
-    .history-details-switch { display: grid; place-items: center; padding: 0; }
+    .price-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 5px; }
+    .price-card-heading label { margin-bottom: 0; }
+    .btn.history-details-switch { display: grid; place-items: center; padding: 0; min-height: 20px; height: 20px; width: 36px; flex: 0 0 36px; border-radius: 999px; }
     .history-details-switch-track { display: block; width: 30px; height: 18px; border-radius: 999px; background: rgba(20,28,36,.22); padding: 2px; box-sizing: border-box; }
     .history-details-switch-thumb { display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform 150ms ease; }
-    .history-details-switch-label { font-size: .54rem; line-height: 1; margin-top: -1px; }
     .history-details-switch[aria-checked="true"] .history-details-switch-track { background: rgba(255,255,255,.35); }
     .history-details-switch[aria-checked="true"] .history-details-switch-thumb { transform: translateX(12px); }
     .manual-entry-add { display: none; }
@@ -386,7 +387,7 @@
        progressively on a slow connection. -->
   <link rel="stylesheet" href="css/history.css?v=105" />
   <link rel="stylesheet" href="css/dialogs.css?v=102" />
-  <link rel="stylesheet" href="css/responsive.css?v=105" />
+  <link rel="stylesheet" href="css/responsive.css?v=108" />
 
 </head>
 <body>
@@ -432,7 +433,6 @@
           </button>
           <input class="input manual-entry-qty" id="quantityInput" type="number" inputmode="none" min="1" step="1" value="" placeholder="Qty" aria-label="Quantity" readonly disabled />
           <button class="btn btn-primary manual-entry-add" id="addBarcodeBtn" type="button" hidden tabindex="-1" aria-hidden="true" disabled>Add</button>
-          <button class="btn btn-muted history-details-switch" id="historyDetailsSwitch" type="button" role="switch" aria-checked="false" aria-label="Show cost and supplier in history" title="Show cost and supplier in history"><span class="history-details-switch-track" aria-hidden="true"><span class="history-details-switch-thumb"></span></span><span class="history-details-switch-label" aria-hidden="true">Details</span></button>
         </div>
         <div class="scan-actions">
           <button class="btn btn-primary" id="scanBtn" type="button" data-mode="start">Start Scanning</button>
@@ -450,7 +450,7 @@
               <div class="field-card pi-w-40" id="field_real_inventory_card"><label for="field_real_inventory">Inventory</label><div class="field-value" id="field_real_inventory"></div></div>
             </div>
             <div class="pi-row">
-              <div class="field-card pi-w-33" id="field_s_price_card"><label for="field_s_price">Price</label><div class="field-value" id="field_s_price"></div></div>
+              <div class="field-card pi-w-33" id="field_s_price_card"><div class="price-card-heading"><label for="field_s_price">Price</label><button class="btn btn-muted history-details-switch" id="historyDetailsSwitch" type="button" role="switch" aria-checked="false" aria-label="Show cost and supplier in history" title="Show cost and supplier in history"><span class="history-details-switch-track" aria-hidden="true"><span class="history-details-switch-thumb"></span></span></button></div><div class="field-value" id="field_s_price"></div></div>
               <div class="field-card pi-w-33" id="field_discount_price_card" hidden><label for="field_discount_price">Disc. Price</label><div class="field-value is-discount" id="field_discount_price"></div></div>
               <div class="field-card pi-w-33" id="field_disc_price_percent_card" hidden><label for="field_disc_price_percent">D. Price%</label><div class="field-value is-discount" id="field_disc_price_percent"></div></div>
             </div>

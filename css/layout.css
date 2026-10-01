@@ -178,7 +178,7 @@
   }
 
   .helper-row {
-    grid-template-columns: var(--control-square-size) minmax(0, .5fr) minmax(0, .5fr) minmax(0, 1fr) var(--control-square-size);
+    grid-template-columns: var(--control-square-size) minmax(0, 1fr) minmax(0, 1fr) var(--control-square-size);
     align-items: stretch;
     margin-top: 8px;
     column-gap: 8px;
@@ -186,7 +186,7 @@
   }
 
   #scanBtn {
-    grid-column: 4 / -1;
+    grid-column: 3 / -1;
   }
 
   .scan-actions {
@@ -203,8 +203,7 @@
 
   .manual-entry-lock,
   .manual-entry-qty,
-  .manual-entry-add,
-  .history-details-switch {
+  .manual-entry-add {
     position: relative;
     z-index: 0;
   }
@@ -249,10 +248,27 @@
     display: none;
   }
 
-  .history-details-switch {
+  .price-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    margin-bottom: 5px;
+  }
+
+  .price-card-heading label {
+    margin-bottom: 0;
+  }
+
+  .btn.history-details-switch {
     display: grid;
     place-items: center;
     padding: 0;
+    min-height: 20px;
+    height: 20px;
+    width: 36px;
+    flex: 0 0 36px;
+    border-radius: 999px;
   }
 
   .history-details-switch-track {
@@ -272,12 +288,6 @@
     border-radius: 50%;
     background: #fff;
     transition: transform 150ms ease;
-  }
-
-  .history-details-switch-label {
-    font-size: .54rem;
-    line-height: 1;
-    margin-top: -1px;
   }
 
   .history-details-switch[aria-checked="true"] .history-details-switch-track {
