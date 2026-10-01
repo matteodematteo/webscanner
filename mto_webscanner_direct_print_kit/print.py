@@ -8,8 +8,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # USER VARIABLES
 # ---------------------------
 PORT = 5000
-PRINTER_40X25_NAME = "Zebra GC420d - EPL (副本 1)" # Change this to your exact printer name
-PRINTER_60X38_NAME = "Zebra GC420d - EPL" # Change this to your exact printer name
+PRINTER_40X25_NAME = "[NAME_PRINTER_1]" # Change this to your exact printer name
+PRINTER_60X38_NAME = "[NAME_PRINTER_2]" # Change this to your exact printer name
 SHOW_TERMINAL_MESSAGES = True
 
 def emit_status(message: str) -> None:
