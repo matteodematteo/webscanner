@@ -108,9 +108,15 @@ async function init() {
     state.activeDeviceId = savedCameraId;
   }
 
-  // Automatically start camera scanning at screen initialization
-  startScanning().catch(function (error) {
-    setStatus(error.message || "Ready — tap Start Scanning");
+  // Automatically start camera scanning at screen initialization.
+  // Android starts immediately. iPhone Safari rejects page-load getUserMedia
+  // (user-gesture requirement), so tryAutoStartCameraScanning attempts the
+  // start and arms a one-tap fallback: the next tap anywhere starts the
+  // camera with a valid gesture.
+  tryAutoStartCameraScanning().catch(function (error) {
+    if (error?.name !== "AbortError") {
+      setStatus(error.message || "Ready — tap Start Scanning");
+    }
   }).finally(finishStartup);
 }
 

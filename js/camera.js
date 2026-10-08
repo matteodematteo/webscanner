@@ -74,6 +74,118 @@ function getCameraSupportIssue() {
 }
 
 
+/* iOS autostart helpers: Safari requires a user gesture before getUserMedia
+   shows its permission prompt, so a page-load call alone is rejected with
+   NotAllowedError. The app still attempts autostart (covers Android and iOS
+   installs already set to "Allow"), then arms a one-tap fallback so the
+   next tap anywhere starts the camera with a valid gesture. */
+function isCameraPermissionError(error) {
+  const name = String(error?.name || "");
+  if (["NotAllowedError", "SecurityError", "PermissionDeniedError"].includes(name)) {
+    return true;
+  }
+  const message = String(error?.message || "").toLowerCase();
+  return /permission|denied|not allowed|gesture|user activation|require.*tap/i.test(message);
+}
+
+
+function showTapToStartCameraHint() {
+  try {
+    if (state.els?.previewPlaceholder) {
+      state.els.previewPlaceholder.textContent = state.isIOS
+        ? "iPhone blocked the automatic camera start (Safari needs one tap). Tap the preview or Start Scanning once to enable the camera."
+        : "Tap the preview or Start Scanning to enable the camera.";
+    }
+    setPreviewActive(false);
+  } catch {
+    // Hint text is optional; never break startup.
+  }
+}
+
+
+function disarmFirstGestureCameraStart() {
+  try {
+    if (typeof state.disarmGestureAutostart === "function") {
+      state.disarmGestureAutostart();
+    }
+  } catch {
+    // Ignore teardown noise.
+  }
+  state.gestureAutostartArmed = false;
+  state.disarmGestureAutostart = null;
+}
+
+
+function armFirstGestureCameraStart() {
+  if (state.gestureAutostartArmed) {
+    return;
+  }
+  state.gestureAutostartArmed = true;
+
+  const tryStartFromGesture = function () {
+    if (state.inputMode === "scanner" || state.cameraStartPromise) {
+      return;
+    }
+    if (state.isCameraRunning) {
+      disarmFirstGestureCameraStart();
+      return;
+    }
+    startScanning().then(function () {
+      disarmFirstGestureCameraStart();
+    }).catch(function (error) {
+      if (isCameraPermissionError(error)) {
+        showTapToStartCameraHint();
+        setStatus("Tap Start Scanning to enable the camera");
+      } else if (error?.name !== "AbortError") {
+        setStatus(error.message || "Tap Start Scanning to retry");
+      }
+    });
+  };
+
+  const disarm = function () {
+    document.removeEventListener("pointerdown", tryStartFromGesture);
+    document.removeEventListener("touchend", tryStartFromGesture);
+    try {
+      state.els?.previewFrame?.removeEventListener("click", tryStartFromGesture);
+    } catch {
+      // Ignore missing preview during teardown.
+    }
+  };
+  state.disarmGestureAutostart = disarm;
+
+  document.addEventListener("pointerdown", tryStartFromGesture, { passive: true });
+  document.addEventListener("touchend", tryStartFromGesture, { passive: true });
+  try {
+    state.els?.previewFrame?.addEventListener("click", tryStartFromGesture);
+    if (state.els?.previewFrame) {
+      state.els.previewFrame.style.cursor = "pointer";
+    }
+  } catch {
+    // Preview tap is a convenience; document taps still work.
+  }
+}
+
+
+async function tryAutoStartCameraScanning() {
+  // Arm the tap fallback BEFORE the permission prompt: on iOS the load-time
+  // request is rejected for missing a gesture, and the next tap must start
+  // the camera even while this first attempt is still pending.
+  if (state.isIOS) {
+    armFirstGestureCameraStart();
+  }
+  try {
+    await startScanning();
+    disarmFirstGestureCameraStart();
+  } catch (error) {
+    if (isCameraPermissionError(error) || !state.isCameraRunning) {
+      showTapToStartCameraHint();
+      armFirstGestureCameraStart();
+    }
+    throw error;
+  }
+}
+
+
 function setPreviewActive(active) {
   state.els.previewPlaceholder.hidden = active;
   state.els.previewPlaceholder.style.display = active ? "none" : "grid";
@@ -167,7 +279,13 @@ async function ensurePreviewReadyAfterForeground() {
   }
 
   if (!state.isCameraRunning) {
-    await startCamera(state.activeDeviceId);
+    // Reopen / foreground return with no camera: restart the full
+    // camera + scanning pipeline (init, refresh and reopen all autostart).
+    try {
+      await tryAutoStartCameraScanning();
+    } catch {
+      // tryAutoStartCameraScanning already armed the tap fallback.
+    }
     return;
   }
 
@@ -196,6 +314,30 @@ async function ensurePreviewReadyAfterForeground() {
     await recoverPreviewFromFreeze();
   } else {
     setPreviewActive(true);
+    await ensureScanningAfterForegroundResume();
+  }
+}
+
+
+async function ensureScanningAfterForegroundResume() {
+  if (document.hidden || state.inputMode === "scanner" || state.cameraStartPromise || state.isRecoveringPreview) {
+    return;
+  }
+  if (state.isScanning || !state.isCameraRunning) {
+    return;
+  }
+  try {
+    await startScanning();
+    disarmFirstGestureCameraStart();
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      return;
+    }
+    if (isCameraPermissionError(error) || !state.isCameraRunning) {
+      showTapToStartCameraHint();
+      armFirstGestureCameraStart();
+    }
+    setStatus(error.message || "Tap Start Scanning to enable the camera");
   }
 }
 
@@ -206,19 +348,20 @@ async function recoverPreviewFromFreeze() {
   }
 
   state.isRecoveringPreview = true;
-  const shouldResumeScanning = state.isScanning;
   const selectedDeviceId = state.activeDeviceId || state.els.cameraSelect.value;
   stopScanning(true);
   setStatus("Camera preview paused, reconnecting...");
 
   try {
     await startCamera(selectedDeviceId);
-    if (shouldResumeScanning) {
-      await startScanning();
-    } else {
-      setStatus("Camera preview restored");
-    }
+    // Reopen must always restart scanning, not just restore the preview.
+    await startScanning();
+    disarmFirstGestureCameraStart();
   } catch (error) {
+    if (isCameraPermissionError(error)) {
+      showTapToStartCameraHint();
+      armFirstGestureCameraStart();
+    }
     setStatus(error.message || "Camera preview recovery failed");
   } finally {
     state.isRecoveringPreview = false;
@@ -1038,6 +1181,13 @@ async function startCameraStream(preferredCameraId, activeVideoConfig) {
 
   state.els.cameraPreview.muted = true;
   state.els.cameraPreview.setAttribute("playsinline", "");
+  state.els.cameraPreview.setAttribute("webkit-playsinline", "");
+  state.els.cameraPreview.setAttribute("disablepictureinpicture", "");
+  try {
+    state.els.cameraPreview.playsInline = true;
+  } catch {
+    // Older browsers ignore the property; the attributes above suffice.
+  }
   state.els.cameraPreview.srcObject = stream;
   // Start focus while the first frame is arriving, independently of playback
   // and decoder initialization. Devices with native autofocus need no reset.
@@ -1310,6 +1460,7 @@ async function startCamera(deviceId) {
 
     state.isCameraRunning = true;
     state.isScanning = false;
+    disarmFirstGestureCameraStart();
     await syncTorchSupport();
     setPreviewActive(true);
     updateResolutionBadge();

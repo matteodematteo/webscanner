@@ -57,6 +57,8 @@ const state = {
     manualScrollLocked: false,
     manualScrollLockY: 0,
     cameraStartPromise: null,
+    gestureAutostartArmed: false,
+    disarmGestureAutostart: null,
     focusRefreshTimers: [],
     iosWarmRestartDone: false,
     isIOS: false,

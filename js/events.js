@@ -41,6 +41,17 @@ function bindCriticalEvents() {
     }
   });
 
+  // iOS fallback: tapping the preview counts as the required user gesture
+  // and starts the camera when autostart was blocked on page load.
+  state.els.previewFrame.addEventListener("click", function () {
+    if (state.isCameraRunning || state.cameraStartPromise || state.inputMode === "scanner") {
+      return;
+    }
+    startScanning().catch(function (error) {
+      setStatus(error.message || "Tap Start Scanning to enable the camera");
+    });
+  });
+
   state.els.barcodeInput.addEventListener("keydown", async function (event) {
     if (event.key !== "Enter") return;
     event.preventDefault();
@@ -565,14 +576,18 @@ function bindDeferredEvents() {
     }
   });
 
-  window.addEventListener("pageshow", function (event) {
-    if (event.persisted) scheduleQuickPreviewResumeCheck();
+  window.addEventListener("pageshow", function () {
+    // Covers reopen from background and bfcache restore: init covers first
+    // load/refresh, visibilitychange covers tab switches. Scheduling is
+    // guarded (cameraStartPromise/document.hidden), so a duplicate call is safe.
+    scheduleQuickPreviewResumeCheck();
   });
 
   window.addEventListener("focus", function () {
-    // iOS permission prompts and keyboard focus are not foreground resumes.
-    // visibilitychange handles returning to the app.
-    if (!state.isIOS) scheduleQuickPreviewResumeCheck();
+    // Permission-prompt focus is filtered inside
+    // scheduleQuickPreviewResumeCheck (cameraStartPromise guard), so iOS
+    // reopen via app switcher also restarts scanning here.
+    scheduleQuickPreviewResumeCheck();
   });
 
   if (navigator.mediaDevices?.addEventListener) {
