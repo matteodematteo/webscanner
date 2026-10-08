@@ -599,6 +599,9 @@ async function handleDetectedCode(detectedText) {
   }
   playCaptureSound();
   stopScanning(true);
+  // The user is about to grab the next object: start the focus hunt now,
+  // during the product lookup, so the next barcode is already sharp.
+  scheduleFocusRefresh(state.track, { newScan: true });
 
   try {
     if (state.isQuantityEntryUnlocked) {
@@ -1256,17 +1259,25 @@ async function requestFocusRefresh(track, options = {}) {
     if (!mode) return false;
     const settings = track.getSettings?.() || {};
     const now = Date.now();
-    const force = options.force || (options.newScan && mode === "single-shot" && now - focus.updatedAt >= 1500);
+    // A new scan means the user is aiming at a new object, usually at a
+    // different distance. Re-kick autofocus (continuous included) so the
+    // next barcode starts sharp instead of waiting out the 1-2s hunt.
+    const force = options.force || (options.newScan && now - focus.updatedAt >= 1500);
     if (!force && (mode === "continuous" && settings.focusMode === mode ||
         focus.mode === mode && (!settings.focusMode || settings.focusMode === mode))) return true;
     if (force && now - focus.lastForcedAt < 700) return false;
     if (force) focus.lastForcedAt = now;
 
     let point;
-    if (options.point && !focus.pointRejected &&
+    if (!focus.pointRejected &&
         navigator.mediaDevices?.getSupportedConstraints?.().pointsOfInterest) {
-      point = { x: Math.max(0, Math.min(1, options.point.x)),
-        y: Math.max(0, Math.min(1, options.point.y)) };
+      // Barcodes are aimed at the frame center; default new scans there so
+      // the focus hunt targets the label. An explicit tap point still wins.
+      const sourcePoint = options.point || (options.newScan ? { x: 0.5, y: 0.5 } : null);
+      if (sourcePoint) {
+        point = { x: Math.max(0, Math.min(1, sourcePoint.x)),
+          y: Math.max(0, Math.min(1, sourcePoint.y)) };
+      }
     }
     const changes = { focusMode: mode };
     if (point) changes.pointsOfInterest = [point];
