@@ -981,7 +981,11 @@ function waitForFreshVideoFrame(video) {
       }
       // Healthy streams resolve immediately on the next frame. Give slow iOS
       // callbacks time to arrive instead of repeatedly canceling them at 55ms.
-      timerId = window.setTimeout(fallback, 250);
+      // Android callbacks are reliable: use a short fallback so a missed
+      // callback cannot stall capture for 250ms on every attempt. The
+      // fallback still decodes only when the stream actually advanced, and
+      // the two-fresh-frame confirmation below is untouched.
+      timerId = window.setTimeout(fallback, state.isIOS ? 250 : 90);
       try {
         callbackId = video.requestVideoFrameCallback(function (_now, metadata) {
           finish(readVideoFrameSample(video, metadata));
