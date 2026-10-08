@@ -84,11 +84,10 @@ const CONFIG = {
     iosVideoConstraints: {
       audio: false,
       video: {
-        // iOS Safari rejects strict resolution/frame-rate ideals more often
-        // than Android/Chrome and prompts for permission on every
-        // getUserMedia call. Request the rear camera minimally on the first
-        // attempt so autostart needs only one permission prompt.
-        facingMode: { ideal: "environment" }
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920, max: 1920 },
+        height: { ideal: 1080, max: 1080 },
+        frameRate: { ideal: 30, max: 30 }
       }
     },
     androidVideoConstraints: {
