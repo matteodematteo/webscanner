@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/erp", "destination": "/api/proxy" },
+    { "source": "/api/erp/:path*", "destination": "/api/proxy?erpPath=:path*" },
+    { "source": "/api/lg/:path*", "destination": "https://www.lgerp.cc/:path*" }
+  ]
+}
